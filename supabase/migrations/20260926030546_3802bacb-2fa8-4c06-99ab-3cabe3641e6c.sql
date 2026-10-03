@@ -1,0 +1,10 @@
+CREATE OR REPLACE VIEW public.office_pages_public AS
+SELECT o.id, o.company_name, o.bio, o.logo_url, o.banner_path, o.city, o.district, o.fal_license_no,
+  o.office_phone, o.whatsapp_number,
+  (SELECT count(*) FROM public.vacant_units_public v WHERE v.office_id = o.id) AS listings_count,
+  (SELECT round(avg(m.rating)::numeric, 1) FROM public.maintenance_requests m
+    WHERE m.org_id = o.id AND m.rating IS NOT NULL) AS avg_rating,
+  (SELECT count(*) FROM public.maintenance_requests m
+    WHERE m.org_id = o.id AND m.rating IS NOT NULL) AS ratings_count
+FROM public.org_settings o WHERE o.listed_publicly AND o.verified;
+GRANT SELECT ON public.office_pages_public TO anon, authenticated;

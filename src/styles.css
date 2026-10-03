@@ -1,0 +1,223 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  /* Archivo first: it has no Arabic glyphs, so Arabic text falls through to IBM Plex Sans Arabic
+     automatically per-character — this alone gives every price/number/Latin string the brand's
+     Archivo treatment without hunting down each occurrence across the app. */
+  --font-sans: "Archivo", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-display: "Archivo", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  /* Kept as "brass" for every existing text-brass/bg-brass/border-brass usage (icon tints, the
+     sale-purpose badge, stat accents) — the gold brand accent retired, remapped to ink so those
+     ~25 call sites need no per-file edits and stay compliant with "red is only for price/primary
+     action/available". */
+  --color-brass: var(--brass);
+  --color-brass-foreground: var(--brass-foreground);
+  --color-red-tint-1: var(--red-tint-1);
+  --color-red-tint-2: var(--red-tint-2);
+  --color-red-tint-3: var(--red-tint-3);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  /* Flat/no-shadow design pass — kept defined (not deleted) so Tailwind still generates the
+     .shadow-deed utility every existing <Card className="shadow-deed"> already uses; this single
+     line flattens all of them at once. */
+  --shadow-deed: none;
+}
+
+:root {
+  /* Sharp corners everywhere (the brand rule's only exception is the OS app icon, public/favicon.png,
+     which never reads this variable) — every rounded-sm/md/lg/xl/2xl/3xl utility in the app derives
+     from this one value. */
+  --radius: 0px;
+
+  /* جارك 2026 identity: أحمر جارك / حبر / جص / حجر. */
+  --background: #f3f2f2; /* جص */
+  --foreground: #201e1d; /* حبر */
+  --card: #eae9e9; /* حجر */
+  --card-foreground: #201e1d;
+  --popover: #eae9e9;
+  --popover-foreground: #201e1d;
+  --primary: #ec3013; /* أحمر جارك */
+  --primary-foreground: #f3f2f2; /* جص — نص الأزرار */
+  --primary-hover: #dd2b0f;
+  --primary-active: #ae1800;
+  --secondary: #eae9e9; /* حجر */
+  --secondary-foreground: #201e1d;
+  --muted: #eae9e9;
+  --muted-foreground: #6b6866;
+  --accent: #fff2ef; /* أفتح درجة حمراء */
+  --accent-foreground: #ae1800;
+  --destructive: oklch(0.47 0.16 25);
+  --destructive-foreground: oklch(0.98 0.01 90);
+  --success: oklch(0.52 0.11 150);
+  --success-foreground: oklch(0.98 0.01 90);
+  --warning: oklch(0.72 0.13 75);
+  --warning-foreground: oklch(0.24 0.04 70);
+  --brass: #201e1d; /* حبر — بديل محايد للذهبي القديم */
+  --brass-foreground: #f3f2f2;
+  --red-tint-1: #fff2ef;
+  --red-tint-2: #ffe0d9;
+  --red-tint-3: #ffc4b8;
+  --border: rgba(32, 30, 29, 0.14); /* حبر بشفافية أخف — نفس نسبة --sidebar-border */
+  --input: rgba(32, 30, 29, 0.14);
+  --ring: #ec3013;
+  --chart-1: oklch(0.38 0.068 155);
+  --chart-2: oklch(0.68 0.1 80);
+  --chart-3: oklch(0.55 0.09 200);
+  --chart-4: oklch(0.47 0.16 25);
+  --chart-5: oklch(0.6 0.06 130);
+  --sidebar: #201e1d; /* حبر */
+  --sidebar-foreground: #f3f2f2; /* جص */
+  --sidebar-primary: #ec3013;
+  --sidebar-primary-foreground: #f3f2f2;
+  --sidebar-accent: #2e2b2a;
+  --sidebar-accent-foreground: #f3f2f2;
+  --sidebar-border: rgba(243, 242, 242, 0.12);
+  --sidebar-ring: #ec3013;
+}
+
+.dark {
+  --background: #1a1918;
+  --foreground: #f3f2f2;
+  --card: #26241f;
+  --card-foreground: #f3f2f2;
+  --popover: #26241f;
+  --popover-foreground: #f3f2f2;
+  --primary: #ec3013;
+  --primary-foreground: #f3f2f2;
+  --primary-hover: #ff4a29;
+  --primary-active: #ae1800;
+  --secondary: #2e2b2a;
+  --secondary-foreground: #f3f2f2;
+  --muted: #2e2b2a;
+  --muted-foreground: #a8a5a3;
+  --accent: #3a221d;
+  --accent-foreground: #ffc4b8;
+  --destructive: oklch(0.62 0.17 25);
+  --destructive-foreground: oklch(0.98 0.01 90);
+  --success: oklch(0.68 0.12 150);
+  --success-foreground: oklch(0.2 0.03 150);
+  --warning: oklch(0.78 0.13 75);
+  --warning-foreground: oklch(0.24 0.04 70);
+  --brass: #f3f2f2;
+  --brass-foreground: #201e1d;
+  --red-tint-1: #3a221d;
+  --red-tint-2: #4a2a20;
+  --red-tint-3: #5a3226;
+  --border: rgba(243, 242, 242, 0.14);
+  --input: rgba(243, 242, 242, 0.18);
+  --ring: #ec3013;
+  --chart-1: oklch(0.72 0.11 155);
+  --chart-2: oklch(0.74 0.1 80);
+  --chart-3: oklch(0.65 0.09 200);
+  --chart-4: oklch(0.62 0.17 25);
+  --chart-5: oklch(0.7 0.06 130);
+  --sidebar: #141312;
+  --sidebar-foreground: #f3f2f2;
+  --sidebar-primary: #ec3013;
+  --sidebar-primary-foreground: #f3f2f2;
+  --sidebar-accent: #26241f;
+  --sidebar-accent-foreground: #f3f2f2;
+  --sidebar-border: rgba(243, 242, 242, 0.12);
+  --sidebar-ring: #ec3013;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+  }
+
+  /* Defaults for a bare heading with no explicit Tailwind text-size utility; a component that
+     already sets its own size (e.g. text-3xl) keeps that — utility classes win over these. */
+  h1 {
+    font-size: 42px;
+    font-weight: 700;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+  }
+}
+
+/* السعر والأرقام اللاتينية: Archivo بأقصى وزن، للاستخدام المباشر إن احتجت تجاوز الوزن المحيط. */
+@utility price {
+  font-family: "Archivo", sans-serif;
+  font-weight: 800;
+}
+@utility latin {
+  font-family: "Archivo", sans-serif;
+  font-weight: 800;
+}
+
+@utility deed-rule {
+  background-image: linear-gradient(
+    to left,
+    var(--color-brass) 0,
+    var(--color-brass) 28px,
+    var(--color-border) 28px,
+    var(--color-border) 100%
+  );
+  height: 2px;
+}

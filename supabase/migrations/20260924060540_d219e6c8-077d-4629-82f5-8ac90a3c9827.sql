@@ -1,0 +1,1 @@
+ALTER FUNCTION private.enforce_market_request_rate_limit() SET search_path = '';

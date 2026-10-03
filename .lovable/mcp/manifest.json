@@ -1,0 +1,410 @@
+{
+  "version": 1,
+  "sdk_version": "3.0.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://opvbxluwhltseaqokppn.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "build-your-business-online",
+      "version": "0.1.0",
+      "title": "Build Your Business Online"
+    },
+    "tools": [
+      {
+        "name": "portfolio_summary",
+        "title": "ملخص المحفظة العقارية",
+        "description": "Overall portfolio snapshot for the signed-in user: counts of properties, units by status, active leases, overdue payments and open maintenance requests.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_properties",
+        "title": "قائمة العقارات",
+        "description": "List real-estate properties visible to the signed-in user, optionally filtered by city or a text search on the name.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "city": {
+              "description": "Filter by city name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "search": {
+              "description": "Case-insensitive match on property name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_units",
+        "title": "قائمة الوحدات",
+        "description": "List units (apartments, shops, offices) with their rent, status and property, optionally filtered by property or status.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "propertyId": {
+              "description": "Restrict to one property id.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "status": {
+              "description": "Unit status filter, e.g. vacant, occupied, maintenance.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_vacant_units",
+        "title": "الوحدات المتاحة للإيجار",
+        "description": "List units currently advertised as available for rent, with rent, type and the listing office name.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "city": {
+              "description": "Filter by the listing office city.",
+              "type": "string",
+              "minLength": 1
+            },
+            "maxAnnualRent": {
+              "description": "Only units at or below this annual rent.",
+              "type": "number",
+              "minimum": 0
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_leases",
+        "title": "قائمة العقود",
+        "description": "List lease contracts with tenant, unit, rent and dates. Use expiringWithinDays to find contracts that need renewal soon.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "status": {
+              "description": "Lease status filter, e.g. active, ended.",
+              "type": "string",
+              "minLength": 1
+            },
+            "expiringWithinDays": {
+              "description": "Only leases whose end date falls within this many days from today.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_overdue_payments",
+        "title": "الدفعات المتأخرة",
+        "description": "List rent installments that are unpaid and past their due date, with tenant, unit and amount, plus the total overdue amount.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "default": 50,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_maintenance_requests",
+        "title": "طلبات الصيانة",
+        "description": "List maintenance requests with their status, priority, unit and assigned technician. Filter by status or priority.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "status": {
+              "description": "Status filter, e.g. new, assigned, in_progress, done, closed.",
+              "type": "string",
+              "minLength": 1
+            },
+            "priority": {
+              "description": "Priority filter, e.g. low, normal, high.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_maintenance_request",
+        "title": "إنشاء طلب صيانة",
+        "description": "Create a new maintenance request for a unit. Use list_units to find the unit id first.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "unitId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Unit the request belongs to."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 160,
+              "description": "Short title of the problem."
+            },
+            "description": {
+              "description": "Details of the problem.",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "priority": {
+              "default": "medium",
+              "description": "Urgency of the request.",
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "urgent"
+              ]
+            }
+          },
+          "required": [
+            "unitId",
+            "title"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_tenants",
+        "title": "قائمة المستأجرين",
+        "description": "List tenants with their contact details, optionally searched by name.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "search": {
+              "description": "Case-insensitive match on tenant name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_deals",
+        "title": "قائمة الصفقات",
+        "description": "List sales and rental deals in the pipeline with client, stage, value and commission. Filter by stage or request type.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "stage": {
+              "description": "Pipeline stage filter, e.g. lead, won, lost.",
+              "type": "string",
+              "minLength": 1
+            },
+            "requestType": {
+              "description": "Request type filter, e.g. rent, buy.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "default": 25,
+              "description": "Maximum rows to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_deal",
+        "title": "إنشاء صفقة جديدة",
+        "description": "Add a new client request (lead) to the sales/rental pipeline.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "clientName": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 160,
+              "description": "Client full name."
+            },
+            "phone": {
+              "description": "Client phone number.",
+              "type": "string",
+              "maxLength": 40
+            },
+            "requestType": {
+              "default": "rent",
+              "description": "Request type, e.g. rent, buy, sell.",
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "default": 0,
+              "description": "Expected deal value in SAR.",
+              "type": "number",
+              "minimum": 0
+            },
+            "notes": {
+              "description": "Free-form notes about the request.",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "propertyId": {
+              "description": "Related property id, if known.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "required": [
+            "clientName"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

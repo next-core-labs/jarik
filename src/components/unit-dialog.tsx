@@ -1,0 +1,738 @@
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Plus, Sparkles, Trash2, Wrench } from "lucide-react";
+import { toast } from "sonner";
+
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { todayRiyadh } from "@/lib/dates";
+import { sar, shortDate } from "@/lib/format";
+import { listClientAccounts } from "@/lib/admin-users.functions";
+import { suggestRent } from "@/lib/pricing.functions";
+import { AMENITIES } from "@/lib/amenities";
+import { PROPERTY_TYPE_GROUPS, PROPERTY_TYPES, type ListingPurpose } from "@/lib/property-types";
+import { mediaUrl, syncUnitPhotos, type ExistingPhoto, type PhotoItem } from "@/lib/unit-photos";
+import { UnitPhotosEditor } from "@/components/unit-photos-editor";
+
+export type UnitFormValues = {
+  id?: string;
+  unit_number: string;
+  unit_name: string;
+  unit_type: string;
+  district: string;
+  street: string;
+  floor_no: string;
+  rooms: string;
+  halls: string;
+  bathrooms: string;
+  area: string;
+  annual_rent: string;
+  sale_price: string;
+  listing_purpose: ListingPurpose;
+  /** مزاد عكسي اختياري: تخفيض تلقائي للسعر عند طول شغور الوحدة، بحد أدنى price_floor. */
+  auto_price_decay: boolean;
+  price_floor: string;
+  /** Only meaningful for listing_purpose "sale": "vacant" (still for sale) or "sold". A rental's
+      status is derived automatically from its lease and is never sent from this form. */
+  status: string;
+  electricity_meter_no: string;
+  water_meter_no: string;
+  furnished: boolean;
+  owner_id: string;
+  tenant_id: string;
+  notes: string;
+  /** Public description shown on the listing in the offers market. */
+  listing_description: string;
+  amenities: string[];
+};
+
+export const emptyUnit: UnitFormValues = {
+  unit_number: "",
+  unit_name: "",
+  unit_type: "شقة",
+  district: "",
+  street: "",
+  floor_no: "",
+  rooms: "",
+  halls: "",
+  bathrooms: "",
+  area: "",
+  annual_rent: "",
+  sale_price: "",
+  listing_purpose: "rent",
+  auto_price_decay: false,
+  price_floor: "",
+  status: "vacant",
+  electricity_meter_no: "",
+  water_meter_no: "",
+  furnished: false,
+  owner_id: "none",
+  tenant_id: "none",
+  notes: "",
+  listing_description: "",
+  amenities: [],
+};
+
+const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+export function UnitDialog({
+  open,
+  onOpenChange,
+  propertyId,
+  propertyName,
+  initial,
+  canManage,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  propertyId: string;
+  propertyName: string;
+  initial: UnitFormValues;
+  canManage: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<UnitFormValues>(initial);
+  const isEdit = Boolean(initial.id);
+
+  useEffect(() => {
+    if (open) setForm(initial);
+  }, [open, initial]);
+
+  // The public listing text of an existing unit is loaded here (not by the properties screen).
+  const listingFields = useQuery({
+    queryKey: ["unit-listing-fields", initial.id],
+    enabled: open && Boolean(initial.id),
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("units")
+        .select("listing_description, amenities")
+        .eq("id", initial.id!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+  // Applies the fetched listing fields into the form exactly once per mount, so it doesn't clobber
+  // the user's in-progress edits on every refetch — but it must wait for a *settled* value: a
+  // reopen within react-query's cache window returns the (possibly stale, pre-save) cached data
+  // synchronously while revalidating in the background, and applying that first would lock the
+  // guard onto stale text before the fresh refetch ever lands.
+  const listingLoaded = useRef(false);
+  useEffect(() => {
+    if (listingLoaded.current || !listingFields.data || listingFields.isFetching) return;
+    listingLoaded.current = true;
+    const { listing_description, amenities } = listingFields.data;
+    setForm((f) => ({
+      ...f,
+      listing_description: listing_description ?? "",
+      amenities: amenities ?? [],
+    }));
+  }, [listingFields.data, listingFields.isFetching]);
+
+  // Photos: the saved ones are loaded once, then edited locally and written on save.
+  const savedPhotos = useQuery({
+    queryKey: ["unit-photos", initial.id],
+    enabled: open && Boolean(initial.id),
+    queryFn: async (): Promise<ExistingPhoto[]> => {
+      const { data, error } = await supabase
+        .from("unit_photos")
+        .select("id, path, position")
+        .eq("unit_id", initial.id!)
+        .order("position");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
+  const photosInitialised = useRef(false);
+  useEffect(() => {
+    if (photosInitialised.current || !savedPhotos.data) return;
+    photosInitialised.current = true;
+    setPhotoItems(
+      savedPhotos.data.map((p) => ({
+        key: p.id,
+        id: p.id,
+        path: p.path,
+        file: null,
+        preview: mediaUrl(p.path),
+      })),
+    );
+  }, [savedPhotos.data]);
+
+  const set = <K extends keyof UnitFormValues>(key: K, value: UnitFormValues[K]) =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  const fetchClients = useServerFn(listClientAccounts);
+  const clients = useQuery({
+    queryKey: ["client-accounts"],
+    queryFn: () => fetchClients(),
+    enabled: canManage,
+  });
+
+  const fetchSuggestion = useServerFn(suggestRent);
+  const suggest = useMutation({
+    mutationFn: () =>
+      fetchSuggestion({
+        data: {
+          unitType: form.unit_type,
+          district: form.district.trim(),
+          rooms: num(form.rooms),
+          halls: Number(form.halls || 0),
+          bathrooms: Number(form.bathrooms || 0),
+          area: num(form.area),
+          furnished: form.furnished,
+          floorNo: form.floor_no.trim() || null,
+        },
+      }),
+    onSuccess: (res) => {
+      if (res.suggestedRent) set("annual_rent", String(res.suggestedRent));
+      if (res.source === "ai") toast.success(res.reasoning);
+      else if (res.suggestedRent) toast.info(res.reasoning);
+      else toast.warning(res.reasoning);
+    },
+    onError: (e: Error) => toast.error(e.message || "تعذّر جلب التسعير"),
+  });
+
+  const tenants = useQuery({
+    queryKey: ["tenants-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, full_name, phone")
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (form.auto_price_decay && !(num(form.price_floor) && num(form.price_floor)! > 0)) {
+        throw new Error("حدّد حدًا أدنى صحيحًا للسعر قبل تفعيل التخفيض التلقائي");
+      }
+      const payload = {
+        property_id: propertyId,
+        unit_number: form.unit_number.trim(),
+        unit_name: form.unit_name.trim() || null,
+        unit_type: form.unit_type,
+        district: form.district.trim() || null,
+        street: form.street.trim() || null,
+        floor_no: form.floor_no.trim() || null,
+        rooms: num(form.rooms),
+        halls: Number(form.halls || 0),
+        bathrooms: Number(form.bathrooms || 0),
+        area: num(form.area),
+        annual_rent: Number(form.annual_rent || 0),
+        sale_price: Number(form.sale_price || 0),
+        listing_purpose: form.listing_purpose,
+        auto_price_decay: form.auto_price_decay,
+        price_floor: form.auto_price_decay ? num(form.price_floor) : null,
+        // A rental's status is derived from its lease (sync_unit_status); sending it here would
+        // fight that trigger. Only a sale unit's status is staff-set, so only it is sent.
+        ...(form.listing_purpose === "sale" ? { status: form.status } : {}),
+        electricity_meter_no: form.electricity_meter_no.trim() || null,
+        water_meter_no: form.water_meter_no.trim() || null,
+        furnished: form.furnished,
+        owner_id: form.owner_id === "none" ? null : form.owner_id,
+        tenant_id: form.tenant_id === "none" ? null : form.tenant_id,
+        notes: form.notes.trim() || null,
+        listing_description: form.listing_description.trim() || null,
+        amenities: form.amenities,
+      };
+      let unitId = form.id;
+      if (unitId) {
+        const { error } = await supabase.from("units").update(payload).eq("id", unitId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("units").insert(payload).select("id").single();
+        if (error) throw error;
+        unitId = data.id;
+        // From here on a retry updates this unit instead of creating a second one.
+        setForm((f) => ({ ...f, id: data.id }));
+      }
+      // Don't touch the photos of a unit whose saved photos never loaded (that would delete them).
+      if (!form.id || savedPhotos.data) {
+        await syncUnitPhotos(supabase, unitId, savedPhotos.data ?? [], photoItems);
+        queryClient.invalidateQueries({ queryKey: ["unit-photos", unitId] });
+      }
+    },
+    onSuccess: () => {
+      toast.success(isEdit ? "تم تحديث الوحدة" : "تمت إضافة الوحدة");
+      queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
+      queryClient.invalidateQueries({ queryKey: ["market"] });
+      queryClient.invalidateQueries({ queryKey: ["unit-listing-fields", form.id] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">
+            {isEdit ? "تعديل بيانات الوحدة" : "تسجيل وحدة جديدة"}
+          </DialogTitle>
+          <DialogDescription>{propertyName}</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="رقم الشقة / الوحدة">
+            <Input
+              value={form.unit_number}
+              onChange={(e) => set("unit_number", e.target.value)}
+              placeholder="مثال: 12"
+            />
+          </Field>
+          <Field label="اسم الوحدة (اختياري)">
+            <Input
+              value={form.unit_name}
+              onChange={(e) => set("unit_name", e.target.value)}
+              placeholder="مثال: شقة الياسمين"
+            />
+          </Field>
+          <Field label="النوع">
+            <Select value={form.unit_type} onValueChange={(v) => set("unit_type", v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROPERTY_TYPE_GROUPS.map((g) => (
+                  <SelectGroup key={g.group}>
+                    <SelectLabel>{g.group}</SelectLabel>
+                    {g.types.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+                {/* An office may have typed its own wording before this list existed. */}
+                {PROPERTY_TYPES.includes(form.unit_type) ? null : (
+                  <SelectItem value={form.unit_type}>{form.unit_type}</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="الدور">
+            <Input
+              value={form.floor_no}
+              onChange={(e) => set("floor_no", e.target.value)}
+              placeholder="مثال: الثالث"
+            />
+          </Field>
+          <Field label="الحي">
+            <Input value={form.district} onChange={(e) => set("district", e.target.value)} />
+          </Field>
+          <Field label="الشارع">
+            <Input value={form.street} onChange={(e) => set("street", e.target.value)} />
+          </Field>
+          <Field label="عدد الغرف">
+            <Input
+              inputMode="numeric"
+              value={form.rooms}
+              onChange={(e) => set("rooms", e.target.value)}
+            />
+          </Field>
+          <Field label="عدد الصالات">
+            <Input
+              inputMode="numeric"
+              value={form.halls}
+              onChange={(e) => set("halls", e.target.value)}
+            />
+          </Field>
+          <Field label="عدد الحمامات">
+            <Input
+              inputMode="numeric"
+              value={form.bathrooms}
+              onChange={(e) => set("bathrooms", e.target.value)}
+            />
+          </Field>
+          <Field label="المساحة (م²)">
+            <Input
+              inputMode="decimal"
+              value={form.area}
+              onChange={(e) => set("area", e.target.value)}
+            />
+          </Field>
+          <Field label="نوع العرض">
+            <Select
+              value={form.listing_purpose}
+              onValueChange={(v) => set("listing_purpose", v as ListingPurpose)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rent">للإيجار</SelectItem>
+                <SelectItem value="sale">للبيع</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          {form.listing_purpose === "sale" ? (
+            <>
+              <Field label="سعر البيع (ريال)">
+                <Input
+                  inputMode="decimal"
+                  value={form.sale_price}
+                  onChange={(e) => set("sale_price", e.target.value)}
+                />
+              </Field>
+              <Field label="حالة البيع">
+                <Select
+                  value={form.status === "sold" ? "sold" : "vacant"}
+                  onValueChange={(v) => set("status", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vacant">متاحة للبيع</SelectItem>
+                    <SelectItem value="sold">تم البيع</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </>
+          ) : (
+            <Field label="الإيجار السنوي (ريال)">
+              <Input
+                inputMode="decimal"
+                value={form.annual_rent}
+                onChange={(e) => set("annual_rent", e.target.value)}
+              />
+            </Field>
+          )}
+          <Field label="تخفيض تلقائي عند طول الشغور">
+            <div className="flex h-9 items-center gap-2">
+              <Switch
+                checked={form.auto_price_decay}
+                onCheckedChange={(v) => set("auto_price_decay", v)}
+              />
+              <span className="text-sm text-muted-foreground">
+                يخفَّض 2% أسبوعيًا بعد 14 يوم شغور
+              </span>
+            </div>
+          </Field>
+          {form.auto_price_decay ? (
+            <Field label="الحد الأدنى للسعر (ريال) — ما ينزل عنه">
+              <Input
+                inputMode="decimal"
+                value={form.price_floor}
+                onChange={(e) => set("price_floor", e.target.value)}
+              />
+            </Field>
+          ) : null}
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => suggest.mutate()}
+              disabled={suggest.isPending}
+            >
+              <Sparkles className="size-4 text-brass" />
+              {suggest.isPending ? "جارٍ التسعير..." : "اقترح سعر الإيجار"}
+            </Button>
+          </div>
+          <Field label="رقم عداد الكهرباء">
+            <Input
+              dir="ltr"
+              value={form.electricity_meter_no}
+              onChange={(e) => set("electricity_meter_no", e.target.value)}
+            />
+          </Field>
+          <Field label="رقم عداد المياه">
+            <Input
+              dir="ltr"
+              value={form.water_meter_no}
+              onChange={(e) => set("water_meter_no", e.target.value)}
+            />
+          </Field>
+          <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+            <Label htmlFor="furnished">الوحدة مؤثثة</Label>
+            <Switch
+              id="furnished"
+              checked={form.furnished}
+              onCheckedChange={(v) => set("furnished", v)}
+            />
+          </div>
+          <Field label="المالك">
+            <Select value={form.owner_id} onValueChange={(v) => set("owner_id", v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="اختر المالك" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">بدون مالك</SelectItem>
+                {(clients.data ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.fullName || c.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="المستأجر">
+            <Select value={form.tenant_id} onValueChange={(v) => set("tenant_id", v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="اختر المستأجر" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">بدون مستأجر</SelectItem>
+                {(tenants.data ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.full_name}
+                    {t.phone ? ` · ${t.phone}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
+            <div>
+              <p className="font-medium">الإعلان في سوق العروض</p>
+              <p className="text-xs text-muted-foreground">
+                تظهر الوحدة للجميع في سوق العروض عندما تكون شاغرة ويكون «العرض العلني» مفعّلًا في
+                هوية المكتب.
+              </p>
+            </div>
+            <Field label="صور الوحدة">
+              <UnitPhotosEditor
+                items={photoItems}
+                onChange={setPhotoItems}
+                disabled={!canManage || save.isPending || (isEdit && savedPhotos.isLoading)}
+              />
+            </Field>
+            <Field label="وصف الإعلان (يظهر للعموم)">
+              <Textarea
+                rows={4}
+                maxLength={2000}
+                value={form.listing_description}
+                onChange={(e) => set("listing_description", e.target.value)}
+                placeholder="مثال: شقة جديدة بتشطيب فاخر، قريبة من المدارس والخدمات، مدخل خاص ومطبخ راكب…"
+              />
+            </Field>
+            <Field label="المزايا والخدمات">
+              <div className="flex flex-wrap gap-2">
+                {AMENITIES.map((a) => {
+                  const on = form.amenities.includes(a);
+                  return (
+                    <button
+                      key={a}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        set(
+                          "amenities",
+                          on ? form.amenities.filter((x) => x !== a) : [...form.amenities, a],
+                        )
+                      }
+                      className={`border px-3 py-1 text-xs transition-colors ${
+                        on
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-input hover:bg-muted"
+                      }`}
+                    >
+                      {a}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="ملاحظات">
+              <Textarea
+                rows={3}
+                value={form.notes}
+                onChange={(e) => set("notes", e.target.value)}
+                placeholder="أي تفاصيل تخص الوحدة"
+              />
+            </Field>
+          </div>
+        </div>
+
+        {form.id ? <RepairInvoices unitId={form.id} canManage={canManage} /> : null}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            إلغاء
+          </Button>
+          <Button
+            onClick={() => save.mutate()}
+            disabled={
+              !form.unit_number.trim() ||
+              save.isPending ||
+              // don't save over the listing text/photos before they have loaded
+              (isEdit && (listingFields.isLoading || savedPhotos.isLoading))
+            }
+          >
+            {isEdit ? "حفظ التعديلات" : "إضافة الوحدة"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function RepairInvoices({ unitId, canManage }: { unitId: string; canManage: boolean }) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(() => todayRiyadh());
+
+  const list = useQuery({
+    queryKey: ["repair-invoices", unitId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("repair_invoices")
+        .select("id, title, vendor, amount, invoice_date, invoice_number, notes")
+        .eq("unit_id", unitId)
+        .order("invoice_date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const add = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("repair_invoices").insert({
+        unit_id: unitId,
+        title: title.trim(),
+        vendor: vendor.trim() || null,
+        amount: Number(amount || 0),
+        invoice_date: invoiceDate,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setTitle("");
+      setVendor("");
+      setAmount("");
+      toast.success("تمت إضافة فاتورة الإصلاح");
+      queryClient.invalidateQueries({ queryKey: ["repair-invoices", unitId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "تعذّرت الإضافة"),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("repair_invoices").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repair-invoices", unitId] }),
+  });
+
+  const total = (list.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+
+  return (
+    <div className="mt-2 rounded-md border border-border p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="flex items-center gap-2 font-medium">
+          <Wrench className="size-4 text-brass" />
+          فواتير الإصلاح
+        </p>
+        <span className="text-sm text-muted-foreground">الإجمالي {sar(total)}</span>
+      </div>
+
+      <div className="space-y-2">
+        {(list.data ?? []).map((r) => (
+          <div
+            key={r.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-sm"
+          >
+            <div>
+              <p className="font-medium">{r.title}</p>
+              <p className="text-xs text-muted-foreground">
+                {r.vendor ? `${r.vendor} · ` : ""}
+                {shortDate(r.invoice_date)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span>{sar(Number(r.amount))}</span>
+              {canManage ? (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => remove.mutate(r.id)}
+                  aria-label="حذف الفاتورة"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ))}
+        {(list.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">لا توجد فواتير إصلاح لهذه الوحدة.</p>
+        ) : null}
+      </div>
+
+      {canManage ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+          <Input
+            placeholder="وصف الإصلاح"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <Input placeholder="المنفّذ" value={vendor} onChange={(e) => setVendor(e.target.value)} />
+          <Input
+            className="sm:w-28"
+            inputMode="decimal"
+            placeholder="المبلغ"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          <Input
+            className="sm:w-40"
+            type="date"
+            value={invoiceDate}
+            onChange={(e) => setInvoiceDate(e.target.value)}
+          />
+          <Button
+            className="sm:col-span-4"
+            variant="outline"
+            onClick={() => add.mutate()}
+            disabled={!title.trim() || add.isPending}
+          >
+            <Plus className="size-4" />
+            إضافة فاتورة إصلاح
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
