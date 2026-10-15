@@ -1,4 +1,4 @@
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakLogo } from "@/components/jarak-logo";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft, MailCheck } from "lucide-react";
@@ -270,14 +270,7 @@ function AuthPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="hidden flex-col justify-between bg-sidebar p-12 text-sidebar-foreground lg:flex">
         <div className="flex items-center gap-2">
-          <img
-            src={jarakLogo}
-            alt="جارك"
-            width={40}
-            height={40}
-            className="size-10 bg-background p-1"
-          />
-          <span className="font-display text-lg font-bold">جارك</span>
+          <JarakLogo />
         </div>
         <div>
           <h2 className="font-display text-3xl leading-snug font-bold">
@@ -324,7 +317,11 @@ function AuthPage() {
                 </Button>
               </form>
               <div className="mt-4 flex justify-between text-sm">
-                <button type="button" className="text-primary hover:underline" onClick={resendCode}>
+                <button
+                  type="button"
+                  className="text-foreground underline underline-offset-4 hover:text-red-text"
+                  onClick={resendCode}
+                >
                   إعادة إرسال الرمز
                 </button>
                 <button
@@ -449,7 +446,7 @@ function AuthPage() {
                       {rememberBox}
                       <button
                         type="button"
-                        className="text-sm text-primary hover:underline"
+                        className="text-sm text-foreground underline underline-offset-4 hover:text-red-text"
                         onClick={() => setStep("forgot")}
                       >
                         نسيت كلمة المرور؟

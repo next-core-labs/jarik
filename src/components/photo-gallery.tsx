@@ -1,17 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, ImageOff, Images } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
+import { JarakSymbol } from "@/components/jarak-logo";
+import { tf } from "@/components/listing-detail/format";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import type { Locale } from "@/lib/i18n";
 import { mediaUrl } from "@/lib/unit-photos";
+import { cn } from "@/lib/utils";
 
 /**
- * Listing gallery: one large photo with up to three thumbnails beside it («+N» on the last one),
- * and a full-screen viewer with previous/next buttons and the arrow keys.
+ * Listing gallery: a large hero photo with two stacked thumbnails beside it on wide screens, and a
+ * full-screen viewer with previous/next buttons and the arrow keys. On phones the hero takes the
+ * arch top (the brand's "your home" shape); on wide screens it stays square beside its thumbnails.
  */
-export function PhotoGallery({ paths, alt }: { paths: string[]; alt: string }) {
+export function PhotoGallery({
+  paths,
+  alt,
+  locale = "ar",
+  badge,
+}: {
+  paths: string[];
+  alt: string;
+  locale?: Locale;
+  /** Sits on the hero's bottom-start corner (the listing's purpose). */
+  badge?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
   const count = paths.length;
+  const rtl = locale !== "en";
 
   const show = (i: number) => {
     setIndex(i);
@@ -23,74 +40,80 @@ export function PhotoGallery({ paths, alt }: { paths: string[]; alt: string }) {
   useEffect(() => {
     if (!open || count < 2) return;
     const onKey = (e: KeyboardEvent) => {
-      // The page is right-to-left: the left arrow moves forward.
-      if (e.key === "ArrowLeft") next();
-      if (e.key === "ArrowRight") prev();
+      // Right-to-left, the left arrow moves forward; left-to-right, the right arrow does.
+      if (e.key === "ArrowLeft") (rtl ? next : prev)();
+      if (e.key === "ArrowRight") (rtl ? prev : next)();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, count, next, prev]);
+  }, [open, count, next, prev, rtl]);
+
+  const heroShape =
+    "relative h-[280px] overflow-hidden rounded-t-[160px] bg-muted lg:h-[440px] lg:rounded-none";
+  const badgeSlot = badge ? (
+    <span className="absolute start-3.5 bottom-3.5 flex">{badge}</span>
+  ) : null;
 
   if (count === 0) {
     return (
-      <div className="grid aspect-[16/8] place-items-center rounded-xl border border-dashed border-border bg-muted text-muted-foreground">
-        <span className="flex flex-col items-center gap-2 text-sm">
-          <ImageOff className="size-10 opacity-50" aria-hidden />
-          لا توجد صور لهذا العرض بعد
+      <div className={cn(heroShape, "grid place-items-center")}>
+        <span className="flex flex-col items-center gap-2 text-[13px] text-muted-foreground">
+          <JarakSymbol mono className="size-14 text-foreground opacity-[.22]" />
+          {tf(locale, "ld_gallery_empty")}
         </span>
+        {badgeSlot}
       </div>
     );
   }
 
-  const side = paths.slice(1, 4);
-  const hidden = count - 4;
+  const thumbs = paths.slice(1, 3);
+  const PrevIcon = rtl ? ChevronRight : ChevronLeft;
+  const NextIcon = rtl ? ChevronLeft : ChevronRight;
 
   return (
     <>
-      <div className="grid gap-2 md:grid-cols-[3fr_1fr]">
+      <div
+        className={cn(
+          "grid gap-2",
+          thumbs.length > 0 && "lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)]",
+        )}
+      >
         <button
           type="button"
           onClick={() => show(0)}
-          className="group relative block aspect-[16/10] overflow-hidden rounded-xl bg-muted"
-          aria-label="عرض الصور بحجم كبير"
+          className={cn(heroShape, "group block w-full cursor-pointer")}
+          aria-label={tf(locale, "ld_gallery_open")}
         >
           <img
             src={mediaUrl(paths[0]!)}
             alt={alt}
             className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
-          {count > 1 ? (
-            <span className="absolute end-3 bottom-3 inline-flex items-center gap-1.5 rounded-md bg-black/65 px-3 py-1.5 text-sm text-white">
-              <Images className="size-4" aria-hidden />
-              {count} صور
-            </span>
-          ) : null}
+          {badgeSlot}
+          <span className="absolute end-3.5 bottom-3.5 flex h-[34px] items-center bg-foreground px-3 text-[13px] font-semibold text-background tabular-nums">
+            {tf(locale, "ld_gallery_show", { n: count })}
+          </span>
         </button>
 
-        {side.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2 md:grid-cols-1 md:grid-rows-3">
-            {side.map((p, i) => (
+        {thumbs.length > 0 ? (
+          <div className="hidden grid-rows-2 gap-2 lg:grid">
+            {thumbs.map((p, i) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => show(i + 1)}
-                className="relative block aspect-[4/3] overflow-hidden rounded-xl bg-muted md:aspect-auto"
-                aria-label={`عرض الصورة ${i + 2}`}
+                className={cn(
+                  "relative block cursor-pointer overflow-hidden bg-muted",
+                  thumbs.length === 1 && "row-span-2",
+                )}
+                aria-label={tf(locale, "ld_gallery_photo", { n: i + 2 })}
               >
                 <img
                   src={mediaUrl(p)}
-                  alt={`${alt} — صورة ${i + 2}`}
+                  alt={`${alt} — ${tf(locale, "ld_gallery_photo", { n: i + 2 })}`}
                   loading="lazy"
                   className="size-full object-cover"
                 />
-                {i === side.length - 1 && hidden > 0 ? (
-                  <span
-                    dir="ltr"
-                    className="absolute inset-0 grid place-items-center bg-black/55 text-lg font-bold text-white"
-                  >
-                    +{hidden}
-                  </span>
-                ) : null}
               </button>
             ))}
           </div>
@@ -98,40 +121,43 @@ export function PhotoGallery({ paths, alt }: { paths: string[]; alt: string }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl gap-3 border-0 bg-black/95 p-3 text-white sm:max-w-4xl">
+        <DialogContent
+          dir={rtl ? "rtl" : "ltr"}
+          className="max-w-4xl gap-3 border-0 bg-black/95 p-3 text-white sm:max-w-4xl"
+        >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <DialogDescription className="sr-only">
-            صورة {index + 1} من {count}
+            {tf(locale, "ld_gallery_of", { n: index + 1, total: count })}
           </DialogDescription>
           <div className="relative">
             <img
               src={mediaUrl(paths[index]!)}
-              alt={`${alt} — صورة ${index + 1}`}
-              className="mx-auto max-h-[70vh] w-full rounded-md object-contain"
+              alt={`${alt} — ${tf(locale, "ld_gallery_photo", { n: index + 1 })}`}
+              className="mx-auto max-h-[70vh] w-full object-contain"
             />
             {count > 1 ? (
               <>
                 <button
                   type="button"
                   onClick={prev}
-                  aria-label="الصورة السابقة"
-                  className="absolute end-2 top-1/2 grid size-10 -translate-y-1/2 place-items-center bg-white/20 hover:bg-white/35"
+                  aria-label={tf(locale, "ld_gallery_prev")}
+                  className="absolute start-2 top-1/2 grid size-11 -translate-y-1/2 cursor-pointer place-items-center bg-white/20 hover:bg-white/35"
                 >
-                  <ChevronRight className="size-6" />
+                  <PrevIcon className="size-6" />
                 </button>
                 <button
                   type="button"
                   onClick={next}
-                  aria-label="الصورة التالية"
-                  className="absolute start-2 top-1/2 grid size-10 -translate-y-1/2 place-items-center bg-white/20 hover:bg-white/35"
+                  aria-label={tf(locale, "ld_gallery_next")}
+                  className="absolute end-2 top-1/2 grid size-11 -translate-y-1/2 cursor-pointer place-items-center bg-white/20 hover:bg-white/35"
                 >
-                  <ChevronLeft className="size-6" />
+                  <NextIcon className="size-6" />
                 </button>
               </>
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/70">
+            <span className="text-sm text-white/70 tabular-nums">
               {index + 1} / {count}
             </span>
             <div className="flex gap-1.5 overflow-x-auto">
@@ -140,11 +166,12 @@ export function PhotoGallery({ paths, alt }: { paths: string[]; alt: string }) {
                   key={p}
                   type="button"
                   onClick={() => setIndex(i)}
-                  aria-label={`الانتقال إلى الصورة ${i + 1}`}
+                  aria-label={tf(locale, "ld_gallery_photo", { n: i + 1 })}
                   aria-current={i === index}
-                  className={`size-12 shrink-0 overflow-hidden rounded border-2 ${
-                    i === index ? "border-brass" : "border-transparent opacity-70"
-                  }`}
+                  className={cn(
+                    "size-12 shrink-0 cursor-pointer overflow-hidden border-2",
+                    i === index ? "border-white" : "border-transparent opacity-70",
+                  )}
                 >
                   <img src={mediaUrl(p)} alt="" loading="lazy" className="size-full object-cover" />
                 </button>

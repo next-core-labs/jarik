@@ -7,23 +7,33 @@ import { cn } from "@/lib/utils";
 const buttonVariants = cva(
   // Text/icon start from the inline-start edge (the right, in this RTL app) rather than centering
   // — the brand rule for every button with a label. Icon-only buttons re-center below.
-  "inline-flex items-center justify-start gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  // Focus is a plaster gap + ink ring (never red), so a focused primary doesn't read as "more red".
+  "inline-flex items-center justify-start gap-2 whitespace-nowrap rounded-md font-semibold cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-[18px] [&_svg]:shrink-0",
   {
     variants: {
       variant: {
+        // أحمر جارك — one per screen: the action the screen exists for.
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active disabled:bg-muted disabled:text-subtle-foreground",
+        destructive:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:bg-muted disabled:text-subtle-foreground",
+        outline:
+          "border-[1.5px] border-foreground bg-transparent text-foreground hover:bg-muted active:bg-border disabled:opacity-50",
+        // Ink — the confident non-primary action (save, confirm in a secondary flow).
+        secondary:
+          "bg-foreground text-background hover:bg-foreground/90 active:bg-foreground/80 disabled:bg-muted disabled:text-subtle-foreground",
+        ghost: "text-foreground hover:bg-muted active:bg-border disabled:opacity-50",
+        link: "text-foreground underline underline-offset-[5px] hover:text-red-text disabled:opacity-50",
+        // Product colour for WhatsApp contact, not a "success" state.
+        whatsapp:
+          "bg-whatsapp text-whatsapp-foreground hover:bg-whatsapp/90 disabled:bg-muted disabled:text-subtle-foreground",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9 justify-center",
+        // 44 is the minimum target; 48 for public pages; 36 only inside dense tables.
+        default: "h-11 px-5 text-[15px]",
+        sm: "h-9 px-3 text-sm",
+        lg: "h-12 px-6 text-base",
+        icon: "size-11 justify-center",
       },
     },
     defaultVariants: {

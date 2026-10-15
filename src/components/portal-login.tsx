@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakLogo } from "@/components/jarak-logo";
 import { PasswordField } from "@/components/password-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,14 +102,7 @@ export function PortalLoginPage({
       <div className="flex flex-col justify-center p-6 sm:p-12">
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
-            <img
-              src={jarakLogo}
-              alt="جارك"
-              width={36}
-              height={36}
-              className="size-9 bg-background p-1"
-            />
-            <span className="font-display text-lg font-bold">جارك</span>
+            <JarakLogo size="sm" />
           </div>
           <h1 className="font-display text-2xl font-bold">{title}</h1>
 
@@ -135,7 +128,7 @@ export function PortalLoginPage({
               />
               <button
                 type="button"
-                className="text-sm text-primary hover:underline"
+                className="text-sm text-foreground underline underline-offset-4 hover:text-red-text"
                 onClick={() => setStep("forgot")}
               >
                 نسيت كلمة المرور؟
@@ -149,7 +142,7 @@ export function PortalLoginPage({
                   <Link
                     to="/auth"
                     search={{ next: "/owner-dashboard" }}
-                    className="text-primary hover:underline"
+                    className="text-foreground underline underline-offset-4 hover:text-red-text"
                   >
                     سجّل حساب جديد
                   </Link>
@@ -217,14 +210,7 @@ export function PortalLoginPage({
         style={bandPatternStyle}
       >
         <div className="flex items-center gap-2">
-          <img
-            src={jarakLogo}
-            alt="جارك"
-            width={40}
-            height={40}
-            className="size-10 bg-background p-1"
-          />
-          <span className="font-display text-lg font-bold">جارك</span>
+          <JarakLogo />
         </div>
         <div>
           <h2 className="font-display text-3xl leading-snug font-bold">{heroTitle}</h2>

@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/app-shell";
 import { AccountProfileCard } from "@/components/account-profile-card";
 import { PasswordField } from "@/components/password-field";
 import { OfficeLinkRequest } from "@/components/office-link-request";
+import { OwnerAutoApproveCard } from "@/components/owner-auto-approve-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -48,6 +49,8 @@ function OwnerSettings() {
 
       <div className="space-y-6">
         <AccountProfileCard />
+
+        <OwnerAutoApproveCard />
 
         <Card className="max-w-md shadow-deed">
           <CardHeader>

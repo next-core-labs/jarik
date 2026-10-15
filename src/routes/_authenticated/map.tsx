@@ -149,13 +149,13 @@ function MapPage() {
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="size-3 rounded-full bg-[#16a34a]" /> مشغولة بالكامل
+          <span className="size-3 rounded-full bg-[#1F7A4D]" /> مشغولة بالكامل
         </span>
         <span className="flex items-center gap-2">
-          <span className="size-3 rounded-full bg-[#d97706]" /> فيها وحدات شاغرة
+          <span className="size-3 rounded-full bg-[#9A6200]" /> فيها وحدات شاغرة
         </span>
         <span className="flex items-center gap-2">
-          <span className="size-3 rounded-full bg-[#64748b]" /> بلا وحدات
+          <span className="size-3 rounded-full bg-[#8E8986]" /> بلا وحدات
         </span>
         <span className="flex items-center gap-2">
           <RefreshCw className="size-3.5" /> اضغط أي عقار على الخريطة لتفاصيله

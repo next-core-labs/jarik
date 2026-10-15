@@ -20,6 +20,9 @@ export type Listing = {
   annualRent: number;
   /** سعر البيع لعروض البيع، و0 لغيرها. */
   salePrice: number;
+  /** The asking price before the automatic vacant-price cuts — set only while the current price is
+   *  really below it (the view returns null otherwise). */
+  listPrice: number | null;
   purpose: ListingPurpose;
   furnished: boolean;
   description: string | null;
@@ -62,6 +65,7 @@ export function toListing(row: ListingRow): Listing | null {
     area: row.area,
     annualRent: Number(row.annual_rent ?? 0),
     salePrice: Number(row.sale_price ?? 0),
+    listPrice: row.list_price != null ? Number(row.list_price) : null,
     purpose: isPurpose(row.listing_purpose) ? row.listing_purpose : "rent",
     furnished: Boolean(row.furnished),
     description: row.listing_description,
@@ -95,6 +99,14 @@ export function toListing(row: ListingRow): Listing | null {
 /** The number this offer is judged by: the asking price when it is for sale, else the annual rent. */
 export function listingPrice(l: Listing): number {
   return l.purpose === "sale" ? l.salePrice : l.annualRent;
+}
+
+/** Whole-percent drop from the original asking price (≥1), or null when there is none. */
+export function priceDropPct(l: Listing): number | null {
+  const now = listingPrice(l);
+  if (!l.listPrice || now <= 0 || l.listPrice <= now) return null;
+  const pct = Math.round(((l.listPrice - now) / l.listPrice) * 100);
+  return pct >= 1 ? pct : null;
 }
 
 /** Lower-case, unify Arabic letter variants and strip diacritics, so "الأندلس" finds "الاندلس". */

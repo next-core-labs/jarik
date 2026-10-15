@@ -53,7 +53,7 @@ function Maintenance() {
       const { data, error } = await supabase
         .from("maintenance_requests")
         .select(
-          "id, unit_id, title, description, priority, status, cost, source, created_at, scheduled_at, approval_status, approval_note, rating, rating_note, photo_path, audio_path, tenants(full_name), units(unit_number, owner_id, properties(name))",
+          "id, unit_id, title, description, priority, status, cost, source, created_at, scheduled_at, approval_status, approval_note, rating, rating_note, photo_path, audio_path, tenants(full_name), units(unit_number, owner_id, properties(name, owner_id))",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -258,7 +258,9 @@ function Maintenance() {
                               saveCost.mutate({
                                 id: m.id,
                                 cost: v,
-                                hasOwner: !!m.units?.owner_id,
+                                // Same rule as private.unit_owner(): the unit's own owner, else
+                                // the property's — most units are owned via their property.
+                                hasOwner: !!(m.units?.owner_id ?? m.units?.properties?.owner_id),
                                 cap: capFor(m.unit_id),
                               });
                             }

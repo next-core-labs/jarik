@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, LayoutDashboard } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakLogo, JarakSymbol } from "@/components/jarak-logo";
 import { supabase } from "@/integrations/supabase/client";
 import { translate, useLocale, type Locale } from "@/lib/i18n";
 
@@ -25,11 +25,19 @@ export function useIsSignedIn(): boolean | null {
   return signedIn;
 }
 
+/** A nav tab of the public header: the active page carries the 3px red underline (the header's
+ *  one red element — the brand bar under "you are here"). */
+const NAV_TAB =
+  "flex h-16 items-center px-2 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground sm:px-4 sm:text-[15px]";
+const NAV_TAB_ACTIVE = {
+  className: "font-bold text-foreground shadow-[inset_0_-3px_0_var(--color-primary)]",
+};
+
 /**
- * Header of the public pages (offers market, listing, owner and office pages). The AR/EN toggle
- * only appears where a caller passes `locale`/`onLocaleChange` (today: the marketplace homepage
- * and the unit listing page) — every other public page keeps its current Arabic-only header
- * unchanged.
+ * Header of the public pages (offers market, listing, owner and office pages): a white 64px bar
+ * with the horizontal lockup, underlined nav tabs, and an ink sign-in button. The AR/EN toggle only
+ * appears where a caller passes `locale`/`onLocaleChange` (today: the marketplace homepage and the
+ * unit listing page) — every other public page stays Arabic-only.
  */
 export function SiteHeader({
   locale = "ar",
@@ -41,46 +49,34 @@ export function SiteHeader({
   const signedIn = useIsSignedIn();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   return (
-    <header className="bg-sidebar text-sidebar-foreground">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <Link to="/" className="flex items-center gap-2">
-          <img
-            src={jarakLogo}
-            alt="جارك"
-            width={40}
-            height={40}
-            className="size-10 bg-background p-1"
-          />
-          <span className="font-display text-lg font-bold">جارك</span>
+    <header className="relative z-20 h-16 shrink-0 border-b border-border bg-card text-foreground">
+      <div className="flex h-full items-center gap-2 px-3 sm:gap-5 sm:px-5">
+        <Link to="/" className="flex shrink-0 items-center" aria-label="جارك">
+          <JarakLogo size="sm" className="hidden sm:inline-flex" />
+          <JarakSymbol className="size-[34px] sm:hidden" />
         </Link>
-        <nav className="flex items-center gap-1 text-sm whitespace-nowrap sm:gap-2">
+        <nav className="flex h-full min-w-0 flex-1 items-stretch overflow-x-auto">
           <Link
             to="/"
-            className="rounded-md px-3 py-2 transition-colors hover:bg-sidebar-accent"
-            activeProps={{ className: "bg-sidebar-accent" }}
+            className={NAV_TAB}
+            activeProps={NAV_TAB_ACTIVE}
             activeOptions={{ exact: true }}
           >
             {t("nav_market")}
           </Link>
-          <Link
-            to="/requests-market"
-            className="rounded-md px-3 py-2 transition-colors hover:bg-sidebar-accent"
-            activeProps={{ className: "bg-sidebar-accent" }}
-          >
+          <Link to="/requests-market" className={NAV_TAB} activeProps={NAV_TAB_ACTIVE}>
             {t("nav_requests")}
           </Link>
-          <Link
-            to="/offices"
-            className="hidden rounded-md px-3 py-2 transition-colors hover:bg-sidebar-accent sm:block"
-            activeProps={{ className: "bg-sidebar-accent" }}
-          >
+          <Link to="/offices" className={NAV_TAB} activeProps={NAV_TAB_ACTIVE}>
             {t("nav_offices")}
           </Link>
+        </nav>
+        <div className="flex shrink-0 items-center gap-2">
           {onLocaleChange ? (
             <button
               type="button"
               onClick={() => onLocaleChange(locale === "ar" ? "en" : "ar")}
-              className="rounded-md border border-sidebar-foreground/30 px-2 py-1.5 text-xs font-medium transition-colors hover:bg-sidebar-accent"
+              className="flex h-10 items-center border border-border px-2.5 font-[Archivo] text-sm font-semibold transition-colors hover:bg-muted sm:px-3"
               aria-label="Switch language"
             >
               {locale === "ar" ? "EN" : "عربي"}
@@ -89,7 +85,7 @@ export function SiteHeader({
           {signedIn ? (
             <Link
               to="/dashboard"
-              className="inline-flex items-center gap-2 rounded-md bg-sidebar-primary px-3 py-2 font-medium text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+              className="flex h-10 items-center gap-2 border border-border px-3 text-sm font-semibold transition-colors hover:bg-muted"
             >
               <LayoutDashboard className="size-4" />
               {t("nav_dashboard")}
@@ -97,23 +93,32 @@ export function SiteHeader({
           ) : (
             <Link
               to="/auth"
-              className="inline-flex items-center gap-2 rounded-md bg-sidebar-primary px-3 py-2 font-medium text-sidebar-primary-foreground transition-opacity hover:opacity-90"
+              className="flex h-10 items-center bg-foreground px-4 text-[15px] font-semibold text-background transition-colors hover:bg-foreground/90"
             >
-              <span className="sm:hidden">{locale === "ar" ? "دخول" : "In"}</span>
-              <span className="hidden sm:inline">{t("nav_signin")}</span>
-              <ArrowLeft className="size-4" />
+              {t("nav_signin")}
             </Link>
           )}
-        </nav>
+        </div>
       </div>
     </header>
   );
 }
 
-/** Subtle geometric pattern used behind the hero and profile bands. */
+/** Ink band backdrop for the hero and profile bands: one oversized stone symbol (the two homes)
+ *  bleeding off the far edge, as on the social covers — flat, no gradients. Sits at the inline end
+ *  (left in RTL) so it never runs behind the band's heading. */
+const BAND_SYMBOL =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#F3F2F2" fill-opacity="0.045">' +
+      '<path fill-rule="evenodd" d="M8 94V38A20 20 0 0 1 48 38V82H94V94Z M20 94V64A8 8 0 0 1 36 64V94Z"/>' +
+      '<path fill-rule="evenodd" d="M54 76V52A18 18 0 0 1 90 52V76Z M64 76V62A8 8 0 0 1 80 62V76Z"/>' +
+      "</svg>",
+  );
+
 export const bandPatternStyle = {
-  backgroundImage:
-    // The second radial highlight used the old brass-gold accent (oklch(0.68 0.1 80)) — updated
-    // to the exact brand red (#EC3013) so it reads correctly against the new ink header background.
-    "radial-gradient(circle at 20% 20%, oklch(1 0 0 / 0.07) 0, transparent 40%), radial-gradient(circle at 85% 70%, rgba(236, 48, 19, 0.16) 0, transparent 45%), repeating-linear-gradient(45deg, oklch(1 0 0 / 0.035) 0 2px, transparent 2px 22px), repeating-linear-gradient(-45deg, oklch(1 0 0 / 0.035) 0 2px, transparent 2px 22px)",
+  backgroundImage: `url("${BAND_SYMBOL}")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "left 4% top 30%",
+  backgroundSize: "auto 150%",
 } as const;

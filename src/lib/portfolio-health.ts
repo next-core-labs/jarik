@@ -1,3 +1,5 @@
+import { arCount } from "@/lib/format";
+
 export type PortfolioHealthInput = {
   occupancyPct: number;
   overdueCount: number;
@@ -25,10 +27,38 @@ export function portfolioHealthScore(input: PortfolioHealthInput): PortfolioHeal
   score -= Math.min(15, expiringLeasesCount * 3);
   score = Math.max(0, Math.min(100, Math.round(score)));
 
+  // Number agreement and Arabic-Indic digits, matching the money figures beside this text.
   const issues: string[] = [];
-  if (overdueCount > 0) issues.push(`${overdueCount} دفعة متأخرة`);
-  if (pendingMaintenanceCount > 0) issues.push(`${pendingMaintenanceCount} صيانة بانتظار موافقتك`);
-  if (expiringLeasesCount > 0) issues.push(`${expiringLeasesCount} عقد ينتهي قريبًا`);
+  if (overdueCount > 0) {
+    issues.push(
+      arCount(overdueCount, {
+        one: "دفعة متأخرة",
+        two: "دفعتان متأخرتان",
+        few: "دفعات متأخرة",
+        many: "دفعة متأخرة",
+      }),
+    );
+  }
+  if (pendingMaintenanceCount > 0) {
+    issues.push(
+      arCount(pendingMaintenanceCount, {
+        one: "صيانة بانتظار موافقتك",
+        two: "صيانتان بانتظار موافقتك",
+        few: "طلبات صيانة بانتظار موافقتك",
+        many: "طلب صيانة بانتظار موافقتك",
+      }),
+    );
+  }
+  if (expiringLeasesCount > 0) {
+    issues.push(
+      arCount(expiringLeasesCount, {
+        one: "عقد ينتهي قريبًا",
+        two: "عقدان ينتهيان قريبًا",
+        few: "عقود تنتهي قريبًا",
+        many: "عقدًا ينتهي قريبًا",
+      }),
+    );
+  }
   const issuesText = issues.join(" و");
 
   let summary: string;

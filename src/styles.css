@@ -4,6 +4,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Jark Design System v1.0 (Oct 2026). Built from the "Two neighbours" logo: right angles everywhere,
+   one arch reserved for "your home" signals (listing cover photos, map pins, empty states). Red is
+   the brand and the primary action only — never an error; errors use pomegranate (--destructive). */
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -16,6 +20,7 @@
      Archivo treatment without hunting down each occurrence across the app. */
   --font-sans: "Archivo", "IBM Plex Sans Arabic", system-ui, sans-serif;
   --font-display: "Archivo", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -30,20 +35,35 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-destructive-tint-foreground: var(--destructive-tint-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-tint: var(--success-tint);
+  --color-success-tint-foreground: var(--success-tint-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-tint: var(--warning-tint);
+  --color-warning-tint-foreground: var(--warning-tint-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-tint: var(--info-tint);
+  --color-info-tint-foreground: var(--info-tint-foreground);
+  /* WhatsApp is a product colour, not "success" — kept separate so the two can diverge. */
+  --color-whatsapp: var(--whatsapp);
+  --color-whatsapp-foreground: var(--whatsapp-foreground);
   /* Kept as "brass" for every existing text-brass/bg-brass/border-brass usage (icon tints, the
      sale-purpose badge, stat accents) — the gold brand accent retired, remapped to ink so those
      ~25 call sites need no per-file edits and stay compliant with "red is only for price/primary
      action/available". */
   --color-brass: var(--brass);
   --color-brass-foreground: var(--brass-foreground);
+  --color-red-text: var(--red-text);
   --color-red-tint-1: var(--red-tint-1);
   --color-red-tint-2: var(--red-tint-2);
   --color-red-tint-3: var(--red-tint-3);
@@ -64,6 +84,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Elevation: borders before shadows. e0 is a plain border (cards, tables — no utility needed),
+     e1 lifts hover menus and popups, e2 is reserved for overlays (dialogs, sheets, toasts). */
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
   /* Flat/no-shadow design pass — kept defined (not deleted) so Tailwind still generates the
      .shadow-deed utility every existing <Card className="shadow-deed"> already uses; this single
      line flattens all of them at once. */
@@ -71,101 +95,145 @@
 }
 
 :root {
-  /* Sharp corners everywhere (the brand rule's only exception is the OS app icon, public/favicon.png,
-     which never reads this variable) — every rounded-sm/md/lg/xl/2xl/3xl utility in the app derives
-     from this one value. */
+  /* Sharp corners everywhere (the brand rule's only exceptions are the OS app icon, avatars, map
+     clusters and the arch — see @utility rounded-arch) — every rounded-sm/md/lg/xl/2xl/3xl utility
+     in the app derives from this one value. */
   --radius: 0px;
 
-  /* جارك 2026 identity: أحمر جارك / حبر / جص / حجر. */
-  --background: #f3f2f2; /* جص */
-  --foreground: #201e1d; /* حبر */
-  --card: #eae9e9; /* حجر */
+  /* Brand: أحمر جارك #EC3013 · حبر #201E1D · جصّ #F3F2F2 · ليل #1A1918. */
+  --background: #f3f2f2; /* bg · جصّ */
+  --foreground: #201e1d; /* text · حبر */
+  --card: #ffffff; /* surface */
   --card-foreground: #201e1d;
-  --popover: #eae9e9;
+  --popover: #ffffff;
   --popover-foreground: #201e1d;
-  --primary: #ec3013; /* أحمر جارك */
-  --primary-foreground: #f3f2f2; /* جص — نص الأزرار */
-  --primary-hover: #dd2b0f;
+  --primary: #ec3013; /* أحمر جارك — brand + the one primary action per screen */
+  --primary-foreground: #ffffff;
+  --primary-hover: #cf2a10;
   --primary-active: #ae1800;
-  --secondary: #eae9e9; /* حجر */
+  --secondary: #eae9e9; /* حجر — neutral fills; the ink button lives on <Button variant="secondary"> */
   --secondary-foreground: #201e1d;
-  --muted: #eae9e9;
-  --muted-foreground: #6b6866;
-  --accent: #fff2ef; /* أفتح درجة حمراء */
-  --accent-foreground: #ae1800;
-  --destructive: oklch(0.47 0.16 25);
-  --destructive-foreground: oklch(0.98 0.01 90);
-  --success: oklch(0.52 0.11 150);
-  --success-foreground: oklch(0.98 0.01 90);
-  --warning: oklch(0.72 0.13 75);
-  --warning-foreground: oklch(0.24 0.04 70);
+  --muted: #eae9e9; /* surface-2 · حجر */
+  --muted-foreground: #5c5856; /* text-2 · 6.9:1 */
+  --subtle-foreground: #7a7572; /* text-3 · 4.5:1 — placeholders, captions */
+  --accent: #eae9e9; /* neutral hover/selected wash — red stays out of hover states */
+  --accent-foreground: #201e1d;
+  --red-text: #c4231a; /* red as text on light, 5.2:1 */
+  --red-tint-1: #fce5e0;
+  --red-tint-2: #f9d0c7;
+  --red-tint-3: #f4b3a5;
+
+  /* Semantic — danger is pomegranate, never brand red; always paired with an icon and text. */
+  --success: #1f7a4d;
+  --success-foreground: #ffffff;
+  --success-tint: #e1f0e7;
+  --success-tint-foreground: #155c39;
+  --warning: #9a6200;
+  --warning-foreground: #ffffff;
+  --warning-tint: #f7ecd6;
+  --warning-tint-foreground: #6e4600;
+  --destructive: #9b1b53;
+  --destructive-foreground: #ffffff;
+  --destructive-tint: #f5e1ea;
+  --destructive-tint-foreground: #7a123f;
+  --info: #255f9e;
+  --info-foreground: #ffffff;
+  --info-tint: #e0eaf5;
+  --info-tint-foreground: #1b4778;
+  --whatsapp: #1f7a4d;
+  --whatsapp-foreground: #ffffff;
+
   --brass: #201e1d; /* حبر — بديل محايد للذهبي القديم */
   --brass-foreground: #f3f2f2;
-  --red-tint-1: #fff2ef;
-  --red-tint-2: #ffe0d9;
-  --red-tint-3: #ffc4b8;
-  --border: rgba(32, 30, 29, 0.14); /* حبر بشفافية أخف — نفس نسبة --sidebar-border */
-  --input: rgba(32, 30, 29, 0.14);
-  --ring: #ec3013;
-  --chart-1: oklch(0.38 0.068 155);
-  --chart-2: oklch(0.68 0.1 80);
-  --chart-3: oklch(0.55 0.09 200);
-  --chart-4: oklch(0.47 0.16 25);
-  --chart-5: oklch(0.6 0.06 130);
+  --border: #dcdad8;
+  --input: #bfbbb8; /* field outline — one step stronger than --border */
+  --ring: #201e1d; /* focus is ink, so a focused primary button never reads as "more red" */
+
+  /* Charts: ink first, red for the one number that matters. */
+  --chart-1: #201e1d;
+  --chart-2: #8e8986;
+  --chart-3: #255f9e;
+  --chart-4: #bfbbb8;
+  --chart-5: #ec3013;
+
   --sidebar: #201e1d; /* حبر */
-  --sidebar-foreground: #f3f2f2; /* جص */
+  --sidebar-foreground: #f3f2f2; /* جصّ */
   --sidebar-primary: #ec3013;
-  --sidebar-primary-foreground: #f3f2f2;
-  --sidebar-accent: #2e2b2a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2e2b29;
   --sidebar-accent-foreground: #f3f2f2;
-  --sidebar-border: rgba(243, 242, 242, 0.12);
-  --sidebar-ring: #ec3013;
+  --sidebar-border: #3a3735;
+  --sidebar-ring: #f3f2f2;
+
+  --elevation-1: 0 1px 0 #dcdad8, 0 4px 12px rgba(32, 30, 29, 0.08);
+  --elevation-2: 0 12px 32px rgba(32, 30, 29, 0.18);
 }
 
 .dark {
-  --background: #1a1918;
+  --background: #1a1918; /* ليل */
   --foreground: #f3f2f2;
-  --card: #26241f;
+  --card: #242220;
   --card-foreground: #f3f2f2;
-  --popover: #26241f;
+  --popover: #242220;
   --popover-foreground: #f3f2f2;
   --primary: #ec3013;
-  --primary-foreground: #f3f2f2;
+  --primary-foreground: #ffffff;
   --primary-hover: #ff4a29;
-  --primary-active: #ae1800;
-  --secondary: #2e2b2a;
+  --primary-active: #cf2a10;
+  --secondary: #2e2b29;
   --secondary-foreground: #f3f2f2;
-  --muted: #2e2b2a;
-  --muted-foreground: #a8a5a3;
-  --accent: #3a221d;
-  --accent-foreground: #ffc4b8;
-  --destructive: oklch(0.62 0.17 25);
-  --destructive-foreground: oklch(0.98 0.01 90);
-  --success: oklch(0.68 0.12 150);
-  --success-foreground: oklch(0.2 0.03 150);
-  --warning: oklch(0.78 0.13 75);
-  --warning-foreground: oklch(0.24 0.04 70);
-  --brass: #f3f2f2;
-  --brass-foreground: #201e1d;
+  --muted: #2e2b29;
+  --muted-foreground: #b5b0ad; /* 8.4:1 */
+  --subtle-foreground: #8e8986; /* 5.1:1 */
+  --accent: #2e2b29;
+  --accent-foreground: #f3f2f2;
+  --red-text: #ff6b50;
   --red-tint-1: #3a221d;
   --red-tint-2: #4a2a20;
   --red-tint-3: #5a3226;
-  --border: rgba(243, 242, 242, 0.14);
-  --input: rgba(243, 242, 242, 0.18);
-  --ring: #ec3013;
-  --chart-1: oklch(0.72 0.11 155);
-  --chart-2: oklch(0.74 0.1 80);
-  --chart-3: oklch(0.65 0.09 200);
-  --chart-4: oklch(0.62 0.17 25);
-  --chart-5: oklch(0.7 0.06 130);
+
+  --success: #4cc28a;
+  --success-foreground: #1a1918;
+  --success-tint: color-mix(in oklab, #4cc28a 16%, #242220);
+  --success-tint-foreground: #4cc28a;
+  --warning: #e5a93a;
+  --warning-foreground: #1a1918;
+  --warning-tint: color-mix(in oklab, #e5a93a 16%, #242220);
+  --warning-tint-foreground: #e5a93a;
+  --destructive: #f0739f;
+  --destructive-foreground: #1a1918;
+  --destructive-tint: color-mix(in oklab, #f0739f 16%, #242220);
+  --destructive-tint-foreground: #f0739f;
+  --info: #74a9e6;
+  --info-foreground: #1a1918;
+  --info-tint: color-mix(in oklab, #74a9e6 16%, #242220);
+  --info-tint-foreground: #74a9e6;
+  --whatsapp: #1f7a4d;
+  --whatsapp-foreground: #ffffff;
+
+  --brass: #f3f2f2;
+  --brass-foreground: #1a1918;
+  --border: #3a3735;
+  --input: #4a4643;
+  --ring: #f3f2f2;
+
+  --chart-1: #f3f2f2;
+  --chart-2: #8e8986;
+  --chart-3: #74a9e6;
+  --chart-4: #5c5856;
+  --chart-5: #ff6b50;
+
   --sidebar: #141312;
   --sidebar-foreground: #f3f2f2;
   --sidebar-primary: #ec3013;
-  --sidebar-primary-foreground: #f3f2f2;
-  --sidebar-accent: #26241f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #242220;
   --sidebar-accent-foreground: #f3f2f2;
-  --sidebar-border: rgba(243, 242, 242, 0.12);
-  --sidebar-ring: #ec3013;
+  --sidebar-border: #3a3735;
+  --sidebar-ring: #f3f2f2;
+
+  --elevation-1: 0 1px 0 #3a3735, 0 4px 12px rgba(0, 0, 0, 0.32);
+  --elevation-2: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
@@ -178,7 +246,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-size: 16px;
-    line-height: 1.7;
+    line-height: 1.75; /* body · 16/28 */
   }
 
   h1,
@@ -189,15 +257,32 @@
     letter-spacing: 0;
   }
 
-  /* Defaults for a bare heading with no explicit Tailwind text-size utility; a component that
-     already sets its own size (e.g. text-3xl) keeps that — utility classes win over these. */
+  /* Type scale (display 48/60 · h1 34/48 · h2 24/36 · h3 18/28 · small 14/22 · caption 12/18).
+     These are defaults for a bare heading with no explicit Tailwind text-size utility; a component
+     that already sets its own size (e.g. text-3xl) keeps that — utility classes win over these. */
   h1 {
-    font-size: 42px;
+    font-size: 34px;
+    line-height: 48px;
     font-weight: 700;
   }
   h2 {
     font-size: 24px;
+    line-height: 36px;
     font-weight: 700;
+  }
+  h3 {
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+  }
+
+  /* Figures line up in columns: amounts, dates and counts in every table. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::placeholder {
+    color: var(--color-subtle-foreground);
   }
 }
 
@@ -205,10 +290,27 @@
 @utility price {
   font-family: "Archivo", sans-serif;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 @utility latin {
   font-family: "Archivo", sans-serif;
   font-weight: 800;
+}
+
+/* English labels and overlines: Archivo 600, tracked. */
+@utility overline {
+  font-family: "Archivo", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The arch — the logo's one curve. Reserved for "your home": listing cover photos, the office page
+   cover, map pins and empty-state illustrations. A huge radius on the two top corners always
+   resolves to a half-circle of the box's width, whatever its size. */
+@utility rounded-arch {
+  border-radius: 9999px 9999px 0 0;
 }
 
 @utility deed-rule {
@@ -220,4 +322,14 @@
     var(--color-border) 100%
   );
   height: 2px;
+}
+
+/* Map pins and clusters are keyboard-focusable Leaflet markers with a 0×0 box (the HTML positions
+   itself), so the focus ring goes on the visible child. */
+.leaflet-marker-icon:focus-visible {
+  outline: none;
+}
+.leaflet-marker-icon:focus-visible > * {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
 }

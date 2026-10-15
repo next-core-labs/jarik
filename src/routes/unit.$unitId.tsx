@@ -1,19 +1,21 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { BedDouble, Bath, Check, ChevronLeft, MapPin, Ruler, Share2, Sofa } from "lucide-react";
+import { ArrowLeft, Check, Heart, MessageCircle, Phone, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdvertiserCard, type AdvertiserView } from "@/components/advertiser-card";
-import { inquiryText, ListingRow } from "@/components/listing-row";
+import { formatNumber } from "@/components/listing-detail/format";
+import { SimilarCard } from "@/components/listing-detail/similar-card";
+import { inquiryText } from "@/components/listing-row";
 import { MortgageCalculator } from "@/components/mortgage-calculator";
 import { NearbyPlacesSection } from "@/components/nearby-places-section";
 import { PhotoGallery } from "@/components/photo-gallery";
 import { SiteHeader } from "@/components/site-header";
 import { UnitRequestForm } from "@/components/unit-request-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { useFavorites } from "@/lib/favorites";
 import { translate, useLocale } from "@/lib/i18n";
 import { trackListingEvent } from "@/lib/office-tools.functions";
 import { sar, shortDate } from "@/lib/format";
@@ -21,14 +23,18 @@ import {
   listingLocation,
   listingPrice,
   listingTitle,
+  phoneHref,
+  priceDropPct,
   similarListings,
   toListing,
+  whatsappHref,
   type Listing,
   type ListingRow as ListingRowLike,
 } from "@/lib/market";
 import { PRICE_SUFFIX } from "@/lib/property-types";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
 import { brandingUrl, mediaUrl } from "@/lib/unit-photos";
+import { cn } from "@/lib/utils";
 
 type UnitPageData =
   | {
@@ -133,14 +139,16 @@ export const Route = createFileRoute("/unit/$unitId")({
   loader: ({ params }) => loadUnitPage(params.unitId),
   head: ({ loaderData, params }) => {
     if (loaderData?.status !== "ok") {
-      return { meta: [
-        { title: "عرض عقاري — جارك" },
-        { name: "description", content: "تصفح العروض العقارية المتاحة على جارك." },
-        { property: "og:title", content: "عرض عقاري — جارك" },
-        { property: "og:description", content: "تصفح العروض العقارية المتاحة على جارك." },
-        { property: "og:type", content: "website" },
-        { name: "twitter:card", content: "summary" },
-      ] };
+      return {
+        meta: [
+          { title: "عرض عقاري — جارك" },
+          { name: "description", content: "تصفح العروض العقارية المتاحة على جارك." },
+          { property: "og:title", content: "عرض عقاري — جارك" },
+          { property: "og:description", content: "تصفح العروض العقارية المتاحة على جارك." },
+          { property: "og:type", content: "website" },
+          { name: "twitter:card", content: "summary" },
+        ],
+      };
     }
     const { listing: l, photos } = loaderData;
     const title = `${listingTitle(l)} — جارك`;
@@ -162,41 +170,57 @@ export const Route = createFileRoute("/unit/$unitId")({
         ...(image ? [{ name: "twitter:image", content: mediaUrl(image) }] : []),
       ],
       links: [{ rel: "canonical", href: url }],
-      scripts: [{
-        type: "application/ld+json",
-        children: JSON.stringify([
-          {
-            "@context": "https://schema.org",
-            "@type": "Accommodation",
-            name: listingTitle(l),
-            url,
-            description: l.description || description,
-            accommodationCategory: l.unitType,
-            ...(l.rooms != null ? { numberOfBedrooms: l.rooms } : {}),
-            ...(l.bathrooms > 0 ? { numberOfBathroomsTotal: l.bathrooms } : {}),
-            ...(l.area ? { floorSize: { "@type": "QuantitativeValue", value: l.area, unitCode: "MTK" } } : {}),
-            ...(image ? { image: mediaUrl(image) } : {}),
-            offers: {
-              "@type": "Offer",
-              price: listingPrice(l),
-              priceCurrency: "SAR",
-              availability: "https://schema.org/InStock",
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "Accommodation",
+              name: listingTitle(l),
               url,
-              ...(l.purpose === "rent" ? { priceSpecification: {
-                "@type": "UnitPriceSpecification", price: listingPrice(l), priceCurrency: "SAR",
-                unitText: "YEAR",
-              } } : {}),
+              description: l.description || description,
+              accommodationCategory: l.unitType,
+              ...(l.rooms != null ? { numberOfBedrooms: l.rooms } : {}),
+              ...(l.bathrooms > 0 ? { numberOfBathroomsTotal: l.bathrooms } : {}),
+              ...(l.area
+                ? { floorSize: { "@type": "QuantitativeValue", value: l.area, unitCode: "MTK" } }
+                : {}),
+              ...(image ? { image: mediaUrl(image) } : {}),
+              offers: {
+                "@type": "Offer",
+                price: listingPrice(l),
+                priceCurrency: "SAR",
+                availability: "https://schema.org/InStock",
+                url,
+                ...(l.purpose === "rent"
+                  ? {
+                      priceSpecification: {
+                        "@type": "UnitPriceSpecification",
+                        price: listingPrice(l),
+                        priceCurrency: "SAR",
+                        unitText: "YEAR",
+                      },
+                    }
+                  : {}),
+              },
             },
-          },
-          {
-            "@context": "https://schema.org", "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "سوق العروض", item: "https://yourneighbor.app/" },
-              { "@type": "ListItem", position: 2, name: listingTitle(l), item: url },
-            ],
-          },
-        ]),
-      }],
+            {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "سوق العروض",
+                  item: "https://yourneighbor.app/",
+                },
+                { "@type": "ListItem", position: 2, name: listingTitle(l), item: url },
+              ],
+            },
+          ]),
+        },
+      ],
     };
   },
   component: UnitPublic,
@@ -211,6 +235,7 @@ function UnitPublic() {
 
   const unitId = data.status === "ok" ? data.listing.id : null;
   const track = useServerFn(trackListingEvent);
+  const fav = useFavorites();
   // مرة وحدة لكل زيارة فعلية بالمتصفح — عمدًا بدون تسجيل بالخادم (loader) حتى ما تُحتسب زيارات
   // بوتات معاينة الروابط (واتساب وغيره) كمشاهدات حقيقية.
   const trackedView = useRef(false);
@@ -280,192 +305,222 @@ function UnitPublic() {
     }
   };
 
-  const info: [string, string | null][] = [
-    [t("info_type"), l.unitType],
-    [t("info_unit_no"), l.unitNumber],
-    [t("info_floor"), l.floorNo],
-    [t("info_rooms"), l.rooms != null ? String(l.rooms) : null],
-    [t("info_halls"), l.halls > 0 ? String(l.halls) : null],
-    [t("info_bathrooms"), l.bathrooms > 0 ? String(l.bathrooms) : null],
-    [t("info_area"), l.area ? `${l.area} ${locale === "en" ? "m²" : "م²"}` : null],
-    [t("info_furnished"), l.furnished ? t("filter_furnished_yes") : t("filter_furnished_no")],
-    [t("info_added"), l.createdAt ? shortDate(l.createdAt) : null],
+  const onContactClick = (kind: "call" | "whatsapp") =>
+    track({
+      data: { unitId: l.id, eventType: kind === "call" ? "call_click" : "whatsapp_click" },
+    }).catch(() => {});
+  const inquiry = inquiryText(l);
+  const tel = phoneHref(advertiser.phone);
+  const wa = whatsappHref(advertiser.whatsapp ?? advertiser.phone, inquiry);
+
+  const priceMain = formatNumber(listingPrice(l), locale);
+  const drop = priceDropPct(l);
+  const saved = fav.has(l.id);
+  const priceUnit = t(l.purpose === "rent" ? "price_rent_unit" : "price_sale_unit");
+  const num = (n: number) => formatNumber(n, locale);
+
+  const districtLine = [location, l.unitNumber ? `${t("info_unit_no")} ${l.unitNumber}` : null]
+    .filter(Boolean)
+    .join(" · ");
+  const specs: [string, string][] = [
+    [t("info_type"), l.unitType || "—"],
+    [t("info_area"), l.area ? `${num(l.area)} ${t("unit_sqm")}` : "—"],
+    [t("info_rooms"), l.rooms != null ? num(l.rooms) : "—"],
+    [t("info_bathrooms"), l.bathrooms > 0 ? num(l.bathrooms) : "—"],
   ];
+  // The facts the four-cell strip has no room for.
+  const moreFacts = [
+    l.floorNo ? `${t("info_floor")}: ${l.floorNo}` : null,
+    l.halls > 0 ? `${t("info_halls")}: ${num(l.halls)}` : null,
+    l.createdAt ? `${t("info_added")}: ${shortDate(l.createdAt)}` : null,
+  ].filter(Boolean);
+  const features = [
+    ...l.amenities,
+    l.furnished ? t("filter_furnished_yes") : t("filter_furnished_no"),
+  ];
+
+  const purposeBadge = (
+    <span
+      className={cn(
+        "flex h-[30px] items-center px-2.5 text-sm font-semibold",
+        l.purpose === "rent"
+          ? "bg-foreground text-background"
+          : "bg-background text-foreground shadow-[inset_0_0_0_1.5px_var(--color-foreground)]",
+      )}
+    >
+      {t(l.purpose === "rent" ? "tab_rent" : "tab_sale")}
+    </span>
+  );
 
   return (
     <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
       <SiteHeader locale={locale} onLocaleChange={setLocale} />
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <nav
-          aria-label={locale === "en" ? "Breadcrumb" : "مسار التنقل"}
-          className="mb-4 flex flex-wrap items-center gap-1 text-sm text-muted-foreground"
-        >
-          <Link to="/" className="hover:underline">
-            {t("unit_breadcrumb")}
+      <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 pt-5 pb-28 sm:px-5 lg:pb-16">
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            to="/"
+            className="flex items-center gap-1.5 text-[15px] font-semibold underline-offset-4 hover:underline"
+          >
+            <ArrowLeft className="size-[18px] rtl:rotate-180" aria-hidden />
+            {t("ld_back_map")}
           </Link>
-          {l.district ? (
-            <>
-              <ChevronLeft className="size-3.5" aria-hidden />
-              <span>{locale === "en" ? l.district : `حي ${l.district}`}</span>
-            </>
-          ) : null}
-          <ChevronLeft className="size-3.5" aria-hidden />
-          <span className="text-foreground">{title}</span>
-        </nav>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={share}
+              className="flex h-10 cursor-pointer items-center gap-1.5 border border-border bg-card px-3 text-sm font-semibold transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              <Share2 className="size-4" aria-hidden />
+              {t("unit_share")}
+            </button>
+            <button
+              type="button"
+              onClick={() => fav.toggle(l.id)}
+              aria-pressed={saved}
+              aria-label={saved ? t("fav_remove") : t("fav_add")}
+              title={saved ? t("fav_remove") : t("fav_add")}
+              className="grid size-10 cursor-pointer place-items-center border border-border bg-card transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              <Heart
+                className={cn("size-[18px]", saved && "fill-primary text-primary")}
+                aria-hidden
+              />
+            </button>
+          </div>
+        </div>
 
-        <PhotoGallery paths={photos} alt={title} />
+        <PhotoGallery paths={photos} alt={title} locale={locale} badge={purposeBadge} />
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
-          <div className="min-w-0 space-y-8">
-            <section>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <p className="font-display text-3xl font-bold">
-                  {sar(listingPrice(l))}
-                  {l.purpose === "rent" ? (
-                    <span className="ms-2 text-base font-normal text-muted-foreground">
-                      {locale === "en" ? t("unit_yearly") : PRICE_SUFFIX[l.purpose]}
-                    </span>
-                  ) : null}
-                </p>
-                <Button variant="outline" size="sm" onClick={share}>
-                  <Share2 className="size-4" />
-                  {t("unit_share")}
-                </Button>
-              </div>
-              <h1 className="mt-2 font-display text-xl font-bold md:text-2xl">{title}</h1>
-              {location ? (
-                <p className="mt-2 flex items-center gap-1.5 text-muted-foreground">
-                  <MapPin className="size-4 text-brass" aria-hidden />
-                  {location}
-                </p>
+        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="flex min-w-0 flex-col gap-7">
+            <section className="flex flex-col gap-2.5">
+              {districtLine ? (
+                <p className="text-sm text-muted-foreground">{districtLine}</p>
               ) : null}
-              <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                {l.rooms != null ? (
-                  <Spec icon={<BedDouble className="size-4" aria-hidden />}>
-                    {l.rooms} {t("info_rooms")}
-                  </Spec>
+              <h1 className="text-[28px] leading-[1.35] font-bold text-pretty sm:text-[32px]">
+                {title}
+              </h1>
+              <p className="flex flex-wrap items-baseline gap-2">
+                <span className="text-[34px] leading-tight font-bold tabular-nums">
+                  {priceMain}
+                </span>
+                <span className="text-base font-medium text-muted-foreground">{priceUnit}</span>
+                {drop ? (
+                  <span className="bg-card px-2 py-[3px] text-[13px] font-semibold tabular-nums shadow-[inset_0_0_0_1px_var(--color-border)]">
+                    ▼ {t("price_drop").replace("{p}", String(drop))} · {t("price_drop_auto")}
+                  </span>
                 ) : null}
-                {l.bathrooms > 0 ? (
-                  <Spec icon={<Bath className="size-4" aria-hidden />}>
-                    {l.bathrooms} {t("info_bathrooms")}
-                  </Spec>
-                ) : null}
-                {l.area ? (
-                  <Spec icon={<Ruler className="size-4" aria-hidden />}>
-                    {l.area} {locale === "en" ? "m²" : "م²"}
-                  </Spec>
-                ) : null}
-                <Spec icon={<Sofa className="size-4" aria-hidden />}>
-                  {l.furnished ? t("filter_furnished_yes") : t("filter_furnished_no")}
-                </Spec>
-              </div>
+              </p>
             </section>
 
+            <div className="flex flex-col gap-2">
+              <dl className="grid grid-cols-2 gap-px border border-border bg-muted sm:grid-cols-4">
+                {specs.map(([k, v]) => (
+                  <div key={k} className="flex min-w-0 flex-col gap-1 bg-card p-4">
+                    <dt className="text-[13px] text-muted-foreground">{k}</dt>
+                    <dd className="truncate text-lg font-bold tabular-nums">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              {moreFacts.length > 0 ? (
+                <p className="text-sm text-muted-foreground">{moreFacts.join(" · ")}</p>
+              ) : null}
+            </div>
+
             {l.description ? (
-              <section>
-                <h2 className="mb-2 font-display text-lg font-bold">{t("unit_about")}</h2>
-                <p className="leading-relaxed whitespace-pre-line text-foreground/90">
+              <section className="flex flex-col gap-2.5">
+                <h2 className="text-xl font-bold">{t("ld_description")}</h2>
+                <p className="max-w-[720px] text-base leading-[1.85] whitespace-pre-line text-pretty">
                   {l.description}
                 </p>
               </section>
             ) : null}
 
-            <section>
-              <h2 className="mb-2 font-display text-lg font-bold">{t("unit_info")}</h2>
-              <dl className="grid gap-x-8 sm:grid-cols-2">
-                {info
-                  .filter(([, v]) => v)
-                  .map(([k, v]) => (
-                    <div
-                      key={k}
-                      className="flex items-center justify-between border-b border-border py-2 text-sm"
-                    >
-                      <dt className="text-muted-foreground">{k}</dt>
-                      <dd className="font-medium">{v}</dd>
-                    </div>
-                  ))}
-              </dl>
+            <section className="flex flex-col gap-3">
+              <h2 className="text-xl font-bold">{t("ld_features")}</h2>
+              <ul className="flex flex-wrap gap-2">
+                {features.map((a, i) => (
+                  <li
+                    key={`${i}-${a}`}
+                    className="flex h-9 items-center gap-[7px] border border-border bg-card px-3 text-sm font-medium"
+                  >
+                    <Check className="size-3.5" aria-hidden />
+                    {a}
+                  </li>
+                ))}
+              </ul>
             </section>
 
             {l.lat != null && l.lng != null ? (
-              <NearbyPlacesSection lat={l.lat} lng={l.lng} />
+              <NearbyPlacesSection lat={l.lat} lng={l.lng} locale={locale} />
             ) : null}
 
             {l.purpose === "sale" && l.salePrice > 0 ? (
-              <MortgageCalculator price={l.salePrice} />
+              <MortgageCalculator price={l.salePrice} locale={locale} />
             ) : null}
 
-            {l.amenities.length > 0 ? (
-              <section>
-                <h2 className="mb-3 font-display text-lg font-bold">{t("unit_amenities")}</h2>
-                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {l.amenities.map((a) => (
-                    <li
-                      key={a}
-                      className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm"
-                    >
-                      <Check className="size-4 text-success" aria-hidden />
-                      {a}
-                    </li>
+            {similar.length > 0 ? (
+              <section className="flex flex-col gap-3">
+                <h2 className="text-xl font-bold">{t("ld_similar_near")}</h2>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                  {similar.map((s) => (
+                    <SimilarCard key={s.id} listing={s} from={l} locale={locale} />
                   ))}
-                </ul>
+                </div>
               </section>
             ) : null}
-
-            <Card className="shadow-deed">
-              <CardContent className="py-6">
-                <UnitRequestForm
-                  unitType={l.unitType}
-                  district={l.district}
-                  city={l.office.city}
-                  officeId={l.office.id}
-                  purpose={l.purpose}
-                />
-              </CardContent>
-            </Card>
           </div>
 
-          <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
             <AdvertiserCard
               advertiser={advertiser}
-              inquiry={inquiryText(l)}
-              onContactClick={(kind) =>
-                track({
-                  data: {
-                    unitId: l.id,
-                    eventType: kind === "call" ? "call_click" : "whatsapp_click",
-                  },
-                }).catch(() => {})
-              }
+              inquiry={inquiry}
+              locale={locale}
+              onContactClick={onContactClick}
             />
-            <p className="rounded-md bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
-              {locale === "en"
-                ? "Contact the advertiser directly for viewing and details. Verify all information before any payment."
-                : "تواصل مع المعلن مباشرة للمعاينة والتفاصيل. تأكد من صحة البيانات قبل أي دفع."}
-            </p>
+            <div className="border border-border bg-card p-5">
+              <UnitRequestForm
+                unitType={l.unitType}
+                district={l.district}
+                city={l.office.city}
+                officeId={l.office.id}
+                officeName={l.office.name}
+                purpose={l.purpose}
+                locale={locale}
+              />
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">{t("ld_adv_note")}</p>
           </aside>
         </div>
-
-        {similar.length > 0 ? (
-          <section className="mt-12">
-            <h2 className="mb-4 font-display text-xl font-bold">{t("unit_similar")}</h2>
-            <div className="space-y-4">
-              {similar.map((s) => (
-                <ListingRow key={s.id} listing={s} />
-              ))}
-            </div>
-          </section>
-        ) : null}
       </main>
-    </div>
-  );
-}
 
-function Spec({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 border border-border bg-card px-3 py-1.5">
-      {icon}
-      {children}
-    </span>
+      {/* Phones: price and the two contact actions stay in reach while scrolling. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 bg-card px-3 pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(32,30,29,.12)] lg:hidden">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[17px] font-bold whitespace-nowrap tabular-nums">{priceMain}</span>
+          <span className="text-xs text-muted-foreground">{priceUnit}</span>
+        </div>
+        {wa ? (
+          <Button variant="whatsapp" size="lg" asChild className="px-4">
+            <a
+              href={wa}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => onContactClick("whatsapp")}
+            >
+              <MessageCircle aria-hidden />
+              {t("card_whatsapp")}
+            </a>
+          </Button>
+        ) : null}
+        {tel ? (
+          <Button variant="outline" asChild className="size-12 justify-center px-0">
+            <a href={tel} onClick={() => onContactClick("call")} aria-label={t("card_call")}>
+              <Phone aria-hidden />
+            </a>
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }

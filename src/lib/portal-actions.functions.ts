@@ -171,3 +171,107 @@ export const decideMaintenanceApproval = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+const RENEWAL_DECISION_LABEL = {
+  renew: "يوافق على التجديد بنفس الإيجار",
+  renew_new_rent: "يوافق على التجديد بإيجار جديد",
+  leave: "لا يرغب بالتجديد",
+} as const;
+
+/** المالك يحدّد قراره في تجديد عقد على وحدته — يصل للمكتب كإشعار ويظهر في صفحة التجديدات. */
+export const submitOwnerRenewalDecision = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      leaseId: string;
+      decision: "renew" | "renew_new_rent" | "leave";
+      proposedRent?: number | undefined;
+      note?: string | undefined;
+    }) =>
+      z
+        .object({
+          leaseId: z.string().uuid(),
+          decision: z.enum(["renew", "renew_new_rent", "leave"]),
+          proposedRent: z.number().positive().max(100_000_000).optional(),
+          note: z.string().max(400).optional(),
+        })
+        .refine((d) => d.decision !== "renew_new_rent" || d.proposedRent !== undefined, {
+          message: "حدّد الإيجار السنوي الجديد",
+        })
+        .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as ServerCtx;
+    // Ownership, the active-lease check and "one open decision per lease" are enforced by the
+    // SECURITY DEFINER function, called as the owner.
+    const { data: id, error } = await ctx.supabase.rpc("owner_submit_renewal_decision", {
+      _lease_id: data.leaseId,
+      _decision: data.decision,
+      ...(data.decision === "renew_new_rent" ? { _proposed_rent: data.proposedRent! } : {}),
+      ...(data.note ? { _note: data.note } : {}),
+    });
+    if (error) throw new Error(error.message || "تعذّر تسجيل قرارك");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { notifyStaff } = await import("@/lib/notify.server");
+    const { orgOf } = await import("@/lib/org.server");
+    const { data: lease } = await supabaseAdmin
+      .from("leases")
+      .select("end_date, units(unit_number, properties(name))")
+      .eq("id", data.leaseId)
+      .maybeSingle();
+    const where = lease?.units
+      ? `${lease.units.properties?.name ?? ""} · وحدة ${lease.units.unit_number}`
+      : "";
+    await notifyStaff(supabaseAdmin, await orgOf(supabaseAdmin, "leases", data.leaseId), {
+      title: `قرار المالك في التجديد: ${RENEWAL_DECISION_LABEL[data.decision]}`,
+      body: [
+        where,
+        data.decision === "renew_new_rent"
+          ? `الإيجار السنوي المقترح ${data.proposedRent} ر.س`
+          : null,
+        lease?.end_date ? `ينتهي العقد ${lease.end_date}` : null,
+        data.note ?? null,
+      ]
+        .filter(Boolean)
+        .join(" — "),
+      kind: "lease",
+      related_table: "owner_renewal_decisions",
+      related_id: id,
+    });
+    return { ok: true };
+  });
+
+/** المالك يطلب من المكتب تعديل الإيجار المطلوب لوحدة شاغرة (المكتب هو من يعدّل السعر فعليًا). */
+export const requestVacantRentChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { unitId: string; newRent: number; note?: string | undefined }) =>
+    z
+      .object({
+        unitId: z.string().uuid(),
+        newRent: z.number().positive().max(100_000_000),
+        note: z.string().max(400).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as ServerCtx;
+    // owner_units() lists exactly the caller's units (unit or property owner).
+    const { data: units, error } = await ctx.supabase.rpc("owner_units");
+    if (error) throw new Error("تعذّر التحقق من ملكية الوحدة");
+    const unit = (units ?? []).find((u) => u.unit_id === data.unitId);
+    if (!unit) throw new Error("هذه الوحدة ليست من وحداتك");
+    if (unit.status !== "vacant") throw new Error("الوحدة ليست شاغرة");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { notifyStaff } = await import("@/lib/notify.server");
+    const { orgOf } = await import("@/lib/org.server");
+    await notifyStaff(supabaseAdmin, await orgOf(supabaseAdmin, "units", data.unitId), {
+      title: `طلب المالك تعديل إيجار ${unit.property_name} · وحدة ${unit.unit_number}`,
+      body: `من ${Number(unit.annual_rent)} إلى ${Math.round(data.newRent)} ر.س سنويًا${data.note ? ` — ${data.note}` : ""}`,
+      kind: "unit",
+      related_table: "units",
+      related_id: data.unitId,
+    });
+    return { ok: true };
+  });

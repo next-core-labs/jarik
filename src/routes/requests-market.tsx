@@ -1,21 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { MessageCircle, Phone, Plus, SearchX } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useId, useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Lock, MessageCircle, Phone, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { SiteHeader, bandPatternStyle } from "@/components/site-header";
+import { ArchEmptyState } from "@/components/public/identity";
+import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +15,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { phoneHref, whatsappHref } from "@/lib/market";
 import {
   requestBudget,
-  requestTitle,
   searchRequests,
   toPublicMarketRequest,
   type PublicMarketRequest,
@@ -32,7 +23,7 @@ import { submitMarketRequest } from "@/lib/market-requests.functions";
 import { PROPERTY_TYPE_GROUPS, type ListingPurpose } from "@/lib/property-types";
 import { isStaffRole, useMyRoles } from "@/lib/use-role";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
-import { shortDate } from "@/lib/format";
+import { arCount, daysLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/requests-market")({
   staticData: { sitemap: true },
@@ -88,6 +79,26 @@ function useStaffContacts(enabled: boolean) {
   });
 }
 
+const PURPOSE_OPTIONS = [
+  { value: "rent", label: "إيجار" },
+  { value: "sale", label: "شراء" },
+] as const;
+
+const FILTER_OPTIONS = [{ value: "all", label: "الكل" }, ...PURPOSE_OPTIONS] as const;
+
+/** Native select dressed like the design-system Input (44px, hairline, ink focus). */
+const SELECT_CLASS =
+  "h-11 w-full border border-input bg-card px-3 text-[15px] focus-visible:border-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none";
+
+/** «اليوم»، «أمس»، «منذ يومين»، «منذ ٣ أيام»… — requests load client-side, so no SSR drift. */
+function postedAgo(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "اليوم";
+  if (days === 1) return "أمس";
+  if (days === 2) return "منذ يومين";
+  return `منذ ${daysLabel(days)}`;
+}
+
 function RequestsMarket() {
   useTrackSiteVisit("/requests-market");
   const requests = usePublicRequests();
@@ -96,7 +107,6 @@ function RequestsMarket() {
   const contacts = useStaffContacts(isStaff);
   const [text, setText] = useState("");
   const [purposeFilter, setPurposeFilter] = useState<ListingPurpose | "all">("all");
-  const [formOpen, setFormOpen] = useState(false);
 
   const shown = useMemo(() => {
     const base = requests.data ?? [];
@@ -109,163 +119,226 @@ function RequestsMarket() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
-      <section
-        className="relative bg-sidebar bg-cover bg-center text-sidebar-foreground"
-        style={bandPatternStyle}
-      >
-        <div className="bg-sidebar/60">
-          <div className="mx-auto max-w-6xl px-4 py-10 md:py-14">
-            <h1 className="font-display text-3xl font-bold md:text-4xl">سوق الطلبات</h1>
-            <p className="mt-2 max-w-2xl text-sidebar-foreground/85">
-              عملاء يبحثون عن وحدة للإيجار أو الشراء — انشر طلبك ليراه كل مكاتب وملّاك «جارك»، أو
-              تصفّح الطلبات إن كنت مكتبًا لديه ما يناسبها.
+      <main className="mx-auto grid w-full max-w-[1240px] items-start gap-7 px-5 pt-9 pb-16 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-[32px] leading-tight font-bold">سوق الطلبات</h1>
+            <p className="text-[15px] leading-relaxed text-muted-foreground">
+              ما يبحث عنه الناس الآن. تُعرض الطلبات المفتوحة لآخر ٤٥ يومًا بدون أسماء أو أرقام،
+              والتواصل متاح للمكاتب المسجّلة فقط.
+              {!isStaff && !roles.isLoading ? (
+                <>
+                  {" "}
+                  <Link
+                    to="/auth"
+                    className="font-semibold text-foreground underline underline-offset-4 hover:text-red-text"
+                  >
+                    سجّل دخولك كمكتب
+                  </Link>
+                </>
+              ) : null}
             </p>
-            <div className="mt-5">
-              <RequestFormDialog open={formOpen} onOpenChange={setFormOpen} />
+          </div>
+
+          {/* On a phone the form sits under the list — this jumps straight to it. */}
+          <Button variant="outline" asChild className="w-fit lg:hidden">
+            <a href="#add-request">
+              <Plus aria-hidden />
+              أضف طلبك
+            </a>
+          </Button>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div
+              role="group"
+              aria-label="نوع الطلب"
+              className="flex border-[1.5px] border-foreground"
+            >
+              {FILTER_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  aria-pressed={purposeFilter === o.value}
+                  onClick={() => setPurposeFilter(o.value)}
+                  className={`h-10 flex-1 cursor-pointer px-4 text-sm font-semibold transition-colors sm:flex-none ${
+                    purposeFilter === o.value
+                      ? "bg-foreground text-background"
+                      : "bg-card text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex gap-1 rounded-md border border-border bg-card p-1">
-            {(
-              [
-                { value: "all", label: "الكل" },
-                { value: "rent", label: "إيجار" },
-                { value: "sale", label: "شراء" },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => setPurposeFilter(o.value)}
-                className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
-                  purposeFilter === o.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent"
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          <Input
-            className="sm:max-w-xs"
-            placeholder="ابحث بالحي أو النوع…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            aria-label="بحث في الطلبات"
-          />
-          <span className="text-sm text-muted-foreground sm:mr-auto">
-            {shown.length.toLocaleString("ar-SA")} طلب
-          </span>
-        </div>
-
-        {!isStaff && !roles.isLoading ? (
-          <p className="mb-4 rounded-lg border border-dashed border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-            بيانات التواصل (الاسم والجوال) تظهر لموظفي المكاتب المسجَّلين فقط.{" "}
-            <a href="/auth" className="font-medium text-primary hover:underline">
-              سجّل دخولك كمكتب
-            </a>{" "}
-            لعرضها والتواصل المباشر.
-          </p>
-        ) : null}
-
-        {requests.isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-32 animate-pulse rounded-lg border border-border bg-card" />
-            ))}
-          </div>
-        ) : shown.length === 0 ? (
-          <div className="grid place-items-center gap-2 rounded-lg border border-dashed border-border bg-card p-12 text-center text-muted-foreground">
-            <SearchX className="size-10 opacity-50" aria-hidden />
-            <p className="font-medium text-foreground">
-              {(requests.data ?? []).length === 0
-                ? "لا توجد طلبات منشورة حاليًا"
-                : "لا توجد طلبات مطابقة"}
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((r) => (
-              <RequestCard
-                key={r.id}
-                request={r}
-                contact={isStaff ? contacts.data?.get(r.id) : undefined}
+            <div className="relative sm:max-w-xs sm:flex-1">
+              <Search
+                className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
               />
-            ))}
+              <Input
+                className="ps-9"
+                placeholder="ابحث بالحي أو النوع…"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                aria-label="بحث في الطلبات"
+              />
+            </div>
+            {requests.data ? (
+              <span className="text-sm text-muted-foreground sm:ms-auto">
+                {shown.length === 0
+                  ? "لا طلبات"
+                  : arCount(shown.length, {
+                      one: "طلب واحد",
+                      two: "طلبان",
+                      few: "طلبات",
+                      many: "طلبًا",
+                    })}
+              </span>
+            ) : null}
           </div>
-        )}
+
+          {requests.isLoading ? (
+            <div className="flex flex-col gap-3" aria-busy>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-[76px] animate-pulse border border-border bg-card" />
+              ))}
+            </div>
+          ) : requests.isError ? (
+            <ArchEmptyState title="تعذّر تحميل الطلبات" hint="تحقّق من الاتصال ثم أعد المحاولة.">
+              <Button variant="outline" onClick={() => requests.refetch()}>
+                إعادة المحاولة
+              </Button>
+            </ArchEmptyState>
+          ) : shown.length === 0 ? (
+            <ArchEmptyState
+              title={
+                (requests.data ?? []).length === 0
+                  ? "لا توجد طلبات منشورة حاليًا"
+                  : "لا توجد طلبات مطابقة"
+              }
+              hint={
+                (requests.data ?? []).length === 0
+                  ? "كن أول من ينشر طلبه — تراه كل المكاتب والملّاك في جارك."
+                  : "جرّب كلمة أخرى أو نوع طلب مختلف."
+              }
+            >
+              {text || purposeFilter !== "all" ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setText("");
+                    setPurposeFilter("all");
+                  }}
+                >
+                  مسح التصفية
+                </Button>
+              ) : null}
+            </ArchEmptyState>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {shown.map((r) => (
+                <li key={r.id}>
+                  <RequestRow
+                    request={r}
+                    staff={isStaff}
+                    contact={isStaff ? contacts.data?.get(r.id) : undefined}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <aside
+          id="add-request"
+          className="scroll-mt-4 border border-border bg-card p-[22px] lg:sticky lg:top-4"
+        >
+          <RequestForm />
+        </aside>
       </main>
     </div>
   );
 }
 
-function RequestCard({
+function RequestRow({
   request: r,
+  staff,
   contact,
 }: {
   request: PublicMarketRequest;
+  staff: boolean;
   contact?: { fullName: string; phone: string } | undefined;
 }) {
   const budget = requestBudget(r);
+  const where = [r.district, r.city].filter(Boolean).join("، ") || "أي حي";
   const tel = contact ? phoneHref(contact.phone) : null;
   const wa = contact
     ? whatsappHref(contact.phone, `مرحبًا ${contact.fullName}، بخصوص طلبك في سوق طلبات جارك`)
     : null;
 
   return (
-    <article className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 shadow-deed">
-      <div className="flex items-start justify-between gap-2">
-        {/* Red is reserved for price/primary action/available, same as the listing purpose badge —
-            rent and sale read the same neutral ink here, distinguished by text only. */}
-        <Badge className="bg-brass text-brass-foreground hover:bg-brass">
-          {r.purpose === "sale" ? "شراء" : "إيجار"}
-        </Badge>
-        <span className="text-xs text-muted-foreground">{shortDate(r.createdAt)}</span>
+    <article className="flex flex-wrap items-center gap-x-4 gap-y-3 border border-border bg-card px-[18px] py-4">
+      {/* Same pill language as the listing badges: ink for rent, outlined for sale. */}
+      <Badge
+        variant={r.purpose === "sale" ? "outline" : "default"}
+        className="h-7 shrink-0 px-2.5 text-[13px]"
+      >
+        {r.purpose === "sale" ? "شراء" : "إيجار"}
+      </Badge>
+
+      <div className="flex min-w-[200px] flex-1 flex-col gap-0.5">
+        <h2 className="text-base font-semibold">
+          {r.unitType ?? (r.purpose === "sale" ? "عقار للشراء" : "عقار للإيجار")}
+        </h2>
+        <p className="text-[13px] text-muted-foreground">
+          {where} · {postedAgo(r.createdAt)}
+        </p>
+        {r.notes ? (
+          <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">{r.notes}</p>
+        ) : null}
       </div>
 
-      <h3 className="font-bold leading-snug">{requestTitle(r)}</h3>
-      {budget ? <p className="text-sm font-medium text-primary">{budget}</p> : null}
-      {r.notes ? <p className="line-clamp-2 text-sm text-muted-foreground">{r.notes}</p> : null}
+      {budget ? <span className="text-[15px] font-bold tabular-nums">{budget}</span> : null}
 
       {contact ? (
-        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
-          <span className="truncate text-sm font-medium">{contact.fullName}</span>
-          <div className="flex gap-2">
-            {tel ? (
-              <Button size="sm" variant="outline" asChild>
-                <a href={tel}>
-                  <Phone className="size-4" aria-hidden />
-                  اتصال
-                </a>
-              </Button>
-            ) : null}
-            {wa ? (
-              <Button size="sm" variant="outline" asChild className="text-success">
-                <a href={wa} target="_blank" rel="noreferrer">
-                  <MessageCircle className="size-4" aria-hidden />
-                  واتساب
-                </a>
-              </Button>
-            ) : null}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="max-w-40 truncate text-sm font-medium">{contact.fullName}</span>
+          {wa ? (
+            <Button size="sm" variant="whatsapp" asChild>
+              <a href={wa} target="_blank" rel="noreferrer">
+                <MessageCircle aria-hidden />
+                واتساب
+              </a>
+            </Button>
+          ) : null}
+          {tel ? (
+            <Button size="sm" variant="outline" asChild>
+              <a href={tel}>
+                <Phone aria-hidden />
+                اتصال
+              </a>
+            </Button>
+          ) : null}
         </div>
-      ) : null}
+      ) : staff ? null : (
+        <Link
+          to="/auth"
+          title="بيانات التواصل تظهر لموظفي المكاتب المسجَّلين فقط"
+          className="flex h-9 items-center gap-1.5 border border-border px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+        >
+          <Lock className="size-3.5" aria-hidden />
+          للمكاتب فقط
+        </Link>
+      )}
     </article>
   );
 }
 
-function RequestFormDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
+/** «أضف طلبك» — public, no sign-in; the server function enforces validation and the rate limit. */
+function RequestForm() {
+  const id = useId();
+  const queryClient = useQueryClient();
+  const [sent, setSent] = useState(false);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [purpose, setPurpose] = useState<ListingPurpose>("rent");
@@ -300,116 +373,159 @@ function RequestFormDialog({
         },
       }),
     onSuccess: () => {
-      toast.success("نُشر طلبك — راح يشوفه المكاتب والملّاك في السوق");
       reset();
-      onOpenChange(false);
+      setSent(true);
+      void queryClient.invalidateQueries({ queryKey: ["market-requests-public"] });
     },
     onError: (e: Error) => toast.error(e.message || "تعذّر نشر الطلب"),
   });
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="lg">
-          <Plus className="size-4" />
-          أضف طلبك
+  if (sent) {
+    return (
+      <div className="flex flex-col gap-2.5" role="status">
+        <span className="grid size-10 place-items-center bg-success text-success-foreground">
+          <Check className="size-[22px]" aria-hidden />
+        </span>
+        <p className="text-lg font-bold">نُشر طلبك</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          سيبقى مفتوحًا ٤٥ يومًا في السوق، وتتواصل معك المكاتب والملّاك المهتمون مباشرة.
+        </p>
+        <Button variant="link" className="h-auto w-fit px-0" onClick={() => setSent(false)}>
+          أضف طلبًا آخر
         </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>ماذا تبحث عنه؟</DialogTitle>
-          <DialogDescription>
-            ينشر طلبك في سوق الطلبات العام — يراه كل مكاتب وملّاك «جارك»، وليس مكتبًا واحدًا فقط.
-          </DialogDescription>
-        </DialogHeader>
+      </div>
+    );
+  }
 
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            {(
-              [
-                { value: "rent", label: "إيجار" },
-                { value: "sale", label: "شراء" },
-              ] as const
-            ).map((o) => (
-              <Button
-                key={o.value}
-                type="button"
-                size="sm"
-                variant={purpose === o.value ? "default" : "outline"}
-                onClick={() => setPurpose(o.value)}
-              >
-                {o.label}
-              </Button>
-            ))}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>الاسم</Label>
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>رقم الجوال</Label>
-              <Input
-                dir="ltr"
-                inputMode="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>نوع الوحدة</Label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={unitType}
-                onChange={(e) => setUnitType(e.target.value)}
-              >
-                <option value="">اختر النوع</option>
-                {PROPERTY_TYPE_GROUPS.map((g) => (
-                  <optgroup key={g.group} label={g.group}>
-                    {g.types.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>
-                {purpose === "sale" ? "أقصى ميزانية للشراء (ريال)" : "أقصى إيجار سنوي (ريال)"}
-              </Label>
-              <Input
-                dir="ltr"
-                inputMode="numeric"
-                value={budgetMax}
-                onChange={(e) => setBudgetMax(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>المدينة</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>الحي المفضّل</Label>
-              <Input value={district} onChange={(e) => setDistrict(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>تفاصيل إضافية (عدد الغرف، المواصفات…)</Label>
-            <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-        </div>
+  return (
+    <form
+      className="flex flex-col gap-3.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit.mutate();
+      }}
+    >
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-bold">أضف طلبك</h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          بدون تسجيل. يراه كل مكاتب وملّاك «جارك»، وليس مكتبًا واحدًا فقط.
+        </p>
+      </div>
 
-        <DialogFooter>
-          <Button
-            disabled={submit.isPending || fullName.trim().length < 2 || phone.trim().length < 9}
-            onClick={() => submit.mutate()}
+      <div role="radiogroup" aria-label="أبحث عن" className="flex border-[1.5px] border-foreground">
+        {PURPOSE_OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={purpose === o.value}
+            onClick={() => setPurpose(o.value)}
+            className={`h-[42px] flex-1 cursor-pointer text-[15px] font-semibold transition-colors ${
+              purpose === o.value
+                ? "bg-foreground text-background"
+                : "bg-card text-foreground hover:bg-muted"
+            }`}
           >
-            {submit.isPending ? "جارٍ النشر…" : "انشر الطلب"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      <Field id={`${id}-name`} label="الاسم">
+        <Input
+          id={`${id}-name`}
+          autoComplete="name"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+        />
+      </Field>
+      <Field id={`${id}-phone`} label="رقم الجوال">
+        <Input
+          id={`${id}-phone`}
+          dir="ltr"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="05XXXXXXXX"
+          className="text-end"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </Field>
+      <Field id={`${id}-type`} label="نوع الوحدة">
+        <select
+          id={`${id}-type`}
+          className={SELECT_CLASS}
+          value={unitType}
+          onChange={(e) => setUnitType(e.target.value)}
+        >
+          <option value="">اختر النوع</option>
+          {PROPERTY_TYPE_GROUPS.map((g) => (
+            <optgroup key={g.group} label={g.group}>
+              {g.types.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </Field>
+      <Field
+        id={`${id}-budget`}
+        label={purpose === "sale" ? "أقصى ميزانية للشراء (ريال)" : "أقصى إيجار سنوي (ريال)"}
+      >
+        <Input
+          id={`${id}-budget`}
+          dir="ltr"
+          inputMode="numeric"
+          className="text-end tabular-nums"
+          value={budgetMax}
+          onChange={(e) => setBudgetMax(e.target.value)}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field id={`${id}-city`} label="المدينة">
+          <Input id={`${id}-city`} value={city} onChange={(e) => setCity(e.target.value)} />
+        </Field>
+        <Field id={`${id}-district`} label="الحي المفضّل">
+          <Input
+            id={`${id}-district`}
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+          />
+        </Field>
+      </div>
+      <Field id={`${id}-notes`} label="تفاصيل إضافية (عدد الغرف، المواصفات…)">
+        <Textarea
+          id={`${id}-notes`}
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </Field>
+
+      <Button
+        type="submit"
+        size="lg"
+        className="mt-1 w-full"
+        disabled={submit.isPending || fullName.trim().length < 2 || phone.trim().length < 9}
+      >
+        {submit.isPending ? "جارٍ النشر…" : "نشر الطلب"}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        لا يظهر اسمك أو رقمك للعموم — تراه المكاتب المسجّلة فقط. حد أقصى ٣ طلبات في الساعة لكل رقم.
+      </p>
+    </form>
+  );
+}
+
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </Label>
+      {children}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, KeyRound, User } from "lucide-react";
 
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakSymbol } from "@/components/jarak-logo";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { portalDestinations, type PortalDestination } from "@/lib/portal-routing";
@@ -28,13 +28,7 @@ function ChooseRole() {
   return (
     <div className="grid min-h-screen place-items-center bg-background p-6">
       <div className="w-full max-w-sm text-center">
-        <img
-          src={jarakLogo}
-          alt="جارك"
-          width={48}
-          height={48}
-          className="mx-auto size-12 bg-background p-1"
-        />
+        <JarakSymbol className="mx-auto size-12" />
         <h1 className="font-display mt-4 text-2xl font-bold">الدخول كـ</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           حسابك مربوط بأكثر من صفة — اختر أي لوحة تفتح.

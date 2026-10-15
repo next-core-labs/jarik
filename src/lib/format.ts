@@ -68,6 +68,35 @@ export const leaseStatusLabel: Record<string, string> = {
   draft: "مسودة",
 };
 
+/** A plain count in Arabic-Indic digits, matching sar() so a screen never mixes 7 and ٧. */
+export function arNum(n: number) {
+  return n.toLocaleString("ar-SA");
+}
+
+/** A percentage (0–100) in Arabic-Indic digits with the Arabic percent sign: ٧١٪. */
+export function arPct(n: number) {
+  return new Intl.NumberFormat("ar-SA", { style: "percent", maximumFractionDigits: 1 }).format(
+    n / 100,
+  );
+}
+
+/**
+ * A counted noun with Arabic number agreement: the singular and dual forms carry no numeral
+ * (وحدة شاغرة، وحدتان شاغرتان), 3–10 take the plural (٣ وحدات), 11+ and 0 the singular accusative
+ * or singular (١١ يومًا، ١١ وحدة).
+ */
+export function arCount(n: number, forms: { one: string; two: string; few: string; many: string }) {
+  const abs = Math.abs(Math.trunc(n));
+  if (abs === 1) return forms.one;
+  if (abs === 2) return forms.two;
+  return `${arNum(abs)} ${abs >= 3 && abs <= 10 ? forms.few : forms.many}`;
+}
+
+/** A day count in correct Arabic number agreement: يوم واحد، يومان، ٣ أيام، ١١ يومًا. */
+export function daysLabel(n: number) {
+  return arCount(n, { one: "يوم واحد", two: "يومان", few: "أيام", many: "يومًا" });
+}
+
 /** Whole calendar days from today (Saudi time) to a YYYY-MM-DD date; negative once it has passed. */
 export function daysUntil(date: string) {
   return daysBetween(todayRiyadh(), date.slice(0, 10));

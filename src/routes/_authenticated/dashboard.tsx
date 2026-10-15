@@ -270,7 +270,10 @@ function Dashboard() {
         <Card className="shadow-deed lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">عقود تنتهي خلال ٩٠ يومًا</CardTitle>
-            <Link to="/tenants" className="text-sm text-primary hover:underline">
+            <Link
+              to="/tenants"
+              className="text-sm text-foreground underline underline-offset-4 hover:text-red-text"
+            >
               كل العقود
             </Link>
           </CardHeader>
@@ -299,7 +302,10 @@ function Dashboard() {
         <Card className="shadow-deed">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">أحدث طلبات الصيانة</CardTitle>
-            <Link to="/maintenance" className="text-sm text-primary hover:underline">
+            <Link
+              to="/maintenance"
+              className="text-sm text-foreground underline underline-offset-4 hover:text-red-text"
+            >
               الصيانة
             </Link>
           </CardHeader>
@@ -326,7 +332,10 @@ function Dashboard() {
         <Card className="shadow-deed">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">المتأخرات</CardTitle>
-            <Link to="/collections" className="text-sm text-primary hover:underline">
+            <Link
+              to="/collections"
+              className="text-sm text-foreground underline underline-offset-4 hover:text-red-text"
+            >
               التحصيل
             </Link>
           </CardHeader>

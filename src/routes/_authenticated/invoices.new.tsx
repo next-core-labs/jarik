@@ -300,7 +300,10 @@ function NewInvoice() {
         subtitle="فاتورة ضريبية مبسطة بحقول هيئة الزكاة والضريبة ورمز QR، وتنزيل مباشر كملف PDF."
       />
 
-      <Link to="/invoices" className="mb-4 inline-flex items-center gap-1 text-sm text-primary">
+      <Link
+        to="/invoices"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-foreground underline underline-offset-4 hover:text-red-text"
+      >
         <ArrowRight className="size-4" />
         رجوع لسجل الفواتير
       </Link>

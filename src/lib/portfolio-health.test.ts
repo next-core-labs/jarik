@@ -31,7 +31,7 @@ describe("portfolioHealthScore", () => {
       expiringLeasesCount: 0,
     });
     expect(score).toBe(70); // penalty capped at 30, not 100
-    expect(summary).toContain("10 دفعة متأخرة");
+    expect(summary).toContain(`${(10).toLocaleString("ar-SA")} دفعات متأخرة`);
   });
 
   it("never goes below 0", () => {

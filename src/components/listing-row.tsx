@@ -73,13 +73,15 @@ export function ListingRow({
   const location = listingLocation(l);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-deed transition-shadow hover:shadow-lg">
+    <article className="overflow-hidden rounded-xl border border-border bg-card shadow-deed transition-shadow hover:shadow-e1">
       {/* Full-width photo on top, on every screen size — the offer's picture is the first thing
-          a visitor sees, aqar.fm-style, rather than sharing the card with the details beside it. */}
+          a visitor sees, aqar.fm-style, rather than sharing the card with the details beside it.
+          The arch is the brand's "your home" shape, so its curve clips the top corners — every
+          overlay sits along the bottom edge. */}
       <Link
         to="/unit/$unitId"
         params={{ unitId: l.id }}
-        className="relative block aspect-[16/10] bg-muted sm:aspect-[16/9]"
+        className="relative mx-2.5 mt-2.5 block aspect-[16/10] overflow-hidden rounded-arch bg-muted sm:aspect-[16/9]"
         aria-label={title}
       >
         {cover ? (
@@ -95,7 +97,7 @@ export function ListingRow({
             <span className="text-xs">لا توجد صور لهذا العرض</span>
           </span>
         )}
-        <span className="absolute start-2 top-2 flex flex-wrap gap-1">
+        <span className="absolute start-2.5 bottom-2.5 flex flex-wrap gap-1">
           {/* Red is reserved for price, the primary action and the "available" mark — the rent/sale
               purpose label is neither, so both read in ink/plaster, distinguished by text only. */}
           <Badge className="bg-brass text-brass-foreground hover:bg-brass">
@@ -111,11 +113,13 @@ export function ListingRow({
             src={advertiserImage}
             alt={advertiserName}
             loading="lazy"
-            className="absolute end-2 top-2 size-10 border-2 border-card object-cover shadow-sm"
+            className="absolute end-2.5 bottom-2.5 size-10 border-2 border-card bg-card object-cover"
           />
         ) : null}
         {l.photosCount > 1 ? (
-          <span className="absolute end-2 bottom-2 inline-flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
+          <span
+            className={`absolute bottom-2.5 inline-flex items-center gap-1 bg-black/60 px-2 py-0.5 text-xs text-white ${advertiserImage ? "end-14" : "end-2.5"}`}
+          >
             <Camera className="size-3.5" aria-hidden />
             {l.photosCount}
           </span>
@@ -160,7 +164,7 @@ export function ListingRow({
           <Link
             to="/unit/$unitId"
             params={{ unitId: l.id }}
-            className="text-primary hover:underline"
+            className="text-foreground underline underline-offset-4 hover:text-red-text"
           >
             {title}
           </Link>
@@ -189,7 +193,7 @@ export function ListingRow({
               </Button>
             ) : null}
             {wa ? (
-              <Button size="sm" variant="outline" asChild className="text-success">
+              <Button size="sm" variant="whatsapp" asChild>
                 <a href={wa} target="_blank" rel="noreferrer">
                   <MessageCircle className="size-4" aria-hidden />
                   واتساب
@@ -245,7 +249,7 @@ function Advertiser({ l }: { l: Listing }) {
 export function ListingRowSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="aspect-[16/10] animate-pulse bg-muted sm:aspect-[16/9]" />
+      <div className="mx-2.5 mt-2.5 aspect-[16/10] animate-pulse rounded-arch bg-muted sm:aspect-[16/9]" />
       <div className="space-y-3 p-4">
         <div className="h-7 w-40 animate-pulse rounded bg-muted" />
         <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />

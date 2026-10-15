@@ -102,7 +102,7 @@ function Assistant() {
                 className={cn(
                   "max-w-[85%] rounded-lg px-4 py-3 text-sm whitespace-pre-wrap",
                   m.role === "user"
-                    ? "ms-auto bg-primary text-primary-foreground"
+                    ? "ms-auto bg-foreground text-background"
                     : "bg-secondary text-secondary-foreground",
                 )}
               >

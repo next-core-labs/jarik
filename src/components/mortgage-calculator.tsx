@@ -1,17 +1,15 @@
-import { useState } from "react";
-import { Calculator } from "lucide-react";
+import { useId, useState } from "react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { formatNumber, tf } from "@/components/listing-detail/format";
+import { translate, type Locale } from "@/lib/i18n";
 import { calculateMortgage } from "@/lib/mortgage";
-import { sar } from "@/lib/format";
 
 /** حاسبة تقديرية للقسط الشهري لعروض البيع — لا تتصل بأي بنك، قيم افتراضية قابلة للتعديل. */
-export function MortgageCalculator({ price }: { price: number }) {
+export function MortgageCalculator({ price, locale = "ar" }: { price: number; locale?: Locale }) {
   const [downPaymentPct, setDownPaymentPct] = useState(20);
   const [annualRatePct, setAnnualRatePct] = useState(6.5);
   const [years, setYears] = useState(20);
+  const id = useId();
 
   const result = calculateMortgage({
     price,
@@ -20,65 +18,85 @@ export function MortgageCalculator({ price }: { price: number }) {
     years: Number.isFinite(years) && years > 0 ? years : 1,
   });
 
+  const currency = translate(locale, "price_sale_unit");
+  const money = (n: number) => `${formatNumber(Number.isFinite(n) ? n : 0, locale)} ${currency}`;
+
+  const sliders = [
+    {
+      key: "down",
+      label: tf(locale, "ld_mortgage_down"),
+      value: `${formatNumber(downPaymentPct, locale)}% · ${money(result.downPayment)}`,
+      min: 10,
+      max: 50,
+      step: 5,
+      current: downPaymentPct,
+      set: setDownPaymentPct,
+    },
+    {
+      key: "rate",
+      label: tf(locale, "ld_mortgage_rate"),
+      value: `${formatNumber(annualRatePct, locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+      min: 2,
+      max: 8,
+      step: 0.25,
+      current: annualRatePct,
+      set: setAnnualRatePct,
+    },
+    {
+      key: "years",
+      label: tf(locale, "ld_mortgage_term"),
+      value: tf(locale, "ld_mortgage_years", { n: formatNumber(years, locale) }),
+      min: 5,
+      max: 30,
+      step: 1,
+      current: years,
+      set: setYears,
+    },
+  ];
+
   return (
-    <Card className="shadow-deed">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Calculator className="size-4 text-brass" aria-hidden />
-          حاسبة التمويل العقاري
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="mortgage-down">الدفعة المقدمة %</Label>
-            <Input
-              id="mortgage-down"
-              type="number"
-              min={0}
-              max={100}
-              value={downPaymentPct}
-              onChange={(e) => setDownPaymentPct(e.target.valueAsNumber)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="mortgage-rate">نسبة الربح السنوية %</Label>
-            <Input
-              id="mortgage-rate"
-              type="number"
-              min={0}
-              step={0.1}
-              value={annualRatePct}
-              onChange={(e) => setAnnualRatePct(e.target.valueAsNumber)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="mortgage-years">مدة التمويل (سنوات)</Label>
-            <Input
-              id="mortgage-years"
-              type="number"
-              min={1}
-              max={30}
-              value={years}
-              onChange={(e) => setYears(e.target.valueAsNumber)}
-            />
-          </div>
+    <section className="flex flex-col gap-3.5 border border-border bg-card p-[22px]">
+      <h2 className="text-xl font-bold">{translate(locale, "unit_mortgage")}</h2>
+      <div className="grid items-center gap-6 md:grid-cols-2">
+        <div className="flex flex-col gap-[18px]">
+          {sliders.map((s) => (
+            <div key={s.key} className="flex flex-col gap-2">
+              <label
+                htmlFor={`${id}-${s.key}`}
+                className="flex justify-between gap-3 text-sm font-medium"
+              >
+                <span>{s.label}</span>
+                <span className="font-bold tabular-nums">{s.value}</span>
+              </label>
+              <input
+                id={`${id}-${s.key}`}
+                type="range"
+                min={s.min}
+                max={s.max}
+                step={s.step}
+                value={s.current}
+                aria-valuetext={s.value}
+                onChange={(e) => s.set(e.target.valueAsNumber)}
+                className="w-full cursor-pointer accent-foreground"
+              />
+            </div>
+          ))}
         </div>
 
-        <div className="rounded-md border border-border bg-muted/40 p-4">
-          <p className="text-sm text-muted-foreground">القسط الشهري التقديري</p>
-          <p className="mt-1 font-display text-2xl font-bold">
-            {sar(Number.isFinite(result.monthlyPayment) ? result.monthlyPayment : 0)}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            الدفعة المقدمة {sar(result.downPayment)} · إجمالي المبلغ الممول {sar(result.principal)}
-          </p>
+        <div
+          className="flex flex-col gap-1.5 bg-foreground p-[22px] text-background"
+          aria-live="polite"
+        >
+          <span className="text-sm text-background/70">{tf(locale, "ld_mortgage_monthly")}</span>
+          <span className="text-4xl font-bold tabular-nums">{money(result.monthlyPayment)}</span>
+          <span className="text-[13px] text-background/70 tabular-nums">
+            {tf(locale, "ld_mortgage_loan", { v: money(result.principal) })}
+          </span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          تقدير مبدئي لأغراض التخطيط فقط، وليس عرض تمويل فعلي — راجع البنك أو جهة التمويل للحصول على
-          القسط الدقيق.
-        </p>
-      </CardContent>
-    </Card>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {tf(locale, "ld_mortgage_disclaimer")}
+      </p>
+    </section>
   );
 }

@@ -203,6 +203,7 @@ function Renewals() {
       )}
 
       <div className="mt-6 space-y-4">
+        <OwnerDecisionsSection />
         <RenewalRequestsSection />
         <DepositsSection />
       </div>
@@ -510,6 +511,102 @@ function BulkRenewDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const OWNER_DECISION_LABEL: Record<string, string> = {
+  renew: "يوافق على التجديد بنفس الإيجار",
+  renew_new_rent: "يوافق على التجديد بإيجار جديد",
+  leave: "لا يرغب بالتجديد",
+};
+
+/** What owners decided about renewing leases on their units (from the owner dashboard). */
+function OwnerDecisionsSection() {
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["owner-renewal-decisions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("owner_renewal_decisions")
+        .select(
+          "id, decision, proposed_rent, note, status, created_at, leases(end_date, annual_rent, units(unit_number, properties(name)))",
+        )
+        .neq("status", "superseded")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const handle = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("owner_renewal_decisions")
+        .update({ status: "handled", updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("علّمنا قرار المالك كمعالج");
+      queryClient.invalidateQueries({ queryKey: ["owner-renewal-decisions"] });
+    },
+    onError: () => toast.error("تعذّر التحديث"),
+  });
+
+  // Before the owner-features migration is applied the table does not exist: leave it out.
+  if (isLoading || isError || !data) return null;
+  return (
+    <Card className="shadow-deed">
+      <CardHeader>
+        <CardTitle className="text-base">قرارات الملاك في التجديد</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {data.map((d) => {
+          const lease = d.leases;
+          return (
+            <div
+              key={d.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm"
+            >
+              <div>
+                <p className="font-medium">
+                  {lease?.units?.properties?.name ?? "—"} · وحدة {lease?.units?.unit_number ?? "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {OWNER_DECISION_LABEL[d.decision] ?? d.decision}
+                  {d.decision === "renew_new_rent" && d.proposed_rent
+                    ? ` · ${sar(d.proposed_rent)} بدل ${sar(lease?.annual_rent)}`
+                    : ""}
+                  {lease?.end_date ? ` · ينتهي ${shortDate(lease.end_date)}` : ""}
+                  {d.note ? ` · ${d.note}` : ""} · {shortDate(d.created_at)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={d.decision === "leave" ? "destructive" : "default"}>
+                  {d.decision === "leave" ? "عدم تجديد" : "تجديد"}
+                </Badge>
+                {d.status === "new" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={handle.isPending}
+                    onClick={() => handle.mutate(d.id)}
+                  >
+                    تمت معالجته
+                  </Button>
+                ) : (
+                  <Badge variant="outline">معالج</Badge>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {data.length === 0 ? (
+          <p className="text-sm text-muted-foreground">لم يحدّد أي مالك قراره بعد.</p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 

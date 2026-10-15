@@ -28,7 +28,16 @@ export function useOrgBranding() {
     },
   });
 
-  const logoPath = org.data?.logo_url ?? null;
+  const logoDataUrl = useBrandingLogo(org.data?.logo_url ?? null);
+
+  return { org, logoDataUrl };
+}
+
+/**
+ * An office logo from the private `branding` bucket as a data URL ("" until loaded or when there is
+ * none). A data URL, not a signed URL, so it also renders inside PDFs built from the DOM.
+ */
+export function useBrandingLogo(logoPath: string | null) {
   const [logoDataUrl, setLogoDataUrl] = useState("");
 
   useEffect(() => {
@@ -36,14 +45,20 @@ export function useOrgBranding() {
       setLogoDataUrl("");
       return;
     }
+    let cancelled = false;
     void (async () => {
       const { data } = await supabase.storage.from("branding").download(logoPath);
-      if (!data) return;
+      if (!data || cancelled) return;
       const reader = new FileReader();
-      reader.onload = () => setLogoDataUrl(String(reader.result ?? ""));
+      reader.onload = () => {
+        if (!cancelled) setLogoDataUrl(String(reader.result ?? ""));
+      };
       reader.readAsDataURL(data);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [logoPath]);
 
-  return { org, logoDataUrl };
+  return logoDataUrl;
 }

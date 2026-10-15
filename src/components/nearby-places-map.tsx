@@ -3,72 +3,80 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { escapeHtml } from "@/lib/escape-html";
+import { HOME_ARCH_PIN_HTML, serviceSquareHtml } from "@/lib/map-markers";
+import { addBrandTiles, htmlIcon } from "@/lib/map-style";
 import type { NearbyPlace } from "@/lib/nearby-places.functions";
+import { cn } from "@/lib/utils";
 
-const COLOR_BY_KIND: Record<NearbyPlace["kind"], string> = {
-  school: "#2563eb",
-  mosque: "#16a34a",
-  market: "#d97706",
-  other: "#64748b",
-};
-
-/** خريطة صغيرة لموقع الوحدة التقريبي وأقرب الخدمات — تُحمّل ديناميكيًا في صفحة العرض العامة. */
+/**
+ * خريطة صغيرة لموقع الوحدة التقريبي وأقرب الخدمات — تُحمّل ديناميكيًا في صفحة العرض العامة.
+ * The unit is the red arch inside a dashed "approximate" circle (its exact spot is shared only after
+ * contacting the office); services are neutral glyph squares.
+ */
 export default function NearbyPlacesMap({
   lat,
   lng,
   places,
+  className,
 }: {
   lat: number;
   lng: number;
   places: NearbyPlace[];
+  className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const placesLayerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current) return;
+    const map = L.map(containerRef.current, { scrollWheelZoom: false, zoomControl: false }).setView(
+      [lat, lng],
+      15,
+    );
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
+    addBrandTiles(L, map);
 
-    const map = L.map(containerRef.current, { scrollWheelZoom: false }).setView([lat, lng], 14);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap",
+    L.circle([lat, lng], {
+      radius: 260,
+      color: "#EC3013",
+      weight: 1.5,
+      dashArray: "4 4",
+      fillColor: "#EC3013",
+      fillOpacity: 0.1,
+      interactive: false,
     }).addTo(map);
-
-    L.circleMarker([lat, lng], {
-      radius: 12,
-      color: "#9f1239",
-      fillColor: "#9f1239",
-      fillOpacity: 0.85,
-      weight: 2,
-    })
+    L.marker([lat, lng], { icon: htmlIcon(L, HOME_ARCH_PIN_HTML), title: "موقع العرض التقريبي" })
       .bindPopup('<div dir="rtl">موقع العرض التقريبي</div>')
       .addTo(map);
 
-    // أسماء الخدمات القريبة تأتي من مصدر خارجي (OSM) — تُهرَّب قبل إدراجها بـ innerHTML الخاص بـ
-    // نافذة Leaflet المنبثقة، بنفس الأسلوب المتّبع بخريطة الإشغال الداخلية.
-    for (const p of places) {
-      L.circleMarker([p.lat, p.lng], {
-        radius: 7,
-        color: COLOR_BY_KIND[p.kind],
-        fillColor: COLOR_BY_KIND[p.kind],
-        fillOpacity: 0.8,
-        weight: 1.5,
-      })
-        .bindPopup(`<div dir="rtl">${escapeHtml(p.name)}</div>`)
-        .addTo(map);
-    }
-
+    placesLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     return () => {
       map.remove();
       mapRef.current = null;
+      placesLayerRef.current = null;
     };
-  }, [lat, lng, places]);
+  }, [lat, lng]);
+
+  useEffect(() => {
+    const layer = placesLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    // أسماء الخدمات القريبة تأتي من مصدر خارجي (OSM) — تُهرَّب قبل إدراجها بـ innerHTML الخاص بـ
+    // تلميح Leaflet، بنفس الأسلوب المتّبع بخريطة الإشغال الداخلية.
+    for (const p of places) {
+      L.marker([p.lat, p.lng], { icon: htmlIcon(L, serviceSquareHtml(p.kind)) })
+        .bindTooltip(escapeHtml(p.name), { direction: "top" })
+        .addTo(layer);
+    }
+  }, [places, lat, lng]);
 
   return (
     <div
       ref={containerRef}
       dir="ltr"
-      className="h-72 w-full overflow-hidden rounded-md border border-border"
+      className={cn("isolate h-72 w-full overflow-hidden bg-[#ECEAE6]", className)}
     />
   );
 }

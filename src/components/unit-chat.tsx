@@ -92,7 +92,7 @@ export function UnitChat({
                 <div
                   className={cn(
                     "max-w-[85%] rounded-lg px-3 py-2 text-sm",
-                    mine ? "bg-primary text-primary-foreground" : "bg-card border border-border",
+                    mine ? "bg-foreground text-background" : "bg-card border border-border",
                   )}
                 >
                   <div className="mb-1 flex items-center gap-2 text-xs opacity-80">

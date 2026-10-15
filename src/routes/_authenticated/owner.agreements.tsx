@@ -125,15 +125,33 @@ function OwnerAgreements() {
     },
   });
 
+  // owner_units(), not properties→units: same ownership rule as request_management_agreement
+  // (the unit's own owner, else the property's), so an owner of a single unit inside someone
+  // else's property can still pick it — properties RLS hides that property from them.
   const properties = useQuery({
     queryKey: ["owner-agreements-properties"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("properties")
-        .select("id, name, units(id, unit_number, unit_type, status)")
-        .order("created_at");
+    queryFn: async (): Promise<PropertyWithUnits[]> => {
+      const { data, error } = await supabase.rpc("owner_units");
       if (error) throw error;
-      return data ?? [];
+      const byProperty = new Map<
+        string,
+        PropertyWithUnits & { units: NonNullable<PropertyWithUnits["units"]> }
+      >();
+      for (const u of data ?? []) {
+        const p = byProperty.get(u.property_id) ?? {
+          id: u.property_id,
+          name: u.property_name,
+          units: [],
+        };
+        p.units.push({
+          id: u.unit_id,
+          unit_number: u.unit_number,
+          unit_type: u.unit_type,
+          status: u.status,
+        });
+        byProperty.set(u.property_id, p);
+      }
+      return [...byProperty.values()];
     },
   });
 

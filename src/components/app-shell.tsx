@@ -1,4 +1,4 @@
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakSymbol } from "@/components/jarak-logo";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -35,6 +35,8 @@ import {
   ClipboardCheck,
   FileSignature,
   Landmark,
+  ArrowLeftRight,
+  type LucideIcon,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -93,14 +95,22 @@ const superAdminNav = [{ to: "/hq", label: "لوحة المدير العام", i
 // نفس الوجهة بلابل مختلفة. عناصر فيها "#" ترجع لنفس صفحة اللوحة وتمرّر لقسمها. مو عبر <Link> من
 // tanstack-router لأن الأقسام مو مسارات مسجّلة أصلًا — روابط <a> عادية تكفي هنا (صفحة واحدة، نقرات
 // نادرة، ما يستاهل التعقيد).
-const tenantNav = [
+type PortalNavItem = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  href: string;
+  badge?: "overdue" | "unread" | "approvals";
+};
+
+const tenantNav: PortalNavItem[] = [
   { key: "home", label: "الرئيسية", icon: Gauge, href: "/tenant-dashboard" },
   {
     key: "payments",
     label: "الدفعات",
     icon: Wallet,
     href: "/tenant-dashboard#payments",
-    badge: "overdue" as const,
+    badge: "overdue",
   },
   { key: "maintenance", label: "الصيانة", icon: Wrench, href: "/tenant-dashboard#maintenance" },
   {
@@ -108,7 +118,7 @@ const tenantNav = [
     label: "المحادثات",
     icon: MessagesSquare,
     href: "/messages",
-    badge: "unread" as const,
+    badge: "unread",
   },
   { key: "documents", label: "المستندات", icon: FileText, href: "/documents" },
   { key: "settings", label: "الإعدادات", icon: UserCog, href: "/tenant/settings" },
@@ -126,15 +136,16 @@ const tenantBottomNav = tenantNav.slice(0, 5);
 // "الموافقات" مختلفة: موجودة اليوم فعلاً (قسم "صيانة تنتظر موافقتك" لا يعتمد على نظام
 // الاتفاقيات — موافقة المالك على تكلفة الصيانة مبنية على ملكية الوحدة مباشرة)، فعدّادها حقيقي.
 // بلا شريط سفلي للجوال — المواصفة ما تطلبه صراحة لهذي البوابة (خلافًا للمستأجر).
-const ownerNav = [
+const ownerNav: PortalNavItem[] = [
   { key: "home", label: "الرئيسية", icon: Gauge, href: "/owner-dashboard" },
   { key: "properties", label: "عقاراتي", icon: Building2, href: "/owner-dashboard#units" },
+  { key: "map", label: "الخريطة والجوار", icon: MapPin, href: "/owner-dashboard#map" },
   {
     key: "approvals",
     label: "الموافقات",
     icon: ClipboardCheck,
     href: "/owner-dashboard#approvals",
-    badge: "approvals" as const,
+    badge: "approvals",
   },
   { key: "agreements", label: "المكاتب والاتفاقيات", icon: Handshake, href: "/owner/agreements" },
   { key: "finance", label: "المالية", icon: Wallet, href: "/owner-dashboard#finance" },
@@ -164,11 +175,31 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { data: me } = useMyRoles();
   const roles = me?.roles ?? [];
   const staff = isStaffRole(roles);
-  const tenant = !staff && roles.includes("tenant");
-  // A dual owner+tenant account gets the tenant nav (checked first) — an owner who is ALSO a
-  // tenant still needs their tenant-side badges/bottom-nav; the owner-only nav below is for
-  // accounts with no tenant role at all.
-  const owner = !staff && !tenant && roles.includes("owner");
+  const isTenant = !staff && roles.includes("tenant");
+  const isOwner = !staff && roles.includes("owner");
+  // A dual owner+tenant account gets the owner nav on the owner pages (/owner-dashboard,
+  // /owner/*) and the tenant nav everywhere else — each nav carries a link to switch to the
+  // other side, so neither dashboard is ever unreachable from the menu.
+  const owner = isOwner && (!isTenant || pathname.startsWith("/owner"));
+  const tenant = isTenant && !owner;
+  const roleNav: PortalNavItem[] = tenant
+    ? isOwner
+      ? [
+          ...tenantNav,
+          { key: "switch", label: "لوحة المالك", icon: ArrowLeftRight, href: "/owner-dashboard" },
+        ]
+      : tenantNav
+    : isTenant
+      ? [
+          ...ownerNav,
+          {
+            key: "switch",
+            label: "لوحة المستأجر",
+            icon: ArrowLeftRight,
+            href: "/tenant-dashboard",
+          },
+        ]
+      : ownerNav;
   // الاسم أعلى الشريط الجانبي/الهيدر يعكس دور الحساب بدل اسم المنصة العام — طلب من المستخدم.
   // حساب بلا دور محدد (فني، أو بدون دور بعد) يبقى على اسم المنصة.
   const brandLabel = platformTeamPage
@@ -218,12 +249,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryKey: ["owner-nav-approvals", me?.userId],
     enabled: owner,
     staleTime: 60_000,
+    // Owner-scoped (units the caller owns) — a plain RLS count also included requests the caller
+    // can see as a tenant/technician, which decideMaintenanceApproval then refuses.
     queryFn: async () => {
-      const { count } = await supabase
-        .from("maintenance_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("approval_status", "pending");
-      return count ?? 0;
+      const { data, error } = await supabase.rpc("owner_pending_approvals");
+      if (error) throw error;
+      return data?.length ?? 0;
     },
   });
   const navBadge = (key: "overdue" | "unread" | "approvals") =>
@@ -326,18 +357,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <div>
           <div className="flex items-center gap-2 px-2 py-3">
-            <img
-              src={jarakLogo}
-              alt="جارك"
-              width={40}
-              height={40}
-              className="size-10 bg-background p-1"
-            />
+            <JarakSymbol className="size-10 text-sidebar-foreground" />
             <span className="font-display text-lg font-bold">{brandLabel}</span>
           </div>
           <nav className="mt-4 space-y-1">
             {!platformTeamPage && (tenant || owner)
-              ? (tenant ? tenantNav : ownerNav).map((item) => {
+              ? roleNav.map((item) => {
                   const active = !item.href.includes("#") && pathname === item.href;
                   const badgeCount = item.badge ? navBadge(item.badge) : 0;
                   return (
@@ -399,12 +424,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="min-w-0 flex-1">
         <InvitationsBanner />
         {announcement.data?.announcement_banner ? (
-          <div className="border-b border-border bg-primary/10 px-4 py-2 text-center text-sm">
+          <div className="border-b border-border bg-info-tint px-4 py-2 text-center text-sm text-info-tint-foreground">
             {announcement.data.announcement_banner}
           </div>
         ) : null}
         {canRestore ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-destructive-tint px-4 py-2 text-sm text-destructive-tint-foreground">
             <span>أنت داخل حساب آخر بجلسة المدير العام — هل تريد العودة لحسابك؟</span>
             <Button size="sm" variant="outline" onClick={restoreAdminSession}>
               <Undo2 className="size-4" />
@@ -413,7 +438,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         ) : null}
         {!platformTeamPage && staff && officeVerified.data === false ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-warning/15 px-4 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-warning-tint px-4 py-2 text-sm text-warning-tint-foreground">
             <Hourglass className="size-4 shrink-0" aria-hidden />
             <span>
               مكتبك بانتظار توثيق إدارة المنصة. تعمل كل أدواتك بشكل كامل، لكن عروض مكتبك لا تظهر في
@@ -431,6 +456,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <Menu className="size-4" />
           </Button>
+          <JarakSymbol className="size-7" />
           <span className="font-display font-bold">{brandLabel}</span>
         </header>
         <main
@@ -451,7 +477,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 className={cn(
                   "relative flex flex-1 flex-col items-center gap-1 py-2 text-[11px]",
-                  active ? "text-primary" : "text-muted-foreground",
+                  active
+                    ? "font-semibold text-foreground shadow-[inset_0_3px_0_var(--color-foreground)]"
+                    : "text-muted-foreground",
                 )}
               >
                 <item.icon className="size-5" />

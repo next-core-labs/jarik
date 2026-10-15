@@ -552,7 +552,7 @@ export function UnitDialog({
                       }
                       className={`border px-3 py-1 text-xs transition-colors ${
                         on
-                          ? "border-primary bg-primary text-primary-foreground"
+                          ? "border-foreground bg-foreground text-background"
                           : "border-input hover:bg-muted"
                       }`}
                     >

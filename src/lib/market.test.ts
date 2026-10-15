@@ -7,6 +7,7 @@ import {
   listingTitle,
   normalizeArabic,
   phoneHref,
+  priceDropPct,
   similarListings,
   sortListings,
   toInternational,
@@ -39,6 +40,7 @@ const row = (over: Partial<ListingRow> = {}): ListingRow => ({
   office_district: "الملقا",
   listing_description: null,
   featured: null,
+  list_price: null,
   amenities: [],
   created_at: "2026-09-01T10:00:00Z",
   cover_path: null,
@@ -209,5 +211,20 @@ describe("phone links", () => {
     expect(whatsappHref("0501234567", "مرحبا")).toBe(
       `https://wa.me/966501234567?text=${encodeURIComponent("مرحبا")}`,
     );
+  });
+});
+
+describe("priceDropPct", () => {
+  it("is the whole-percent cut from the original asking price", () => {
+    expect(priceDropPct(L({ annual_rent: 48000, list_price: 50000 }))).toBe(4);
+    expect(
+      priceDropPct(L({ listing_purpose: "sale", sale_price: 2_300_000, list_price: 2_400_000 })),
+    ).toBe(4);
+  });
+
+  it("is null without an earlier, higher price", () => {
+    expect(priceDropPct(L({ annual_rent: 50000, list_price: null }))).toBeNull();
+    expect(priceDropPct(L({ annual_rent: 50000, list_price: 50000 }))).toBeNull();
+    expect(priceDropPct(L({ annual_rent: 50000, list_price: 50100 }))).toBeNull(); // < 1%
   });
 });

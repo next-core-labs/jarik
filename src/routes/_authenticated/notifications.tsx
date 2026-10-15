@@ -34,7 +34,11 @@ const kindLabel: Record<string, string> = {
   maintenance: "صيانة",
   reply: "رد",
   payment: "تحصيل",
+  payment_reminder: "تذكير دفعة",
   announcement: "إعلان",
+  lease: "عقد",
+  unit: "وحدة",
+  deal: "صفقة",
 };
 
 function Notifications() {
@@ -111,7 +115,7 @@ function Notifications() {
           {(data ?? []).map((n) => (
             <Card
               key={n.id}
-              className={cn("shadow-deed", !n.read_at && "border-primary/40 bg-primary/5")}
+              className={cn("shadow-deed", !n.read_at && "border-s-[3px] border-s-foreground")}
             >
               <CardContent className="flex items-start gap-3 pt-6">
                 <Bell className="mt-0.5 size-4 shrink-0 text-brass" />

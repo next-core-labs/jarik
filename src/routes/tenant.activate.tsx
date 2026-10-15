@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakSymbol } from "@/components/jarak-logo";
 import { PasswordField } from "@/components/password-field";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,13 +59,7 @@ function ActivateTenant() {
   return (
     <div className="grid min-h-screen place-items-center bg-background p-6">
       <div className="w-full max-w-sm">
-        <img
-          src={jarakLogo}
-          alt="جارك"
-          width={48}
-          height={48}
-          className="mx-auto size-12 bg-background p-1"
-        />
+        <JarakSymbol className="mx-auto size-12" />
         <h1 className="font-display mt-4 text-center text-2xl font-bold">تفعيل حسابك</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
           دعاك مكتبك العقاري — عيّن كلمة مرور لإكمال حسابك.

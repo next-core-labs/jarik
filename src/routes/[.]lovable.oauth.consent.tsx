@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 
-import jarakLogo from "@/assets/jarak-logo.png";
+import { JarakLogo } from "@/components/jarak-logo";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
@@ -87,14 +87,7 @@ function Consent() {
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-xl border bg-card p-8 text-card-foreground shadow-sm">
         <div className="flex items-center gap-2">
-          <img
-            src={jarakLogo}
-            alt="جارك"
-            width={40}
-            height={40}
-            className="size-10 bg-background p-1"
-          />
-          <span className="font-display text-lg font-bold">جارك</span>
+          <JarakLogo />
         </div>
 
         <h1 className="mt-6 font-display text-xl font-bold">ربط {clientName} بحسابك</h1>
