@@ -66,6 +66,8 @@ export type UnitFormValues = {
   /** Public description shown on the listing in the offers market. */
   listing_description: string;
   amenities: string[];
+  /** Advertise the unit in the public offers market while it is vacant. */
+  market_listed: boolean;
 };
 
 export const emptyUnit: UnitFormValues = {
@@ -93,6 +95,7 @@ export const emptyUnit: UnitFormValues = {
   notes: "",
   listing_description: "",
   amenities: [],
+  market_listed: true,
 };
 
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
@@ -128,7 +131,7 @@ export function UnitDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("units")
-        .select("listing_description, amenities")
+        .select("listing_description, amenities, market_listed")
         .eq("id", initial.id!)
         .single();
       if (error) throw error;
@@ -144,11 +147,12 @@ export function UnitDialog({
   useEffect(() => {
     if (listingLoaded.current || !listingFields.data || listingFields.isFetching) return;
     listingLoaded.current = true;
-    const { listing_description, amenities } = listingFields.data;
+    const { listing_description, amenities, market_listed } = listingFields.data;
     setForm((f) => ({
       ...f,
       listing_description: listing_description ?? "",
       amenities: amenities ?? [],
+      market_listed,
     }));
   }, [listingFields.data, listingFields.isFetching]);
 
@@ -261,6 +265,16 @@ export function UnitDialog({
         notes: form.notes.trim() || null,
         listing_description: form.listing_description.trim() || null,
         amenities: form.amenities,
+        // Only once the saved value is known (a failed load must not silently unpublish), and the
+        // listing date is stamped only when the unit newly goes on the market.
+        ...(!isEdit || listingFields.data
+          ? {
+              market_listed: form.market_listed,
+              ...(form.market_listed && !listingFields.data?.market_listed
+                ? { market_listed_at: new Date().toISOString() }
+                : {}),
+            }
+          : {}),
       };
       let unitId = form.id;
       if (unitId) {
@@ -512,12 +526,21 @@ export function UnitDialog({
             </Select>
           </Field>
           <div className="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
-            <div>
-              <p className="font-medium">الإعلان في سوق العروض</p>
-              <p className="text-xs text-muted-foreground">
-                تظهر الوحدة للجميع في سوق العروض عندما تكون شاغرة ويكون «العرض العلني» مفعّلًا في
-                هوية المكتب.
-              </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label htmlFor="market_listed" className="font-medium">
+                  الإعلان في سوق العروض
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  تظهر الوحدة للجميع في سوق العروض عندما تكون شاغرة ويكون «العرض العلني» مفعّلًا في
+                  هوية المكتب ومعتمدًا من المنصة.
+                </p>
+              </div>
+              <Switch
+                id="market_listed"
+                checked={form.market_listed}
+                onCheckedChange={(v) => set("market_listed", v)}
+              />
             </div>
             <Field label="صور الوحدة">
               <UnitPhotosEditor

@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PropertyDialog } from "@/components/property-dialog";
 import { UnitDialog, emptyUnit, type UnitFormValues } from "@/components/unit-dialog";
 import { sar, unitStatusLabel } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
@@ -69,6 +70,7 @@ function Properties() {
     propertyName: string;
     values: UnitFormValues;
   } | null>(null);
+  const [newProperty, setNewProperty] = useState(false);
 
   const [ad, setAd] = useState<{ unitId: string; label: string } | null>(null);
   const fetchAd = useServerFn(generateAdText);
@@ -139,6 +141,14 @@ function Properties() {
       <PageHeader
         title="الأملاك والوحدات"
         subtitle="كل عقار ووحداته، حالة الإشغال، ورقم عداد الكهرباء والمياه لكل وحدة."
+        action={
+          isStaff ? (
+            <Button onClick={() => setNewProperty(true)}>
+              <Plus className="size-4" />
+              تسجيل عقار
+            </Button>
+          ) : null
+        }
       />
 
       {isLoading ? (
@@ -146,6 +156,15 @@ function Properties() {
           <Skeleton className="h-48" />
           <Skeleton className="h-48" />
         </div>
+      ) : (data ?? []).length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <p className="font-medium">لا توجد عقارات بعد</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              سجّل أول عقار، ثم أضف وحداته الشاغرة لتظهر في سوق العروض.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-6">
           {(data ?? []).map((p) => {
@@ -311,6 +330,7 @@ function Properties() {
                                     // does not depend on the listing columns.
                                     listing_description: "",
                                     amenities: [],
+                                    market_listed: false,
                                   },
                                 })
                               }
@@ -335,6 +355,8 @@ function Properties() {
           ) : null}
         </div>
       )}
+
+      <PropertyDialog open={newProperty} onOpenChange={setNewProperty} />
 
       {dialog ? (
         <UnitDialog
