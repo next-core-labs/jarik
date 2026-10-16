@@ -12,6 +12,10 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "deploy": "npm run build && npx wrangler deploy --config .output/server/wrangler.json",
+    "cap:sync": "cap sync",
+    "cap:android": "cap sync android && cap open android",
+    "cap:ios": "cap sync ios && cap open ios",
+    "cap:assets": "capacitor-assets generate --ios --android --iconBackgroundColor \"#F3F2F2\" --iconBackgroundColorDark \"#F3F2F2\" --splashBackgroundColor \"#F3F2F2\" --splashBackgroundColorDark \"#F3F2F2\"",
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked --schema public > src/integrations/supabase/types.ts && prettier --write src/integrations/supabase/types.ts"
   },
@@ -19,6 +23,13 @@
     "rolldown": "1.2.1"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/share": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.2",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -81,6 +92,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3",
     "@eslint/js": "^9.32.0",
     "@types/leaflet": "1.9.20",
     "@types/node": "^22.16.5",

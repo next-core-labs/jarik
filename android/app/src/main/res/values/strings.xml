@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">جارك</string>
+    <string name="title_activity_main">جارك</string>
+    <string name="package_name">com.jarakksa.app</string>
+    <string name="custom_url_scheme">com.jarakksa.app</string>
+</resources>

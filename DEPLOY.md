@@ -145,6 +145,39 @@ After adding secrets, deploy again (B2) so the Worker picks them up.
 
 ---
 
+## Part C — Mobile apps (Android + iOS)
+
+The apps are Capacitor shells (`capacitor.config.ts`, `android/`, `ios/`) that load
+`https://jarak-ksa.com`, so a normal deploy (B2) updates them too. Rebuild and resubmit the store
+apps only after a native change: `capacitor.config.ts`, a plugin, permissions, icons
+(`assets/logo.png` → `npm run cap:assets`). App ID / bundle ID: `com.jarakksa.app`.
+
+### C1. Google sign-in in the apps
+
+Google doesn't allow sign-in inside an app WebView, so the apps open it in the system browser
+and return through the app's URL scheme (`src/lib/native.ts`). In Supabase → Authentication →
+URL Configuration → Redirect URLs, add:
+
+```
+com.jarakksa.app://auth-callback
+```
+
+### C2. Build
+
+| Task                          | Command                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| Copy config/plugins to native | `npm run cap:sync`                                                          |
+| Android Studio                | `npm run cap:android` (needs JDK 21 + Android SDK)                          |
+| Xcode                         | `npm run cap:ios`                                                           |
+| Point a dev build at local    | `CAP_SERVER_URL=http://<your LAN IP>:8080 npm run cap:sync`, then run again |
+
+Store builds: Android Studio → Build → Generate Signed App Bundle (keep the upload keystore safe,
+outside the repo); Xcode → set the Team under Signing & Capabilities → Product → Archive. Bump
+`versionCode`/`versionName` in `android/app/build.gradle` and the version/build in Xcode each
+release.
+
+---
+
 ## Day to day
 
 | Task                | Command                                                                             |
@@ -152,3 +185,4 @@ After adding secrets, deploy again (B2) so the Worker picks them up.
 | Run locally         | `npm run dev` → http://localhost:8080 (uses `.env`; server secrets in `.dev.vars`)  |
 | Change the database | add a file in `supabase/migrations/`, then `npm run db:push` and `npm run db:types` |
 | Deploy              | push to GitHub (Option 2) or `npm run deploy`                                       |
+| Mobile apps         | web changes ship with the deploy; native changes need `npm run cap:sync` (Part C)   |

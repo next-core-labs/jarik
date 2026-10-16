@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { initNativeApp } from "@/lib/native";
 
 function NotFoundComponent() {
   return (
@@ -129,6 +130,8 @@ function RootComponent() {
     });
     return () => data.subscription.unsubscribe();
   }, [queryClient, router]);
+
+  useEffect(() => initNativeApp(), []);
 
   return (
     <QueryClientProvider client={queryClient}>

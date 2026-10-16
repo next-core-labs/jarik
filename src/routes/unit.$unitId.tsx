@@ -16,6 +16,7 @@ import { UnitRequestForm } from "@/components/unit-request-form";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useFavorites } from "@/lib/favorites";
+import { isNativeApp, nativeShare } from "@/lib/native";
 import { translate, useLocale } from "@/lib/i18n";
 import { trackListingEvent } from "@/lib/office-tools.functions";
 import { sar, shortDate } from "@/lib/format";
@@ -294,6 +295,10 @@ function UnitPublic() {
   const share = async () => {
     const url = window.location.href;
     try {
+      if (isNativeApp()) {
+        await nativeShare(title, url);
+        return;
+      }
       if (navigator.share) {
         await navigator.share({ title, url });
         return;

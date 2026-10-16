@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PasswordField } from "@/components/password-field";
+import { isNativeApp, nativeOAuthSignIn } from "@/lib/native";
 import { safeNext } from "@/lib/safe-redirect";
 import {
   ACCOUNT_TYPE_LABEL,
@@ -247,6 +248,11 @@ function AuthPage() {
   // Supabase's own Google provider (enable it under Authentication → Providers, and list this
   // site's origin under Authentication → URL Configuration → Redirect URLs).
   async function google() {
+    if (isNativeApp()) {
+      const { error } = await nativeOAuthSignIn("google", next);
+      if (error) toast.error("تعذّر الدخول عبر Google");
+      return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}${next ?? ""}` },
