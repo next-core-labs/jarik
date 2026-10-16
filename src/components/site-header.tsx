@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Menu } from "lucide-react";
 
 import { JarakLogo, JarakSymbol } from "@/components/jarak-logo";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { translate, useLocale, type Locale } from "@/lib/i18n";
 
@@ -32,6 +33,12 @@ const NAV_TAB =
 const NAV_TAB_ACTIVE = {
   className: "font-bold text-foreground shadow-[inset_0_-3px_0_var(--color-primary)]",
 };
+/** The same links in the phone menu: full-width rows, the active one marked by the red bar. */
+const MENU_ITEM =
+  "flex h-12 items-center border-b border-border px-1 text-base font-medium text-muted-foreground transition-colors hover:text-foreground";
+const MENU_ITEM_ACTIVE = {
+  className: "font-bold text-foreground shadow-[inset_-3px_0_0_var(--color-primary)] ps-3",
+};
 
 /**
  * Header of the public pages (offers market, listing, owner and office pages): a white 64px bar
@@ -47,7 +54,13 @@ export function SiteHeader({
   onLocaleChange?: (l: Locale) => void;
 }) {
   const signedIn = useIsSignedIn();
+  const [menuOpen, setMenuOpen] = useState(false);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const links = [
+    { to: "/", label: t("nav_market"), exact: true },
+    { to: "/requests-market", label: t("nav_requests"), exact: false },
+    { to: "/offices", label: t("nav_offices"), exact: false },
+  ] as const;
   return (
     <header className="relative z-20 h-16 shrink-0 border-b border-border bg-card text-foreground">
       <div className="flex h-full items-center gap-2 px-3 sm:gap-5 sm:px-5">
@@ -55,23 +68,54 @@ export function SiteHeader({
           <JarakLogo size="sm" className="hidden sm:inline-flex" />
           <JarakSymbol className="size-[34px] sm:hidden" />
         </Link>
-        <nav className="flex h-full min-w-0 flex-1 items-stretch overflow-x-auto">
-          <Link
-            to="/"
-            className={NAV_TAB}
-            activeProps={NAV_TAB_ACTIVE}
-            activeOptions={{ exact: true }}
-          >
-            {t("nav_market")}
-          </Link>
-          <Link to="/requests-market" className={NAV_TAB} activeProps={NAV_TAB_ACTIVE}>
-            {t("nav_requests")}
-          </Link>
-          <Link to="/offices" className={NAV_TAB} activeProps={NAV_TAB_ACTIVE}>
-            {t("nav_offices")}
-          </Link>
+        {/* Phones: the three tabs don't fit beside the logo and buttons, so they move into a menu. */}
+        <nav className="hidden h-full min-w-0 flex-1 items-stretch overflow-x-auto sm:flex">
+          {links.map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              className={NAV_TAB}
+              activeProps={NAV_TAB_ACTIVE}
+              activeOptions={{ exact: l.exact }}
+            >
+              {l.label}
+            </Link>
+          ))}
         </nav>
+        <div className="flex-1 sm:hidden" />
         <div className="flex shrink-0 items-center gap-2">
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <SheetTrigger
+              className="flex size-10 items-center justify-center border border-border transition-colors hover:bg-muted sm:hidden"
+              aria-label={locale === "ar" ? "القائمة" : "Menu"}
+            >
+              <Menu className="size-5" />
+            </SheetTrigger>
+            <SheetContent
+              side={locale === "ar" ? "right" : "left"}
+              dir={locale === "ar" ? "rtl" : "ltr"}
+              className="w-72 p-5"
+            >
+              <SheetTitle className="mt-8 mb-2 flex items-center gap-2">
+                <JarakSymbol className="size-7" />
+                <span className="font-display text-lg font-bold">جارك</span>
+              </SheetTitle>
+              <nav className="flex flex-col">
+                {links.map((l) => (
+                  <Link
+                    key={l.to}
+                    to={l.to}
+                    className={MENU_ITEM}
+                    activeProps={MENU_ITEM_ACTIVE}
+                    activeOptions={{ exact: l.exact }}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {l.label}
+                  </Link>
+                ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
           {onLocaleChange ? (
             <button
               type="button"
