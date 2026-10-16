@@ -41,7 +41,7 @@ export function ReferralCard() {
     if (!code.data) return;
     try {
       await navigator.clipboard.writeText(code.data);
-      toast.success("انسخ الرمز وشاركه");
+      toast.success("نُسخ الرمز — شاركه مع من تريد");
     } catch {
       toast.error("تعذّر النسخ");
     }

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageCirclePlus, MessagesSquare } from "lucide-react";
+import { Copy, MessageCirclePlus, MessagesSquare } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { DirectChat } from "@/components/direct-chat";
@@ -46,6 +47,28 @@ export function DirectMessagesTab({
     },
   });
 
+  // The caller's own ID, shown in the dialog: not every account has a settings page to find it in
+  // (technicians don't), and the other person needs it to start a chat back.
+  const myCode = useQuery({
+    queryKey: ["my-reference-code"],
+    enabled: dialogOpen,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("my_reference_code");
+      if (error) throw new Error(error.message);
+      return data ?? null;
+    },
+  });
+
+  const copyMyCode = () => {
+    const mine = myCode.data;
+    if (!mine) return;
+    navigator.clipboard?.writeText(mine).then(
+      () => toast.success("نُسخ رقمك"),
+      () => toast.error("تعذّر النسخ"),
+    );
+  };
+
   const list = conversations.data ?? [];
   const active = selected ?? list[0]?.id ?? null;
 
@@ -63,7 +86,7 @@ export function DirectMessagesTab({
       queryClient.invalidateQueries({ queryKey: ["direct-conversations"] });
       onSelect(conversationId);
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر بدء المحادثة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر بدء المحادثة")),
   });
 
   return (
@@ -128,10 +151,23 @@ export function DirectMessagesTab({
           <DialogHeader>
             <DialogTitle className="font-display">بدء محادثة</DialogTitle>
             <DialogDescription>
-              اكتب الرقم التعريفي المكوّن من 6 أرقام للحساب الذي تريد مراسلته — يجده في صفحة
-              إعداداته.
+              اكتب الرقم التعريفي المكوّن من 6 أرقام للحساب الذي تريد مراسلته — اطلبه من صاحبه.
             </DialogDescription>
           </DialogHeader>
+          {myCode.data ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+              <span>
+                رقمك التعريفي:{" "}
+                <span dir="ltr" className="font-bold tracking-widest">
+                  {myCode.data}
+                </span>
+              </span>
+              <Button size="sm" variant="ghost" onClick={copyMyCode}>
+                <Copy className="size-4" />
+                نسخ
+              </Button>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="direct-code">الرقم التعريفي</Label>
             <Input

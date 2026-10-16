@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Copy, MessageCircle, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { handleWhatsappMessage } from "@/lib/whatsapp.functions";
@@ -111,7 +112,7 @@ function WhatsappPage() {
       toast.success("تم تسجيل رقم المكتب");
       queryClient.invalidateQueries({ queryKey: ["whatsapp-channels"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل الرقم"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل الرقم")),
   });
 
   const removeChannel = useMutation({
@@ -120,7 +121,7 @@ function WhatsappPage() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["whatsapp-channels"] }),
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحذف"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحذف")),
   });
 
   const runMessage = useMutation({
@@ -139,7 +140,7 @@ function WhatsappPage() {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحليل الرسالة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحليل الرسالة")),
   });
 
   const origin = typeof window === "undefined" ? "" : window.location.origin;

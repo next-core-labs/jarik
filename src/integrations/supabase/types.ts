@@ -3854,6 +3854,14 @@ export type Database = {
         Args: { _category: string; _message: string; _rating: number };
         Returns: undefined;
       };
+      technician_job_contacts: {
+        Args: never;
+        Returns: {
+          request_id: string;
+          tenant_name: string;
+          tenant_phone: string;
+        }[];
+      };
       tenant_overdue_count: { Args: { _tenant_id: string }; Returns: number };
       update_agreement_permissions: {
         Args: { _agreement_id: string; _permissions: string[] };

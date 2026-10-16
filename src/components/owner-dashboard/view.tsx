@@ -19,6 +19,7 @@ import { Panel, Section } from "@/components/owner-dashboard/parts";
 import { Portfolio } from "@/components/owner-dashboard/portfolio";
 import { RecentPayments } from "@/components/owner-dashboard/recent-payments";
 import { Renewals, type RenewalDecisionInput } from "@/components/owner-dashboard/renewals";
+import { scrollToSection } from "@/components/owner-dashboard/scroll-to-section";
 import { SectionNav, type SectionLink } from "@/components/owner-dashboard/section-nav";
 import { StatementPdf } from "@/components/owner-dashboard/statement-pdf";
 import { Vacancies, type RentRequest } from "@/components/owner-dashboard/vacancies";
@@ -66,133 +67,140 @@ export function OwnerDashboardView({
 
   const locate = (propertyId: string) => {
     setMapSelection(propertyId);
-    document.getElementById("map")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const map = document.getElementById("map");
+    if (map) scrollToSection(map);
   };
 
+  // The tab bar is a direct child of the outermost wrapper: a sticky element only sticks within its
+  // parent, so nesting it with the hero alone let it scroll away with the hero.
   return (
-    <div className="space-y-10">
-      <div>
-        <OwnerHero
-          model={model}
-          finance={data.finance}
-          offices={data.offices}
-          downloading={downloading}
-          onDownload={() => statementRef.current && onDownloadStatement(statementRef.current)}
-          onExportExcel={() => onExportExcel(ownerWorkbookSheets(data, model))}
-        />
-        {model.hasUnits ? <SectionNav links={links} /> : null}
-      </div>
+    <div>
+      <OwnerHero
+        model={model}
+        finance={data.finance}
+        offices={data.offices}
+        downloading={downloading}
+        onDownload={() => statementRef.current && onDownloadStatement(statementRef.current)}
+        onExportExcel={() => onExportExcel(ownerWorkbookSheets(data, model))}
+      />
+      {model.hasUnits ? <SectionNav links={links} /> : null}
 
-      {!model.hasUnits ? (
-        <Panel className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <span
-            className="grid size-12 place-items-center bg-sidebar text-sidebar-foreground"
-            aria-hidden
-          >
-            <Building2 className="size-6" />
-          </span>
-          <h2 className="font-display text-lg font-bold">لا توجد وحدات مسجّلة باسمك بعد</h2>
-          <p className="max-w-md text-sm text-muted-foreground">
-            اطلب من مكتبك ربط وحداتك بحسابك، أو اطلب من مكتب عقاري إدارة أملاكك — وسيظهر هنا دخلك
-            وإشغالك وكل ما يحتاج قرارك.
-          </p>
-          <div className="mt-2 flex flex-wrap justify-center gap-2">
-            <Button asChild>
-              <Link to="/owner/agreements">المكاتب والاتفاقيات</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/messages">راسل المكتب</Link>
-            </Button>
-          </div>
-        </Panel>
-      ) : (
-        <>
-          <AttentionCenter
-            model={model}
-            deciding={deciding}
-            onDecide={onDecide}
-            autoApproveLimit={data.autoApproveLimit}
-          />
+      <div className="mt-10 space-y-10">
+        {!model.hasUnits ? (
+          <Panel className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+            <span
+              className="grid size-12 place-items-center bg-sidebar text-sidebar-foreground"
+              aria-hidden
+            >
+              <Building2 className="size-6" />
+            </span>
+            <h2 className="font-display text-lg font-bold">لا توجد وحدات مسجّلة باسمك بعد</h2>
+            <p className="max-w-md text-sm text-muted-foreground">
+              اطلب من مكتبك ربط وحداتك بحسابك، أو اطلب من مكتب عقاري إدارة أملاكك — وسيظهر هنا دخلك
+              وإشغالك وكل ما يحتاج قرارك.
+            </p>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              <Button asChild>
+                <Link to="/owner/agreements">المكاتب والاتفاقيات</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/messages">راسل المكتب</Link>
+              </Button>
+            </div>
+          </Panel>
+        ) : (
+          <>
+            <AttentionCenter
+              model={model}
+              deciding={deciding}
+              onDecide={onDecide}
+              autoApproveLimit={data.autoApproveLimit}
+            />
 
-          <Section
-            id="finance"
-            title="المالية"
-            description="ما حُصّل وما سيُحصَّل، أين ذهبت المصروفات، وما يحين تجديده"
-          >
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-              <div className="min-w-0 lg:col-span-3">
-                <CollectionsChart points={model.chart} total={model.chartTotal} />
-              </div>
-              <div className="min-w-0 lg:col-span-2">
-                <RecentPayments payments={data.finance.recent} today={data.finance.today} />
-              </div>
-              {data.forecast ? (
-                <div className={data.expenses ? "min-w-0 lg:col-span-3" : "min-w-0 lg:col-span-5"}>
-                  <CashflowForecast
-                    points={model.forecast}
-                    outstanding={model.forecastOutstanding}
+            <Section
+              id="finance"
+              title="المالية"
+              description="ما حُصّل وما سيُحصَّل، أين ذهبت المصروفات، وما يحين تجديده"
+            >
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+                <div className="min-w-0 lg:col-span-3">
+                  <CollectionsChart points={model.chart} total={model.chartTotal} />
+                </div>
+                <div className="min-w-0 lg:col-span-2">
+                  <RecentPayments payments={data.finance.recent} today={data.finance.today} />
+                </div>
+                {data.forecast ? (
+                  <div
+                    className={data.expenses ? "min-w-0 lg:col-span-3" : "min-w-0 lg:col-span-5"}
+                  >
+                    <CashflowForecast
+                      points={model.forecast}
+                      outstanding={model.forecastOutstanding}
+                    />
+                  </div>
+                ) : null}
+                {data.expenses ? (
+                  <div
+                    className={data.forecast ? "min-w-0 lg:col-span-2" : "min-w-0 lg:col-span-5"}
+                  >
+                    <ExpensesBreakdown
+                      categories={model.expenseCategories}
+                      total={model.expensesTotal}
+                      rows={data.expenses}
+                    />
+                  </div>
+                ) : null}
+                <div className="min-w-0 lg:col-span-5">
+                  <Renewals
+                    renewals={model.renewals}
+                    total={model.renewalsRent}
+                    decisions={model.renewalDecisions}
+                    onDecide={onRenewalDecision}
                   />
                 </div>
-              ) : null}
-              {data.expenses ? (
-                <div className={data.forecast ? "min-w-0 lg:col-span-2" : "min-w-0 lg:col-span-5"}>
-                  <ExpensesBreakdown
-                    categories={model.expenseCategories}
-                    total={model.expensesTotal}
-                    rows={data.expenses}
-                  />
-                </div>
-              ) : null}
-              <div className="min-w-0 lg:col-span-5">
-                <Renewals
-                  renewals={model.renewals}
-                  total={model.renewalsRent}
-                  decisions={model.renewalDecisions}
-                  onDecide={onRenewalDecision}
+              </div>
+            </Section>
+
+            <Section
+              id="units"
+              title="عقاراتي ووحداتي"
+              description="الشاغر أولًا، ثم الإشغال والعائد لكل عقار وحالة كل وحدة"
+            >
+              <div className="space-y-6">
+                {data.vacancies ? (
+                  <Vacancies vacancies={model.vacancies} onRequestRent={onRequestRent} />
+                ) : null}
+                <Portfolio
+                  properties={model.properties}
+                  statusCounts={model.statusCounts}
+                  onLocate={locate}
                 />
               </div>
-            </div>
-          </Section>
+            </Section>
 
-          <Section
-            id="units"
-            title="عقاراتي ووحداتي"
-            description="الشاغر أولًا، ثم الإشغال والعائد لكل عقار وحالة كل وحدة"
-          >
-            <div className="space-y-6">
-              {data.vacancies ? (
-                <Vacancies vacancies={model.vacancies} onRequestRent={onRequestRent} />
-              ) : null}
-              <Portfolio
-                properties={model.properties}
-                statusCounts={model.statusCounts}
-                onLocate={locate}
-              />
-            </div>
-          </Section>
+            <Locations
+              properties={model.properties}
+              selectedId={mapSelection}
+              onSelect={setMapSelection}
+            />
 
-          <Locations
-            properties={model.properties}
-            selectedId={mapSelection}
-            onSelect={setMapSelection}
-          />
+            <Section
+              id="reports"
+              title="السوق والمكاتب"
+              description="إيجارك مقارنة بأحيائك، ومن يدير أملاكك"
+            >
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <MarketBenchmark benchmarks={model.benchmarks} />
+                {data.offices.length > 0 ? <OfficesList offices={data.offices} /> : null}
+              </div>
+            </Section>
+          </>
+        )}
 
-          <Section
-            id="reports"
-            title="السوق والمكاتب"
-            description="إيجارك مقارنة بأحيائك، ومن يدير أملاكك"
-          >
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <MarketBenchmark benchmarks={model.benchmarks} />
-              {data.offices.length > 0 ? <OfficesList offices={data.offices} /> : null}
-            </div>
-          </Section>
-        </>
-      )}
+        <ReferralCard />
 
-      <ReferralCard />
-
-      {model.hasUnits ? <StatementPdf ref={statementRef} data={data} model={model} /> : null}
+        {model.hasUnits ? <StatementPdf ref={statementRef} data={data} model={model} /> : null}
+      </div>
     </div>
   );
 }

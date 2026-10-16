@@ -1,15 +1,22 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Building2, KeyRound, User } from "lucide-react";
 
 import { JarakSymbol } from "@/components/jarak-logo";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { portalDestinations, type PortalDestination } from "@/lib/portal-routing";
+import {
+  portalDestinations,
+  resolvePostLoginPath,
+  type PortalDestination,
+} from "@/lib/portal-routing";
 import { useMyRoles } from "@/lib/use-role";
 
 export const Route = createFileRoute("/choose-role")({
   staticData: { sitemap: false },
-  head: () => ({ meta: [{ title: "الدخول كـ — جارك" }] }),
+  head: () => ({
+    meta: [{ title: "الدخول كـ — جارك" }, { name: "robots", content: "noindex" }],
+  }),
   component: ChooseRole,
 });
 
@@ -24,6 +31,40 @@ function ChooseRole() {
   const navigate = useNavigate();
   const { data: me, isLoading } = useMyRoles();
   const dests = portalDestinations(me?.roles ?? []);
+  const signedIn = !!me?.userId;
+
+  // Only an account with more than one portal has anything to choose; anyone else goes straight
+  // to their own home instead of a screen with no options.
+  useEffect(() => {
+    if (me?.userId && portalDestinations(me.roles).length < 2) {
+      navigate({ to: resolvePostLoginPath(me.roles), replace: true });
+    }
+  }, [me, navigate]);
+
+  if (!isLoading && !signedIn) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background p-6">
+        <div className="w-full max-w-sm text-center">
+          <JarakSymbol className="mx-auto size-12" />
+          <h1 className="font-display mt-4 text-2xl font-bold">سجّل دخولك أولًا</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            هذه الصفحة تختار لوحتك بعد الدخول إلى حسابك.
+          </p>
+          <Button asChild className="mt-6 w-full">
+            <Link to="/auth" search={{ next: "/choose-role" }}>
+              تسجيل الدخول
+            </Link>
+          </Button>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-sm text-muted-foreground hover:text-foreground"
+          >
+            رجوع للصفحة الرئيسية
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-screen place-items-center bg-background p-6">
@@ -35,7 +76,7 @@ function ChooseRole() {
         </p>
 
         <div className="mt-6 space-y-2">
-          {isLoading ? (
+          {isLoading || dests.length < 2 ? (
             <p className="text-sm text-muted-foreground">جارٍ التحميل…</p>
           ) : (
             dests.map((d) => {

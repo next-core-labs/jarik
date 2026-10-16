@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -39,7 +40,7 @@ function TenantSettings() {
       setPassword("");
       setConfirm("");
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث كلمة المرور"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث كلمة المرور")),
   });
 
   return (

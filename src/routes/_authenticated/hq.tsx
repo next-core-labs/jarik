@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -221,7 +222,7 @@ function HqPage() {
       window.location.href = "/portal";
     } catch (e) {
       localStorage.removeItem(RESTORE_KEY);
-      toast.error((e as Error).message || "تعذّر الدخول على الحساب");
+      toast.error(userErrorMessage(e, "تعذّر الدخول على الحساب"));
       setEntering(null);
     }
   }
@@ -289,7 +290,7 @@ function HqPage() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hq-subscriber-directory"] }),
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث علامة VIP"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث علامة VIP")),
   });
 
   const setSuspended = useServerFn(hqSetAccountSuspended);
@@ -299,7 +300,7 @@ function HqPage() {
       toast.success(v.suspended ? "عُلِّق الحساب" : "رُفع التعليق عن الحساب");
       queryClient.invalidateQueries({ queryKey: ["hq-subscriber-directory"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث حالة الحساب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث حالة الحساب")),
   });
 
   const setRole = useServerFn(hqSetAccountRole);
@@ -309,7 +310,7 @@ function HqPage() {
       toast.success("تم تحديث الدور");
       queryClient.invalidateQueries({ queryKey: ["hq-subscriber-directory"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث الدور"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث الدور")),
   });
 
   if (!me || (!isSuperAdmin && myHqPermissions.isPending)) return <Skeleton className="h-64" />;
@@ -852,7 +853,7 @@ function HqPage() {
                                   <p>
                                     {actionLabel[r.action] ?? r.action} —{" "}
                                     {tableLabel[r.table_name] ?? r.table_name}
-                                    {r.summary ? ` · ${summarize(r.summary)}` : ""}
+                                    {r.summary ? ` · ${summarize(r.summary, r.table_name)}` : ""}
                                   </p>
                                   <span className="text-muted-foreground">
                                     {new Date(r.created_at).toLocaleString("ar-SA")}
@@ -945,7 +946,7 @@ function HqAdminsTab({ prefillEmail }: { prefillEmail?: string }) {
       setPermissions(new Set(["subscribers"]));
       queryClient.invalidateQueries({ queryKey: ["hq-admin-invitations"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الدعوة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الدعوة")),
   });
 
   const revoke = useMutation({
@@ -954,7 +955,7 @@ function HqAdminsTab({ prefillEmail }: { prefillEmail?: string }) {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hq-admin-invitations"] }),
-    onError: (e: Error) => toast.error(e.message || "تعذّر إلغاء الدعوة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إلغاء الدعوة")),
   });
 
   const remove = useMutation({
@@ -963,7 +964,7 @@ function HqAdminsTab({ prefillEmail }: { prefillEmail?: string }) {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hq-admins-list"] }),
-    onError: (e: Error) => toast.error(e.message || "تعذّر إزالة المدير"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إزالة المدير")),
   });
 
   return (
@@ -1120,7 +1121,7 @@ function AddSubscriberDialog() {
       setRole("tenant");
       queryClient.invalidateQueries({ queryKey: ["hq-subscriber-directory"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إنشاء الحساب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إنشاء الحساب")),
   });
 
   const canSubmit =
@@ -1261,7 +1262,7 @@ function AnnouncementsTab() {
       setBody("");
       queryClient.invalidateQueries({ queryKey: ["hq-platform-announcements"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الإعلان"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الإعلان")),
   });
 
   const canSend = title.trim().length > 0 && body.trim().length > 0 && !send.isPending;
@@ -1367,13 +1368,13 @@ function CommissionsTab() {
       setAmount("");
       queryClient.invalidateQueries({ queryKey: ["hq-platform-commissions"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل العمولة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل العمولة")),
   });
 
   const collect = useMutation({
     mutationFn: (id: string) => markCollected({ data: { id } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hq-platform-commissions"] }),
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث الحالة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث الحالة")),
   });
 
   const offices = data.data?.offices ?? [];
@@ -1579,7 +1580,7 @@ function AuditLogTab() {
               >
                 <p>
                   {actionLabel[r.action] ?? r.action} — {tableLabel[r.table_name] ?? r.table_name}
-                  {r.summary ? ` · ${summarize(r.summary)}` : ""}
+                  {r.summary ? ` · ${summarize(r.summary, r.table_name)}` : ""}
                   <span className="text-muted-foreground">
                     {" "}
                     · {r.actorName || "—"}
@@ -1633,7 +1634,7 @@ function SystemTab({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       setBanner(null);
       settings.refetch();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   return (
@@ -1780,7 +1781,7 @@ function LegalPagesEditor() {
       setBody(null);
       pages.refetch();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   return (
@@ -1860,7 +1861,7 @@ function ReviewsTab() {
     mutationFn: (v: { id: string; status: "open" | "in_progress" | "resolved" }) =>
       setStatus({ data: v }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hq-platform-feedback"] }),
-    onError: (e: Error) => toast.error(e.message || "تعذّر التحديث"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر التحديث")),
   });
 
   const rows = data.data ?? [];

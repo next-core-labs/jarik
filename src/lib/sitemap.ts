@@ -110,3 +110,23 @@ export function sitemapXML(baseURL: string, entries: SitemapEntry[]): string {
   }
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Sitemap entries for the published listings (ids from vacant_units_public) and office pages (ids
+ * from office_pages_public) — the same views those pages read, so unlisted offices and unpublished
+ * units never reach the sitemap. No lastmod: the views expose only the unit's created_at, which
+ * says nothing about when the listing last changed (or was even put on the market).
+ */
+export function sitemapRecordEntries(
+  unitIds: (string | null)[],
+  officeIds: (string | null)[],
+): SitemapEntry[] {
+  const paths = (prefix: string, ids: (string | null)[]) =>
+    [...new Set(ids)]
+      .filter((id): id is string => Boolean(id && UUID_RE.test(id)))
+      .sort()
+      .map((id) => ({ path: `${prefix}${id}` }));
+  return [...paths("/office/", officeIds), ...paths("/unit/", unitIds)];
+}

@@ -36,6 +36,7 @@ import {
   FileSignature,
   Landmark,
   ArrowLeftRight,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -75,14 +76,22 @@ const staffNav = [
   { to: "/assistant", label: "المساعد الذكي", icon: MessageCircle },
 ] as const;
 
+// حساب بلا دور بعد (أو دور المنصة فقط). "المساعد الذكي" للمكتب فقط (askAssistant يرفض غير
+// الموظفين)، فما يظهر هنا.
 const portalNav = [
   { to: "/portal", label: "صفحتي", icon: UserCircle },
   { to: "/", label: "سوق العروض", icon: Store },
   { to: "/messages", label: "المحادثات", icon: MessagesSquare },
-  { to: "/documents", label: "وثائق عقاراتي", icon: FileText },
   { to: "/notifications", label: "الإشعارات", icon: Bell },
-  { to: "/assistant", label: "المساعد الذكي", icon: MessageCircle },
   { to: "/register-office", label: "سجّل مكتبك", icon: Building2 },
+] as const;
+
+// الفني عضو في فريق مكتب أصلًا: لا "سجّل مكتبك" ولا "وثائق عقاراتي" (ما يملك عقارات).
+const technicianNav = [
+  { to: "/portal", label: "أعمال الصيانة", icon: Wrench },
+  { to: "/messages", label: "المحادثات", icon: MessagesSquare },
+  { to: "/notifications", label: "الإشعارات", icon: Bell },
+  { to: "/", label: "سوق العروض", icon: Store },
 ] as const;
 
 const adminNav = [{ to: "/users", label: "المستخدمون والأدوار", icon: ShieldCheck }] as const;
@@ -92,9 +101,9 @@ const superAdminNav = [{ to: "/hq", label: "لوحة المدير العام", i
 
 // المستأجر له قائمة خاصة فيه، مو قائمة المكتب أو "portalNav" العامة (spec: tenant-dashboard-prompt.md).
 // "عقدي" مو مسار مستقل — هو نفس قسم "كرت العقد" في لوحة المستأجر، فما ضفناه هنا لتفادي تكرار
-// نفس الوجهة بلابل مختلفة. عناصر فيها "#" ترجع لنفس صفحة اللوحة وتمرّر لقسمها. مو عبر <Link> من
-// tanstack-router لأن الأقسام مو مسارات مسجّلة أصلًا — روابط <a> عادية تكفي هنا (صفحة واحدة، نقرات
-// نادرة، ما يستاهل التعقيد).
+// نفس الوجهة بلابل مختلفة. عناصر فيها "#" ترجع لنفس صفحة اللوحة وتمرّر لقسمها. تبقى روابط <a>
+// (href فيه "#قسم" وليس مسارًا مسجّلًا)، لكن النقرة العادية تمرّ عبر الراوتر (followPortalLink) بدل
+// إعادة تحميل الصفحة كاملة وإعادة فحص الدخول مع كل نقرة.
 type PortalNavItem = {
   key: string;
   label: string;
@@ -167,6 +176,14 @@ const RESTORE_KEY = "aqari-hq-restore";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  // Plain left-clicks on the portal nav's <a> links navigate in-app; modified clicks (new tab,
+  // download…) keep the browser's default.
+  const followPortalLink = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+      return;
+    e.preventDefault();
+    void navigate({ href });
+  };
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const platformTeamPage = pathname === "/hq";
@@ -177,6 +194,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const staff = isStaffRole(roles);
   const isTenant = !staff && roles.includes("tenant");
   const isOwner = !staff && roles.includes("owner");
+  const isTechnician = roles.includes("technician");
   // A dual owner+tenant account gets the owner nav on the owner pages (/owner-dashboard,
   // /owner/*) and the tenant nav everywhere else — each nav carries a link to switch to the
   // other side, so neither dashboard is ever unreachable from the menu.
@@ -200,8 +218,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           },
         ]
       : ownerNav;
+  // فني يملك أيضًا دور مالك/مستأجر: قائمة البوابة ما فيها /portal، فنضيف رابط أعماله.
+  const portalRoleNav: PortalNavItem[] = isTechnician
+    ? [...roleNav, { key: "jobs", label: "أعمال الصيانة", icon: Wrench, href: "/portal" }]
+    : roleNav;
   // الاسم أعلى الشريط الجانبي/الهيدر يعكس دور الحساب بدل اسم المنصة العام — طلب من المستخدم.
-  // حساب بلا دور محدد (فني، أو بدون دور بعد) يبقى على اسم المنصة.
+  // حساب بلا دور بعد يبقى على اسم المنصة.
   const brandLabel = platformTeamPage
     ? "إدارة جارك"
     : staff
@@ -210,7 +232,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         ? "مستأجر"
         : owner
           ? "مالك"
-          : "جارك";
+          : isTechnician
+            ? "فني"
+            : "جارك";
 
   const fetchPlatformSettings = useServerFn(platformSettings);
   const announcement = useQuery({
@@ -221,12 +245,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const overdueCount = useQuery({
     queryKey: ["tenant-nav-overdue", me?.userId],
-    enabled: tenant,
+    enabled: tenant && !!me?.userId,
     staleTime: 60_000,
     queryFn: async () => {
+      // Only this account's own leases: RLS also shows an owner+tenant account the payments of
+      // the units it owns, which aren't its own debt.
       const { count } = await supabase
         .from("payments")
-        .select("id", { count: "exact", head: true })
+        .select("id, leases!inner(tenants!inner(user_id))", { count: "exact", head: true })
+        .eq("leases.tenants.user_id", me!.userId!)
         .neq("status", "paid")
         .lt("due_date", todayRiyadh());
       return count ?? 0;
@@ -310,6 +337,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, [pathname]);
 
+  // Mobile drawer: Escape closes it, like the backdrop tap and the close button below.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   async function restoreAdminSession() {
     const raw = localStorage.getItem(RESTORE_KEY);
     if (!raw) return;
@@ -332,7 +369,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const nav = platformTeamPage
     ? [...superAdminNav]
     : [
-        ...(staff ? staffNav : portalNav),
+        ...(staff ? staffNav : isTechnician ? technicianNav : portalNav),
         ...(staff ? [{ to: "/portal", label: "صفحتي", icon: UserCircle }] : []),
         ...(roles.includes("admin") ? adminNav : []),
         ...(roles.includes("super_admin") || (hqPermissions.data?.length ?? 0) > 0
@@ -349,27 +386,48 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
+      {open ? (
+        <div
+          aria-hidden
+          className="fixed inset-0 z-35 bg-black/40 lg:hidden"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
       <aside
         className={cn(
-          "fixed inset-y-0 end-0 z-40 w-64 shrink-0 flex-col justify-between bg-sidebar p-4 text-sidebar-foreground transition-transform lg:static lg:flex lg:translate-x-0",
+          // On phones the drawer is taller than the screen (24 staff links), so it scrolls on its
+          // own to keep "خروج" reachable.
+          "fixed inset-y-0 end-0 z-40 w-64 shrink-0 flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-sidebar p-4 text-sidebar-foreground transition-transform lg:static lg:flex lg:translate-x-0 lg:overflow-visible",
           open ? "flex" : "hidden",
         )}
       >
         <div>
           <div className="flex items-center gap-2 px-2 py-3">
             <JarakSymbol className="size-10 text-sidebar-foreground" />
-            <span className="font-display text-lg font-bold">{brandLabel}</span>
+            <span className="flex-1 font-display text-lg font-bold">{brandLabel}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="إغلاق القائمة"
+              className="text-sidebar-foreground hover:bg-sidebar-accent/60 lg:hidden"
+              onClick={() => setOpen(false)}
+            >
+              <X className="size-4" />
+            </Button>
           </div>
           <nav className="mt-4 space-y-1">
             {!platformTeamPage && (tenant || owner)
-              ? roleNav.map((item) => {
+              ? portalRoleNav.map((item) => {
                   const active = !item.href.includes("#") && pathname === item.href;
                   const badgeCount = item.badge ? navBadge(item.badge) : 0;
                   return (
                     <a
                       key={item.key}
                       href={item.href}
-                      onClick={() => setOpen(false)}
+                      onClick={(e) => {
+                        setOpen(false);
+                        followPortalLink(e, item.href);
+                      }}
                       className={cn(
                         "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                         active
@@ -475,6 +533,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <a
                 key={item.key}
                 href={item.href}
+                onClick={(e) => followPortalLink(e, item.href)}
                 className={cn(
                   "relative flex flex-1 flex-col items-center gap-1 py-2 text-[11px]",
                   active

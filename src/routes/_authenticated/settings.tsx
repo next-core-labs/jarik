@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { compressImage, mediaUrl, uploadListingImage, validateImageFile } from "@/lib/unit-photos";
 import { useOrgBranding } from "@/lib/use-org-branding";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
@@ -77,16 +79,24 @@ function Settings() {
   const set = (key: keyof typeof form, value: string | boolean) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // Same minimum as register_office; the phone is optional but must be a Saudi mobile when given.
+  const nameError =
+    form.company_name.trim().length < 3 ? "اسم المكتب مطلوب (3 أحرف على الأقل)" : null;
+  const phone = form.office_phone.trim() ? parseSaudiMobile(form.office_phone) : null;
+  const phoneError =
+    form.office_phone.trim() && !phone ? "رقم الجوال غير صحيح — مثال: 05xxxxxxxx" : null;
+
   const save = useMutation({
     mutationFn: async () => {
       const id = org.data?.id;
       if (!id) throw new Error("لا توجد إعدادات للمكتب");
+      if (nameError || phoneError) throw new Error(nameError ?? phoneError ?? "");
       const { error } = await supabase
         .from("org_settings")
         .update({
           company_name: form.company_name.trim(),
           fal_license_no: form.fal_license_no.trim() || null,
-          office_phone: form.office_phone.trim() || null,
+          office_phone: phone,
           city: form.city.trim() || null,
           district: form.district.trim() || null,
           office_code: form.office_code.trim() || null,
@@ -103,8 +113,9 @@ function Settings() {
     onSuccess: () => {
       toast.success("تم حفظ هوية المكتب");
       queryClient.invalidateQueries({ queryKey: ["org-branding"] });
+      queryClient.invalidateQueries({ queryKey: ["office-page-fields"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   const uploadLogo = useMutation({
@@ -122,7 +133,7 @@ function Settings() {
       toast.success("تم رفع الشعار");
       queryClient.invalidateQueries({ queryKey: ["org-branding"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر رفع الشعار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الشعار")),
   });
 
   return (
@@ -175,7 +186,11 @@ function Settings() {
                 value={form.company_name}
                 disabled={!canEdit}
                 onChange={(e) => set("company_name", e.target.value)}
+                aria-invalid={Boolean(nameError)}
               />
+              {canEdit && nameError ? (
+                <p className="text-xs text-destructive">{nameError}</p>
+              ) : null}
             </F>
             <F label="رقم ترخيص فال">
               <Input
@@ -188,10 +203,16 @@ function Settings() {
             <F label="رقم الجوال">
               <Input
                 dir="ltr"
+                inputMode="tel"
                 value={form.office_phone}
                 disabled={!canEdit}
                 onChange={(e) => set("office_phone", e.target.value)}
+                placeholder="05xxxxxxxx"
+                aria-invalid={Boolean(phoneError)}
               />
+              {canEdit && phoneError ? (
+                <p className="text-xs text-destructive">{phoneError}</p>
+              ) : null}
             </F>
             <F label="شفرة المكتب">
               <Input
@@ -261,7 +282,10 @@ function Settings() {
 
             {canEdit ? (
               <div className="sm:col-span-2">
-                <Button onClick={() => save.mutate()} disabled={save.isPending}>
+                <Button
+                  onClick={() => save.mutate()}
+                  disabled={save.isPending || Boolean(nameError) || Boolean(phoneError)}
+                >
                   حفظ هوية المكتب
                 </Button>
               </div>
@@ -290,7 +314,7 @@ function OfficePageCard({ orgId, canEdit }: { orgId: string; canEdit: boolean })
     queryFn: async () => {
       const { data, error } = await supabase
         .from("org_settings")
-        .select("bio, banner_path")
+        .select("bio, banner_path, listed_publicly, verified")
         .eq("id", orgId)
         .single();
       if (error) throw error;
@@ -310,7 +334,7 @@ function OfficePageCard({ orgId, canEdit }: { orgId: string; canEdit: boolean })
       return uploadListingImage(supabase, `offices/${orgId}`, await compressImage(file, 1600));
     },
     onSuccess: (path) => setBanner(path),
-    onError: (e: Error) => toast.error(e.message || "تعذّر رفع الغلاف"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الغلاف")),
   });
 
   const save = useMutation({
@@ -325,23 +349,45 @@ function OfficePageCard({ orgId, canEdit }: { orgId: string; canEdit: boolean })
       toast.success("تم حفظ صفحة المكتب");
       queryClient.invalidateQueries({ queryKey: ["office-page-fields", orgId] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   if (fields.isError) return null; // columns not available yet
+
+  // The public page (office_pages_public) only shows a listed AND platform-verified office; until
+  // then the link would open "هذا المكتب غير متاح", so say why instead of linking to a dead end.
+  const hiddenReason = !fields.data
+    ? null
+    : !fields.data.verified
+      ? "صفحتك مخفية عن العموم حتى تعتمد إدارة المنصة مكتبك."
+      : !fields.data.listed_publicly
+        ? "صفحتك مخفية عن العموم — فعّل «إظهار المكتب في دليل المكاتب» أعلاه واحفظ لتظهر."
+        : null;
 
   return (
     <Card className="mt-6 max-w-3xl shadow-deed">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">صفحة المكتب في سوق العروض</CardTitle>
-        <Button size="sm" variant="ghost" asChild>
-          <Link to="/office/$officeId" params={{ officeId: orgId }} target="_blank">
+        {fields.data && !hiddenReason ? (
+          <Button size="sm" variant="ghost" asChild>
+            <Link to="/office/$officeId" params={{ officeId: orgId }} target="_blank">
+              <ExternalLink className="size-4" />
+              عرض الصفحة
+            </Link>
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" disabled title={hiddenReason ?? undefined}>
             <ExternalLink className="size-4" />
             عرض الصفحة
-          </Link>
-        </Button>
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {hiddenReason ? (
+          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            {hiddenReason}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           يظهر شعار المكتب وبياناته مع عروضك في الصفحة الرئيسية. أضف غلافًا ونبذة لصفحة مكتبك. (تظهر
           الصفحة للعموم فقط عند تفعيل «إظهار المكتب في دليل المكاتب» أعلاه.)

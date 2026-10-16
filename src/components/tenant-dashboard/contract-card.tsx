@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download, FileText, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -41,13 +42,14 @@ export function ContractCard({ leaseId }: { leaseId: string }) {
 
   const downloadContractPdf = async () => {
     if (!data) return;
-    setShowPdfNode(true);
-    await new Promise((r) => setTimeout(r, 120));
-    if (!pdfRef.current) return;
     try {
+      // Commit the hidden PDF node now, so the ref is set before the capture.
+      flushSync(() => setShowPdfNode(true));
+      if (!pdfRef.current) return;
       await downloadElementAsPdf(pdfRef.current, `ملخص-عقد-${data.units?.unit_number ?? ""}.pdf`);
       toast.success("نزل ملخص العقد PDF");
-    } catch {
+    } catch (e) {
+      console.error("Contract summary PDF failed", e);
       toast.error("تعذّر إنشاء الملف");
     } finally {
       setShowPdfNode(false);

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { BadgeCheck, MessageSquare, Search, ShieldOff, Star } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,7 @@ export function HqOfficesPanel() {
       await queryClient.invalidateQueries({ queryKey: ["hq-offices"] });
       await queryClient.invalidateQueries({ queryKey: ["market"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث حالة المكتب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث حالة المكتب")),
   });
 
   const setWhatsapp = useMutation({
@@ -60,7 +61,7 @@ export function HqOfficesPanel() {
       toast.success(input.locked ? "أُقفل واتساب المكتب" : "فُتح واتساب المكتب");
       await queryClient.invalidateQueries({ queryKey: ["hq-offices"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث قفل واتساب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث قفل واتساب")),
   });
 
   const all = offices.data ?? [];
@@ -213,7 +214,7 @@ function FeaturedListingsSection() {
       await queryClient.invalidateQueries({ queryKey: ["hq-featured-search"] });
       await queryClient.invalidateQueries({ queryKey: ["market"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث التمييز"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث التمييز")),
   });
 
   return (

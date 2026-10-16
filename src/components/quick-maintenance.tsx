@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ImagePlus, Mic, Send, Square, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { submitQuickMaintenance } from "@/lib/office-tools.functions";
@@ -125,7 +126,7 @@ export function QuickMaintenance() {
       setPhoto(null);
       setAudio(null);
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
   });
 
   return (

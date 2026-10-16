@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Paperclip, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { smartScheduleMaintenance } from "@/lib/office-tools.functions";
@@ -12,8 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toDatetimeLocalValue } from "@/lib/dates";
-import { sar, shortDate, maintenanceStatusLabel, priorityLabel } from "@/lib/format";
+import { sar, shortDate, maintenanceStatusLabel, priorityText } from "@/lib/format";
 import { useOrgBranding } from "@/lib/use-org-branding";
 
 const approvalLabel: Record<string, string> = {
@@ -42,8 +51,12 @@ const columns = [
   { key: "done", title: "منجز" },
 ] as const;
 
+const priorities = ["urgent", "high", "medium", "low"] as const;
+
 function Maintenance() {
   const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const { org } = useOrgBranding();
   const threshold = Number(org.data?.owner_approval_threshold ?? 2000);
 
@@ -53,7 +66,7 @@ function Maintenance() {
       const { data, error } = await supabase
         .from("maintenance_requests")
         .select(
-          "id, unit_id, title, description, priority, status, cost, source, created_at, scheduled_at, approval_status, approval_note, rating, rating_note, photo_path, audio_path, tenants(full_name), units(unit_number, owner_id, properties(name, owner_id))",
+          "id, unit_id, title, description, priority, status, cost, source, created_at, scheduled_at, technician_id, approval_status, approval_note, rating, rating_note, photo_path, audio_path, tenants(full_name), units(unit_number, owner_id, properties(name, owner_id))",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -92,6 +105,58 @@ function Maintenance() {
   const capFor = (unitId: string | null) =>
     (unitId ? caps.data?.get(unitId) : undefined) ?? threshold;
 
+  // The office's own technicians — the only people the database lets a job be assigned to.
+  const technicians = useQuery({
+    queryKey: ["office-technicians"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("office_people");
+      if (error) throw error;
+      return (data ?? [])
+        .filter((p) => p.relation === "member" && p.roles.includes("technician"))
+        .map((p) => ({ id: p.user_id, name: p.full_name || p.email }));
+    },
+  });
+  const technicianName = (id: string | null) =>
+    id ? (technicians.data?.find((t) => t.id === id)?.name ?? "فني") : null;
+
+  const assign = useMutation({
+    mutationFn: async ({
+      id,
+      technicianId,
+      title,
+    }: {
+      id: string;
+      technicianId: string | null;
+      title: string;
+    }) => {
+      const { error } = await supabase
+        .from("maintenance_requests")
+        .update({ technician_id: technicianId })
+        .eq("id", id);
+      if (error) throw error;
+      if (technicianId) {
+        // Best effort, like the smart schedule: the assignment stands even if the notice fails.
+        await supabase.from("notifications").insert({
+          user_id: technicianId,
+          title: "أُسند إليك عمل صيانة",
+          body: title,
+          kind: "maintenance",
+          source: "system",
+          related_table: "maintenance_requests",
+          related_id: id,
+        });
+      }
+      return technicianId;
+    },
+    onSuccess: (technicianId) => {
+      toast.success(
+        technicianId ? `أُسند الطلب إلى ${technicianName(technicianId)}` : "أُلغي إسناد الطلب",
+      );
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إسناد الطلب")),
+  });
+
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("maintenance_requests").update({ status }).eq("id", id);
@@ -102,7 +167,8 @@ function Maintenance() {
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: () => toast.error("تعذّر التحديث — الصلاحية للموظف أو الفني المسند"),
+    onError: (e: Error) =>
+      toast.error(userErrorMessage(e, "تعذّر التحديث — الصلاحية للموظف أو الفني المسند")),
   });
 
   const saveCost = useMutation({
@@ -130,7 +196,7 @@ function Maintenance() {
       toast.success("حُفظت التكلفة — إن تجاوزت الحد فستُرسل للمالك للموافقة");
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
     },
-    onError: () => toast.error("تعذّر حفظ التكلفة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ التكلفة")),
   });
 
   const schedule = useMutation({
@@ -145,7 +211,7 @@ function Maintenance() {
       toast.success("حُدد موعد الزيارة");
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
     },
-    onError: () => toast.error("تعذّر حفظ الموعد"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ الموعد")),
   });
 
   const smart = useServerFn(smartScheduleMaintenance);
@@ -157,7 +223,7 @@ function Maintenance() {
       // the smart appointment.
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّرت الجدولة الذكية"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت الجدولة الذكية")),
   });
 
   const openMedia = async (path: string) => {
@@ -184,171 +250,251 @@ function Maintenance() {
         subtitle="طلب المستأجر يصبح مهمة، والحالة تتحدّث حتى الإنجاز وترحيل التكلفة."
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {columns.map((col) => {
-          const items = data.filter((m) => m.status === col.key);
-          return (
-            <Card key={col.key} className="shadow-deed">
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle className="text-base">{col.title}</CardTitle>
-                <Badge variant="outline">{items.length}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {items.map((m) => (
-                  <div key={m.id} className="rounded-md border border-border bg-background p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium">{m.title}</p>
-                      <Badge
-                        variant={
-                          m.priority === "urgent" || m.priority === "high"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {priorityLabel[m.priority] ?? m.priority}
-                      </Badge>
-                    </div>
-                    {m.description ? (
-                      <p className="mt-2 text-sm text-muted-foreground">{m.description}</p>
-                    ) : null}
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {m.units?.properties?.name} · وحدة {m.units?.unit_number} ·{" "}
-                      {m.tenants?.full_name ?? "—"}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {shortDate(m.created_at)}
-                      {Number(m.cost) > 0 ? ` · التكلفة ${sar(m.cost)}` : ""}
-                    </p>
-                    {m.approval_status && m.approval_status !== "not_required" ? (
-                      <Badge
-                        className="mt-2"
-                        variant={
-                          m.approval_status === "approved"
-                            ? "default"
-                            : m.approval_status === "rejected"
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">الحالة</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل الحالات</SelectItem>
+              {columns.map((c) => (
+                <SelectItem key={c.key} value={c.key}>
+                  {c.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">الأولوية</Label>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل الأولويات</SelectItem>
+              {priorities.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {priorityText(p)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className={`grid gap-4 ${statusFilter === "all" ? "lg:grid-cols-3" : ""}`}>
+        {columns
+          .filter((col) => statusFilter === "all" || col.key === statusFilter)
+          .map((col) => {
+            const items = data.filter(
+              (m) =>
+                m.status === col.key &&
+                (priorityFilter === "all" ||
+                  // Compared by label so legacy spellings (normal, emergency…) match their level.
+                  priorityText(m.priority) === priorityText(priorityFilter)),
+            );
+            return (
+              <Card key={col.key} className="shadow-deed">
+                <CardHeader className="flex-row items-center justify-between">
+                  <CardTitle className="text-base">{col.title}</CardTitle>
+                  <Badge variant="outline">{items.length}</Badge>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {items.map((m) => (
+                    <div key={m.id} className="rounded-md border border-border bg-background p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium">{m.title}</p>
+                        <Badge
+                          variant={
+                            m.priority === "urgent" || m.priority === "high"
                               ? "destructive"
                               : "secondary"
-                        }
-                      >
-                        {approvalLabel[m.approval_status] ?? m.approval_status}
-                      </Badge>
-                    ) : null}
-                    {m.rating ? (
-                      <p className="mt-2 text-xs text-brass">
-                        تقييم المستأجر: {"★".repeat(m.rating)}
-                        {m.rating_note ? ` — ${m.rating_note}` : ""}
+                          }
+                        >
+                          {priorityText(m.priority)}
+                        </Badge>
+                      </div>
+                      {m.description ? (
+                        <p className="mt-2 text-sm text-muted-foreground">{m.description}</p>
+                      ) : null}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {m.units?.properties?.name} · وحدة {m.units?.unit_number} ·{" "}
+                        {m.tenants?.full_name ?? "—"}
                       </p>
-                    ) : null}
-                    {m.status !== "done" ? (
-                      <div className="mt-3 space-y-1">
-                        <label className="text-xs text-muted-foreground">
-                          التكلفة المقدّرة (تحتاج موافقة المالك فوق {sar(capFor(m.unit_id))})
-                        </label>
-                        <input
-                          // Uncontrolled: re-mount when the saved cost changes (e.g. a refetch after
-                          // a colleague's edit) so the field shows the server value, not a stale one.
-                          key={`${m.id}-${m.cost ?? ""}`}
-                          type="number"
-                          dir="ltr"
-                          className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-                          defaultValue={Number(m.cost) || ""}
-                          onBlur={(e) => {
-                            const v = Number(e.target.value || 0);
-                            if (v !== Number(m.cost)) {
-                              saveCost.mutate({
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {shortDate(m.created_at)}
+                        {Number(m.cost) > 0 ? ` · التكلفة ${sar(m.cost)}` : ""}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        الفني: {technicianName(m.technician_id) ?? "غير مسند"}
+                      </p>
+                      {m.approval_status && m.approval_status !== "not_required" ? (
+                        <Badge
+                          className="mt-2"
+                          variant={
+                            m.approval_status === "approved"
+                              ? "default"
+                              : m.approval_status === "rejected"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {approvalLabel[m.approval_status] ?? m.approval_status}
+                        </Badge>
+                      ) : null}
+                      {m.rating ? (
+                        <p className="mt-2 text-xs text-brass">
+                          تقييم المستأجر: {"★".repeat(m.rating)}
+                          {m.rating_note ? ` — ${m.rating_note}` : ""}
+                        </p>
+                      ) : null}
+                      {m.status !== "done" ? (
+                        <div className="mt-3 space-y-1">
+                          <label className="text-xs text-muted-foreground">الفني المسند</label>
+                          <Select
+                            value={m.technician_id ?? "none"}
+                            disabled={assign.isPending}
+                            onValueChange={(v) =>
+                              assign.mutate({
                                 id: m.id,
-                                cost: v,
-                                // Same rule as private.unit_owner(): the unit's own owner, else
-                                // the property's — most units are owned via their property.
-                                hasOwner: !!(m.units?.owner_id ?? m.units?.properties?.owner_id),
-                                cap: capFor(m.unit_id),
-                              });
+                                technicianId: v === "none" ? null : v,
+                                title: m.title,
+                              })
                             }
-                          }}
-                        />
-                        <label className="text-xs text-muted-foreground">موعد الزيارة</label>
-                        <input
-                          // Uncontrolled: re-mount when the saved time changes (e.g. after the
-                          // smart schedule) so the field shows the server value.
-                          key={`${m.id}-${m.scheduled_at ?? ""}`}
-                          type="datetime-local"
-                          dir="ltr"
-                          className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-                          defaultValue={toDatetimeLocalValue(m.scheduled_at)}
-                          onBlur={(e) => {
-                            const v = e.target.value;
-                            if (v !== toDatetimeLocalValue(m.scheduled_at)) {
-                              schedule.mutate({ id: m.id, at: v });
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    {m.photo_path || m.audio_path ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {m.photo_path ? (
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="اختر الفني" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">بدون فني</SelectItem>
+                              {(technicians.data ?? []).map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                              {/* Still show a technician who has since left the team list. */}
+                              {m.technician_id &&
+                              !(technicians.data ?? []).some((t) => t.id === m.technician_id) ? (
+                                <SelectItem value={m.technician_id}>فني</SelectItem>
+                              ) : null}
+                            </SelectContent>
+                          </Select>
+                          {technicians.data && technicians.data.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              لا يوجد فنيون بعد — أضف فنيًا من «فريق المكتب».
+                            </p>
+                          ) : null}
+                          <label className="text-xs text-muted-foreground">
+                            التكلفة المقدّرة (تحتاج موافقة المالك فوق {sar(capFor(m.unit_id))})
+                          </label>
+                          <input
+                            // Uncontrolled: re-mount when the saved cost changes (e.g. a refetch after
+                            // a colleague's edit) so the field shows the server value, not a stale one.
+                            key={`${m.id}-${m.cost ?? ""}`}
+                            type="number"
+                            dir="ltr"
+                            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                            defaultValue={Number(m.cost) || ""}
+                            onBlur={(e) => {
+                              const v = Number(e.target.value || 0);
+                              if (v !== Number(m.cost)) {
+                                saveCost.mutate({
+                                  id: m.id,
+                                  cost: v,
+                                  // Same rule as private.unit_owner(): the unit's own owner, else
+                                  // the property's — most units are owned via their property.
+                                  hasOwner: !!(m.units?.owner_id ?? m.units?.properties?.owner_id),
+                                  cap: capFor(m.unit_id),
+                                });
+                              }
+                            }}
+                          />
+                          <label className="text-xs text-muted-foreground">موعد الزيارة</label>
+                          <input
+                            // Uncontrolled: re-mount when the saved time changes (e.g. after the
+                            // smart schedule) so the field shows the server value.
+                            key={`${m.id}-${m.scheduled_at ?? ""}`}
+                            type="datetime-local"
+                            dir="ltr"
+                            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                            defaultValue={toDatetimeLocalValue(m.scheduled_at)}
+                            onBlur={(e) => {
+                              const v = e.target.value;
+                              if (v !== toDatetimeLocalValue(m.scheduled_at)) {
+                                schedule.mutate({ id: m.id, at: v });
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                      {m.photo_path || m.audio_path ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {m.photo_path ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openMedia(m.photo_path!)}
+                            >
+                              <Paperclip className="size-4" />
+                              صورة الطلب
+                            </Button>
+                          ) : null}
+                          {m.audio_path ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openMedia(m.audio_path!)}
+                            >
+                              <Paperclip className="size-4" />
+                              الوصف الصوتي
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {m.status !== "done" ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {m.status === "new" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setStatus.mutate({ id: m.id, status: "in_progress" })}
+                            >
+                              بدء العمل
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => openMedia(m.photo_path!)}
+                            disabled={scheduleSmart.isPending}
+                            onClick={() => scheduleSmart.mutate(m.id)}
                           >
-                            <Paperclip className="size-4" />
-                            صورة الطلب
+                            <Zap className="size-4" />
+                            جدولة ذكية
                           </Button>
-                        ) : null}
-                        {m.audio_path ? (
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => openMedia(m.audio_path!)}
+                            onClick={() => setStatus.mutate({ id: m.id, status: "done" })}
                           >
-                            <Paperclip className="size-4" />
-                            الوصف الصوتي
+                            إنجاز
                           </Button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {m.status !== "done" ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {m.status === "new" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setStatus.mutate({ id: m.id, status: "in_progress" })}
-                          >
-                            بدء العمل
-                          </Button>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={scheduleSmart.isPending}
-                          onClick={() => scheduleSmart.mutate(m.id)}
-                        >
-                          <Zap className="size-4" />
-                          جدولة ذكية
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => setStatus.mutate({ id: m.id, status: "done" })}
-                        >
-                          إنجاز
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-xs text-success">
-                        {maintenanceStatusLabel[m.status]}
-                      </p>
-                    )}
-                  </div>
-                ))}
-                {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">لا توجد طلبات.</p>
-                ) : null}
-              </CardContent>
-            </Card>
-          );
-        })}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-success">
+                          {maintenanceStatusLabel[m.status]}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {items.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">لا توجد طلبات.</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            );
+          })}
       </div>
     </>
   );

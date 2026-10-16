@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2 } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,8 @@ const statusLabel: Record<string, string> = {
 export function OfficeLinkRequest({ kind }: { kind: "owner" | "tenant" }) {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
+  // Say why the button is disabled once the user has started typing a too-short code.
+  const codeTooShort = code.trim().length > 0 && code.trim().length < 3;
 
   const requests = useQuery({
     queryKey: ["my-link-requests"],
@@ -48,7 +51,7 @@ export function OfficeLinkRequest({ kind }: { kind: "owner" | "tenant" }) {
       setCode("");
       queryClient.invalidateQueries({ queryKey: ["my-link-requests"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
   });
 
   const cancel = useMutation({
@@ -60,7 +63,7 @@ export function OfficeLinkRequest({ kind }: { kind: "owner" | "tenant" }) {
       toast.success("أُلغي الطلب");
       queryClient.invalidateQueries({ queryKey: ["my-link-requests"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الإلغاء"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الإلغاء")),
   });
 
   const rows = requests.data ?? [];
@@ -81,11 +84,18 @@ export function OfficeLinkRequest({ kind }: { kind: "owner" | "tenant" }) {
             placeholder="رمز المكتب"
             value={code}
             onChange={(e) => setCode(e.target.value)}
+            aria-invalid={codeTooShort}
+            aria-describedby={codeTooShort ? "office-code-hint" : undefined}
           />
           <Button disabled={send.isPending || code.trim().length < 3} onClick={() => send.mutate()}>
             {send.isPending ? "جارٍ الإرسال..." : "أرسل طلب الربط"}
           </Button>
         </div>
+        {codeTooShort ? (
+          <p id="office-code-hint" className="text-xs text-destructive">
+            رمز المكتب 3 أحرف على الأقل.
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           اطلب رمز المكتب من موظفيه، ثم أدخله هنا. يوصل طلبك للمكتب ويرتبط حسابك به بعد موافقته.
         </p>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Sparkles, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,6 @@ export type UnitFormValues = {
   water_meter_no: string;
   furnished: boolean;
   owner_id: string;
-  tenant_id: string;
   notes: string;
   /** Public description shown on the listing in the offers market. */
   listing_description: string;
@@ -91,7 +91,6 @@ export const emptyUnit: UnitFormValues = {
   water_meter_no: "",
   furnished: false,
   owner_id: "none",
-  tenant_id: "none",
   notes: "",
   listing_description: "",
   amenities: [],
@@ -107,6 +106,7 @@ export function UnitDialog({
   propertyName,
   initial,
   canManage,
+  leaseTenant = null,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -114,6 +114,8 @@ export function UnitDialog({
   propertyName: string;
   initial: UnitFormValues;
   canManage: boolean;
+  /** The tenant on the unit's active lease — the only source of who lives in the unit. */
+  leaseTenant?: string | null;
 }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<UnitFormValues>(initial);
@@ -217,19 +219,7 @@ export function UnitDialog({
       else if (res.suggestedRent) toast.info(res.reasoning);
       else toast.warning(res.reasoning);
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر جلب التسعير"),
-  });
-
-  const tenants = useQuery({
-    queryKey: ["tenants-list"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("id, full_name, phone")
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر جلب التسعير")),
   });
 
   const save = useMutation({
@@ -261,7 +251,6 @@ export function UnitDialog({
         water_meter_no: form.water_meter_no.trim() || null,
         furnished: form.furnished,
         owner_id: form.owner_id === "none" ? null : form.owner_id,
-        tenant_id: form.tenant_id === "none" ? null : form.tenant_id,
         notes: form.notes.trim() || null,
         listing_description: form.listing_description.trim() || null,
         amenities: form.amenities,
@@ -300,7 +289,7 @@ export function UnitDialog({
       queryClient.invalidateQueries({ queryKey: ["unit-listing-fields", form.id] });
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   return (
@@ -510,20 +499,14 @@ export function UnitDialog({
             </Select>
           </Field>
           <Field label="المستأجر">
-            <Select value={form.tenant_id} onValueChange={(v) => set("tenant_id", v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="اختر المستأجر" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">بدون مستأجر</SelectItem>
-                {(tenants.data ?? []).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.full_name}
-                    {t.phone ? ` · ${t.phone}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Who lives in the unit comes from its active lease (it also drives the unit's
+                status); a lease is created from «المستأجرون والعقود». */}
+            <p className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm">
+              {leaseTenant ?? "بدون مستأجر"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              يُحدَّد من عقد الإيجار الساري — أنشئ العقد من «المستأجرون والعقود».
+            </p>
           </Field>
           <div className="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
             <div className="flex items-start justify-between gap-4">
@@ -668,7 +651,7 @@ function RepairInvoices({ unitId, canManage }: { unitId: string; canManage: bool
       toast.success("تمت إضافة فاتورة الإصلاح");
       queryClient.invalidateQueries({ queryKey: ["repair-invoices", unitId] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّرت الإضافة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت الإضافة")),
   });
 
   const remove = useMutation({

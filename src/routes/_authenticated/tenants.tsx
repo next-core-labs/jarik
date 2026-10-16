@@ -2,14 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, UserPlus } from "lucide-react";
+import { Download, FilePlus2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { exportWorkbook } from "@/lib/export-excel";
 import { inviteTenant } from "@/lib/tenant-portal.functions";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app-shell";
+import { LeaseDetailsDialog, NewLeaseDialog } from "@/components/lease-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,8 @@ function Tenants() {
     tenantName: string;
     tenantEmail: string | null;
   } | null>(null);
+  const [openLeaseId, setOpenLeaseId] = useState<string | null>(null);
+  const [newLease, setNewLease] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["leases"],
@@ -149,13 +153,15 @@ function Tenants() {
         size="sm"
         variant="outline"
         className={full ? "w-full" : undefined}
-        onClick={() =>
+        onClick={(e) => {
+          // The row itself opens the lease details.
+          e.stopPropagation();
           setInvitingLease({
             id: l.id,
             tenantName: l.tenants?.full_name ?? "المستأجر",
             tenantEmail: l.tenants?.email ?? null,
-          })
-        }
+          });
+        }}
       >
         <UserPlus className="size-4" />
         دعوة مستأجر
@@ -174,10 +180,16 @@ function Tenants() {
         title="المستأجرون والعقود"
         subtitle="العقود السارية، جدول الدفعات، ورقم عقد «إيجار» وحالة توثيقه."
         action={
-          <Button variant="outline" onClick={exportTenants}>
-            <Download className="size-4" />
-            تصدير Excel
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setNewLease(true)}>
+              <FilePlus2 className="size-4" />
+              عقد جديد
+            </Button>
+            <Button variant="outline" onClick={exportTenants}>
+              <Download className="size-4" />
+              تصدير Excel
+            </Button>
+          </div>
         }
       />
 
@@ -211,7 +223,12 @@ function Tenants() {
                     إيجار {ejarBadge(l)}
                   </span>
                 </div>
-                {tenantAccount(l, true)}
+                <div className="flex flex-col gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setOpenLeaseId(l.id)}>
+                    تفاصيل العقد
+                  </Button>
+                  {tenantAccount(l, true)}
+                </div>
               </li>
             ))}
           </ul>
@@ -231,7 +248,19 @@ function Tenants() {
               </TableHeader>
               <TableBody>
                 {data.leases.map((l) => (
-                  <TableRow key={l.id}>
+                  <TableRow
+                    key={l.id}
+                    className="cursor-pointer"
+                    tabIndex={0}
+                    aria-label={`تفاصيل عقد ${l.tenants?.full_name ?? ""}`}
+                    onClick={() => setOpenLeaseId(l.id)}
+                    onKeyDown={(e) => {
+                      if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        setOpenLeaseId(l.id);
+                      }
+                    }}
+                  >
                     <TableCell className="font-medium">{l.tenants?.full_name ?? "—"}</TableCell>
                     <TableCell>
                       {l.units?.properties?.name} · {l.units?.unit_number}
@@ -251,7 +280,9 @@ function Tenants() {
             </Table>
           </div>
           {data.leases.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">لا توجد عقود.</p>
+            <p className="py-6 text-sm text-muted-foreground">
+              لا توجد عقود بعد — أنشئ أول عقد من «عقد جديد».
+            </p>
           ) : null}
         </CardContent>
       </Card>
@@ -299,6 +330,11 @@ function Tenants() {
         </CardContent>
       </Card>
 
+      {openLeaseId ? (
+        <LeaseDetailsDialog leaseId={openLeaseId} onClose={() => setOpenLeaseId(null)} />
+      ) : null}
+      <NewLeaseDialog open={newLease} onOpenChange={setNewLease} />
+
       {invitingLease ? (
         <InviteTenantDialog
           lease={invitingLease}
@@ -331,7 +367,7 @@ function InviteTenantDialog({
       toast.success("أُرسلت دعوة الدخول إلى بريد المستأجر");
       onDone();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الدعوة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الدعوة")),
   });
 
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());

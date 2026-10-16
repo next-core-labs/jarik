@@ -3,6 +3,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Lock, MessageCircle, Phone, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { ArchEmptyState } from "@/components/public/identity";
 import { SiteHeader } from "@/components/site-header";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/market-requests";
 import { submitMarketRequest } from "@/lib/market-requests.functions";
 import { PROPERTY_TYPE_GROUPS, type ListingPurpose } from "@/lib/property-types";
+import { parseAmount, parseSaudiMobile } from "@/lib/public-form";
 import { isStaffRole, useMyRoles } from "@/lib/use-role";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
 import { arCount, daysLabel } from "@/lib/format";
@@ -36,6 +38,7 @@ export const Route = createFileRoute("/requests-market")({
           "زوّار يبحثون عن وحدة للإيجار أو الشراء وينشرون طلبهم هنا — يراه كل مكتب ومالك، بلا حصرية لمكتب واحد.",
       },
     ],
+    links: [{ rel: "canonical", href: "https://jarak-ksa.com/requests-market" }],
   }),
   component: RequestsMarket,
 });
@@ -87,6 +90,9 @@ const PURPOSE_OPTIONS = [
 const FILTER_OPTIONS = [{ value: "all", label: "الكل" }, ...PURPOSE_OPTIONS] as const;
 
 /** Native select dressed like the design-system Input (44px, hairline, ink focus). */
+/** submitMarketRequest's own ceiling — checked here so the visitor gets a readable message. */
+const MAX_BUDGET = 50_000_000;
+
 const SELECT_CLASS =
   "h-11 w-full border border-input bg-card px-3 text-[15px] focus-visible:border-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none";
 
@@ -347,6 +353,19 @@ function RequestForm() {
   const [district, setDistrict] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
   const [notes, setNotes] = useState("");
+  const [touched, setTouched] = useState({ phone: false, budget: false });
+
+  const mobile = parseSaudiMobile(phone);
+  const budgetValue = parseAmount(budgetMax);
+  const phoneError = mobile ? null : "أدخل رقم جوال سعودي صحيح، مثل 0501234567";
+  const budgetError =
+    budgetValue === null
+      ? "اكتب الميزانية بالأرقام فقط"
+      : budgetValue !== undefined && budgetValue > MAX_BUDGET
+        ? "الميزانية أكبر من الحد المسموح"
+        : null;
+  const showPhoneError = touched.phone && phone.trim() !== "" && phoneError;
+  const showBudgetError = touched.budget && budgetError;
 
   const reset = () => {
     setFullName("");
@@ -356,6 +375,7 @@ function RequestForm() {
     setDistrict("");
     setBudgetMax("");
     setNotes("");
+    setTouched({ phone: false, budget: false });
   };
 
   const submit = useMutation({
@@ -363,12 +383,12 @@ function RequestForm() {
       submitMarketRequest({
         data: {
           fullName,
-          phone: phone.trim(),
+          phone: mobile ?? phone.trim(),
           purpose,
           unitType: unitType || undefined,
           city: city || undefined,
           district: district || undefined,
-          budgetMax: budgetMax ? Number(budgetMax) : undefined,
+          budgetMax: budgetValue ?? undefined,
           notes: notes || undefined,
         },
       }),
@@ -377,7 +397,7 @@ function RequestForm() {
       setSent(true);
       void queryClient.invalidateQueries({ queryKey: ["market-requests-public"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر نشر الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر نشر الطلب")),
   });
 
   if (sent) {
@@ -402,6 +422,8 @@ function RequestForm() {
       className="flex flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault();
+        setTouched({ phone: true, budget: true });
+        if (phoneError || budgetError) return;
         submit.mutate();
       }}
     >
@@ -449,7 +471,15 @@ function RequestForm() {
           className="text-end"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, phone: true }))}
+          aria-invalid={showPhoneError ? true : undefined}
+          aria-describedby={showPhoneError ? `${id}-phone-error` : undefined}
         />
+        {showPhoneError ? (
+          <p id={`${id}-phone-error`} className="text-xs text-destructive">
+            {phoneError}
+          </p>
+        ) : null}
       </Field>
       <Field id={`${id}-type`} label="نوع الوحدة">
         <select
@@ -481,7 +511,15 @@ function RequestForm() {
           className="text-end tabular-nums"
           value={budgetMax}
           onChange={(e) => setBudgetMax(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, budget: true }))}
+          aria-invalid={showBudgetError ? true : undefined}
+          aria-describedby={showBudgetError ? `${id}-budget-error` : undefined}
         />
+        {showBudgetError ? (
+          <p id={`${id}-budget-error`} className="text-xs text-destructive">
+            {budgetError}
+          </p>
+        ) : null}
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field id={`${id}-city`} label="المدينة">
@@ -508,7 +546,7 @@ function RequestForm() {
         type="submit"
         size="lg"
         className="mt-1 w-full"
-        disabled={submit.isPending || fullName.trim().length < 2 || phone.trim().length < 9}
+        disabled={submit.isPending || fullName.trim().length < 2 || !phone.trim()}
       >
         {submit.isPending ? "جارٍ النشر…" : "نشر الطلب"}
       </Button>

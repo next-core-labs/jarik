@@ -28,6 +28,25 @@ export function idTypeOf(value: string): IdType | null {
 }
 
 /**
+ * The check digit of a national ID or iqama: the Luhn algorithm over all ten digits (double the
+ * digits in odd positions counting from 1 on the left, add the digits of each product, and the
+ * total must end in 0). Expects ten Latin digits.
+ */
+export function hasValidSaudiIdChecksum(digits: string): boolean {
+  if (!/^\d{10}$/.test(digits)) return false;
+  let total = 0;
+  for (let i = 0; i < 10; i++) {
+    let d = Number(digits[i]);
+    if (i % 2 === 0) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    total += d;
+  }
+  return total % 10 === 0;
+}
+
+/**
  * The Arabic problem with the number, or null when it is acceptable.
  * An office is a Saudi business: it is identified by a national ID, never by an iqama.
  */
@@ -39,6 +58,9 @@ export function validateSaudiId(value: string, account: AccountType): string | n
   if (!type) return "الرقم يجب أن يبدأ بـ1 (هوية وطنية) أو 2 (إقامة)";
   if (account === "office" && type === "iqama") {
     return "حساب المكتب يحتاج هوية وطنية تبدأ بـ1";
+  }
+  if (!hasValidSaudiIdChecksum(d)) {
+    return `رقم ${type === "iqama" ? "الإقامة" : "الهوية"} غير صحيح — تأكّد من كتابته كما في البطاقة`;
   }
   return null;
 }

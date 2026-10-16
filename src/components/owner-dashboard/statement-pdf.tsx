@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 
-import { sar, shortDate, unitStatusLabel } from "@/lib/format";
+import { arCount, arNum, arPct, sar, shortDate, unitStatusLabel } from "@/lib/format";
 import { useBrandingLogo } from "@/lib/use-org-branding";
 import type { DashboardModel, OwnerDashboardData } from "@/components/owner-dashboard/model";
 
@@ -42,7 +42,7 @@ export const StatementPdf = forwardRef<
 
       <h2 className="mt-6 text-xl font-bold">كشف حساب المالك</h2>
       <p className="mt-1 text-sm text-gray-500">
-        الفترة: آخر 12 شهرًا حتى {shortDate(finance.today)}
+        الفترة: آخر {arNum(12)} شهرًا حتى {shortDate(finance.today)}
       </p>
 
       <table className="mt-4 w-full border-collapse text-sm">
@@ -52,10 +52,15 @@ export const StatementPdf = forwardRef<
           <Row label="الصافي" value={sar(model.net12m)} bold />
           <Row
             label="المتأخرات حتى تاريخه"
-            value={`${sar(finance.overdue_total)} (${finance.overdue_count} دفعة)`}
+            value={`${sar(finance.overdue_total)} (${arCount(finance.overdue_count, {
+              one: "دفعة واحدة",
+              two: "دفعتان",
+              few: "دفعات",
+              many: "دفعة",
+            })})`}
           />
           <Row label="الإيجار السنوي حسب العقود السارية" value={sar(model.contractedRent)} />
-          <Row label="نسبة الإشغال" value={`${model.occupancyPct}%`} />
+          <Row label="نسبة الإشغال" value={arPct(model.occupancyPct)} />
         </tbody>
       </table>
 
@@ -74,7 +79,7 @@ export const StatementPdf = forwardRef<
           {returns.map((r) => (
             <tr key={r.property_id} className="border-b">
               <td className="py-2">{r.property_name}</td>
-              <td className="py-2">{r.units_count}</td>
+              <td className="py-2">{arNum(r.units_count)}</td>
               <td className="py-2">{sar(r.collected_12m)}</td>
               <td className="py-2">{sar(r.expenses_12m)}</td>
               <td className="py-2">{sar(r.net_12m)}</td>

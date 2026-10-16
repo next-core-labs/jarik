@@ -8,6 +8,8 @@ export const Route = createFileRoute("/tenant/login")({
     meta: [
       { title: "دخول المستأجر — جارك" },
       { name: "description", content: "دخول المستأجرين إلى لوحتهم الخاصة في منصة جارك." },
+      // Portal entry point, not search content.
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: () => (

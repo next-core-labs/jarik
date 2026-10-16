@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { sar, shortDate } from "@/lib/format";
+import { useMyRoles } from "@/lib/use-role";
 
 export const Route = createFileRoute("/_authenticated/tenant-dashboard")({
   staticData: { sitemap: false },
@@ -42,35 +43,77 @@ export const Route = createFileRoute("/_authenticated/tenant-dashboard")({
 
 function TenantDashboard() {
   const [selectedLeaseId, setSelectedLeaseId] = useState<string | null>(null);
+  const { data: me } = useMyRoles();
+  const userId = me?.userId ?? null;
 
+  // Everything is scoped to the signed-in account's own tenant record(s). RLS alone isn't enough:
+  // it also returns the leases of units the account owns or manages, which would show up here as
+  // if they were the account's own lease (owner+tenant or staff+tenant accounts).
   const { data, isLoading } = useQuery({
-    queryKey: ["tenant-dashboard"],
+    queryKey: ["tenant-dashboard", userId],
+    enabled: !!userId,
     queryFn: async () => {
-      const [tenant, leases, invoices, notif] = await Promise.all([
-        supabase.from("tenants").select("id, full_name, phone").maybeSingle(),
-        supabase
-          .from("leases")
-          .select(
-            "id, start_date, end_date, annual_rent, installments, status, units(id, unit_number, rooms, bathrooms, area, floor_no, furnished, property_id, properties(name, city))",
-          )
-          .order("end_date", { ascending: false }),
-        supabase
-          .from("invoices")
-          .select("id, invoice_number, issue_date, total, zatca_status")
-          .order("issue_date", { ascending: false }),
+      const [tenants, notif] = await Promise.all([
+        supabase.from("tenants").select("id, full_name, phone").eq("user_id", userId!),
         supabase
           .from("notifications")
           .select("id", { count: "exact", head: true })
+          .eq("user_id", userId!)
           .is("read_at", null),
       ]);
+      if (tenants.error) throw tenants.error;
+      const tenantIds = (tenants.data ?? []).map((t) => t.id);
+      const leases = tenantIds.length
+        ? await supabase
+            .from("leases")
+            .select(
+              "id, start_date, end_date, annual_rent, installments, status, units(id, unit_number, rooms, bathrooms, area, floor_no, furnished, property_id, properties(name, city))",
+            )
+            .in("tenant_id", tenantIds)
+            .order("end_date", { ascending: false })
+        : null;
+      if (leases?.error) throw leases.error;
+      const leaseIds = (leases?.data ?? []).map((l) => l.id);
+      const invoices = leaseIds.length
+        ? await supabase
+            .from("invoices")
+            .select("id, invoice_number, issue_date, total, zatca_status")
+            .in("lease_id", leaseIds)
+            .order("issue_date", { ascending: false })
+        : null;
       return {
-        tenant: tenant.data,
-        leases: leases.data ?? [],
-        invoices: invoices.data ?? [],
+        tenant: tenants.data?.[0] ?? null,
+        leases: leases?.data ?? [],
+        invoices: invoices?.data ?? [],
         unreadNotif: notif.count ?? 0,
       };
     },
   });
+
+  // The #payments / #maintenance targets only exist once the dashboard has loaded, so the
+  // browser's own jump on page load (nav links like /tenant-dashboard#payments) found nothing.
+  // Jump once it's loaded, and keep the section in place while the cards above it load their own
+  // data and grow, until they settle or the user scrolls.
+  const loaded = !!data;
+  useEffect(() => {
+    if (!loaded) return;
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    const target = id ? document.getElementById(id) : null;
+    if (!target) return;
+    const align = () => target.scrollIntoView({ block: "start" });
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(document.body);
+    const stop = () => observer.disconnect();
+    const timer = window.setTimeout(stop, 5000);
+    const userScroll = ["wheel", "touchstart", "keydown"] as const;
+    userScroll.forEach((e) => window.addEventListener(e, stop, { passive: true }));
+    return () => {
+      stop();
+      window.clearTimeout(timer);
+      userScroll.forEach((e) => window.removeEventListener(e, stop));
+    };
+  }, [loaded]);
 
   if (isLoading || !data) {
     return (

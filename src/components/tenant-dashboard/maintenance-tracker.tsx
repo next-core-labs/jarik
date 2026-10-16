@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Star } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { shortDate, maintenanceStatusLabel, priorityLabel } from "@/lib/format";
+import { rateMaintenance } from "@/lib/portal-actions.functions";
+import { shortDate, maintenanceStatusLabel, priorityText } from "@/lib/format";
 
 const STAGES = [
   { key: "received", label: "استُلم" },
@@ -83,19 +86,21 @@ function RatingPicker({ requestId, unitId }: { requestId: string; unitId: string
   const [hovered, setHovered] = useState(0);
   const [note, setNote] = useState("");
 
+  // Through the server function, not a direct UPDATE: it checks the request is the caller's own,
+  // done and not yet rated, and notifies the office of the rating.
+  const rate = useServerFn(rateMaintenance);
   const submitRating = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from("maintenance_requests")
-        .update({ rating: selected, rating_note: note.trim() || null })
-        .eq("id", requestId);
-      if (error) throw error;
-    },
+    mutationFn: () =>
+      rate({
+        data: note.trim()
+          ? { requestId, rating: selected, note: note.trim() }
+          : { requestId, rating: selected },
+      }),
     onSuccess: () => {
       toast.success("تم إرسال تقييمك");
       queryClient.invalidateQueries({ queryKey: ["tenant-maintenance-tracker", unitId] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال التقييم"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال التقييم")),
   });
 
   return (
@@ -118,6 +123,7 @@ function RatingPicker({ requestId, unitId }: { requestId: string; unitId: string
       <Textarea
         rows={2}
         placeholder="ملاحظتك على الخدمة (اختياري)"
+        maxLength={400}
         value={note}
         onChange={(e) => setNote(e.target.value)}
       />
@@ -174,7 +180,7 @@ export function MaintenanceTracker({ unitId }: { unitId: string }) {
                       m.priority === "urgent" || m.priority === "high" ? "destructive" : "secondary"
                     }
                   >
-                    {priorityLabel[m.priority] ?? m.priority}
+                    {priorityText(m.priority)}
                   </Badge>
                 </div>
                 {m.description ? (

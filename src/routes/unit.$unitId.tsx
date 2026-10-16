@@ -49,7 +49,11 @@ type UnitPageData =
   | { status: "error" };
 
 /** Everything the page needs, fetched on the server too so link previews (WhatsApp) have the photo. */
+/** Public ids are uuids — anything else can't be a record (and PostgREST would fail with 22P02). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function loadUnitPage(unitId: string): Promise<UnitPageData> {
+  if (!UUID_RE.test(unitId)) return { status: "missing" };
   try {
     const { data: row, error } = await supabase
       .from("vacant_units_public")
@@ -144,6 +148,7 @@ export const Route = createFileRoute("/unit/$unitId")({
         meta: [
           { title: "عرض عقاري — جارك" },
           { name: "description", content: "تصفح العروض العقارية المتاحة على جارك." },
+          { name: "robots", content: "noindex" },
           { property: "og:title", content: "عرض عقاري — جارك" },
           { property: "og:description", content: "تصفح العروض العقارية المتاحة على جارك." },
           { property: "og:type", content: "website" },

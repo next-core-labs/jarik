@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MailCheck } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -68,7 +69,7 @@ export function InvitationsBanner() {
       // Accepting changes the account's roles and office, so everything on screen is now stale.
       await queryClient.invalidateQueries();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تنفيذ الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ الطلب")),
   });
 
   const answerHq = useMutation({
@@ -84,7 +85,7 @@ export function InvitationsBanner() {
       toast.success(v.accept ? "صرت مدير عام مفوَّض" : "رُفضت الدعوة");
       await queryClient.invalidateQueries();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تنفيذ الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ الطلب")),
   });
 
   const rows = invitations.data ?? [];

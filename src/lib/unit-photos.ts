@@ -71,7 +71,11 @@ export function planPhotoSync(
  * applied, and transparency is flattened onto white.
  */
 export async function compressImage(file: File, maxDim = 1600, quality = 0.85): Promise<Blob> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  // The browser's decode error is English ("The source image could not be decoded."); a corrupt
+  // file or a mislabelled HEIC both land here.
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => {
+    throw new Error("تعذّرت قراءة الصورة — جرّب صورة أخرى بصيغة JPG أو PNG أو WebP");
+  });
   const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));

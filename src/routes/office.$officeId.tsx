@@ -13,7 +13,11 @@ type OfficePageResult =
   | { status: "missing" }
   | { status: "error" };
 
+/** Public ids are uuids — anything else can't be a record (and PostgREST would fail with 22P02). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function loadOfficePage(officeId: string): Promise<OfficePageResult> {
+  if (!UUID_RE.test(officeId)) return { status: "missing" };
   try {
     const [pageRes, listingsRes] = await Promise.all([
       supabase.from("office_pages_public").select("*").eq("id", officeId).maybeSingle(),
@@ -56,6 +60,7 @@ export const Route = createFileRoute("/office/$officeId")({
         meta: [
           { title: "مكتب عقاري — جارك" },
           { name: "description", content: "تصفح المكاتب العقارية على جارك." },
+          { name: "robots", content: "noindex" },
           { property: "og:title", content: "مكتب عقاري — جارك" },
           { property: "og:description", content: "تصفح المكاتب العقارية على جارك." },
           { property: "og:type", content: "website" },

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { digitsOnly, idTypeOf, validateFalLicense, validateSaudiId } from "./saudi-id";
+import {
+  digitsOnly,
+  hasValidSaudiIdChecksum,
+  idTypeOf,
+  validateFalLicense,
+  validateSaudiId,
+} from "./saudi-id";
 
 describe("digitsOnly", () => {
   it("accepts the Arabic-Indic digits a Saudi keyboard produces", () => {
@@ -27,11 +33,41 @@ describe("idTypeOf", () => {
   });
 });
 
+describe("hasValidSaudiIdChecksum", () => {
+  it("accepts numbers whose check digit is right", () => {
+    expect(hasValidSaudiIdChecksum("1023456781")).toBe(true);
+    expect(hasValidSaudiIdChecksum("1000000008")).toBe(true);
+    expect(hasValidSaudiIdChecksum("2023456789")).toBe(true);
+    expect(hasValidSaudiIdChecksum("2000000006")).toBe(true);
+  });
+
+  it("refuses a wrong check digit or a mistyped digit", () => {
+    expect(hasValidSaudiIdChecksum("1000000000")).toBe(false);
+    expect(hasValidSaudiIdChecksum("1023456789")).toBe(false);
+    expect(hasValidSaudiIdChecksum("1023456718")).toBe(false);
+    expect(hasValidSaudiIdChecksum("2023456788")).toBe(false);
+  });
+
+  it("refuses anything that is not ten Latin digits", () => {
+    expect(hasValidSaudiIdChecksum("100000008")).toBe(false);
+    expect(hasValidSaudiIdChecksum("10000000a8")).toBe(false);
+  });
+});
+
 describe("validateSaudiId", () => {
   it("accepts a national id for every account type", () => {
     for (const t of ["office", "owner", "tenant"] as const) {
-      expect(validateSaudiId("1023456789", t)).toBeNull();
+      expect(validateSaudiId("1023456781", t)).toBeNull();
     }
+  });
+
+  it("accepts Arabic-Indic digits with a valid check digit", () => {
+    expect(validateSaudiId("١٠٢٣٤٥٦٧٨١", "owner")).toBeNull();
+  });
+
+  it("refuses a number whose check digit is wrong, naming the document", () => {
+    expect(validateSaudiId("1000000000", "office")).toContain("رقم الهوية غير صحيح");
+    expect(validateSaudiId("2023456788", "tenant")).toContain("رقم الإقامة غير صحيح");
   });
 
   it("accepts an iqama for an owner or a tenant", () => {

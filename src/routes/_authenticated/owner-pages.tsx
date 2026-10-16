@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ExternalLink, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { PageHeader } from "@/components/app-shell";
 import { Avatar } from "@/components/listing-row";
@@ -145,7 +146,7 @@ function OwnerPageCard({ account, page }: { account: Account; page: PageRow | nu
       return uploadListingImage(supabase, `owners/${account.id}`, blob);
     },
     onSuccess: (path) => set("avatar_path", path),
-    onError: (e: Error) => toast.error(e.message || "تعذّر رفع الصورة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الصورة")),
   });
 
   const save = useMutation({
@@ -169,7 +170,7 @@ function OwnerPageCard({ account, page }: { account: Account; page: PageRow | nu
       queryClient.invalidateQueries({ queryKey: ["owner-pages"] });
       queryClient.invalidateQueries({ queryKey: ["market"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   const image = form.avatar_path ? mediaUrl(form.avatar_path) : null;

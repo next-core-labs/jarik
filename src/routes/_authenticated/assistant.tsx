@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { askAssistant } from "@/lib/assistant.functions";
 import { PageHeader } from "@/components/app-shell";
@@ -52,7 +53,7 @@ function Assistant() {
       return result.reply;
     },
     onSuccess: (reply) => setMessages((m) => [...m, { role: "assistant", content: reply }]),
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحصول على رد"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحصول على رد")),
   });
 
   function submit(e: React.FormEvent) {

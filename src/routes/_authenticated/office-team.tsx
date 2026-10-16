@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Check, Crown, Link2, MailCheck, Trash2, UserMinus, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { PageHeader } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,15 @@ function roleText(role: string) {
   return roleLabel[role as AppRole] ?? role;
 }
 
+/** Shown inline instead of the browser's own (English) email bubble. */
+function emailError(value: string) {
+  const v = value.trim();
+  if (!v) return "أدخل البريد الإلكتروني للحساب";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    return "البريد الإلكتروني غير صحيح — مثال: name@example.com";
+  return null;
+}
+
 function OfficeTeam() {
   const queryClient = useQueryClient();
   const { data: me } = useMyRoles();
@@ -127,10 +137,11 @@ function OfficeTeam() {
       toast.success("سُحبت الدعوة");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر سحب الدعوة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر سحب الدعوة")),
   });
 
   const [memberEmail, setMemberEmail] = useState("");
+  const [memberTried, setMemberTried] = useState(false);
   const [memberRole, setMemberRole] = useState<"staff" | "technician">("staff");
   const [memberManager, setMemberManager] = useState(false);
   const addMember = useMutation({
@@ -145,13 +156,15 @@ function OfficeTeam() {
     onSuccess: () => {
       toast.success("أُرسلت الدعوة — تنضم إلى الفريق بعد قبولها من صاحب الحساب");
       setMemberEmail("");
+      setMemberTried(false);
       setMemberManager(false);
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الدعوة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الدعوة")),
   });
 
   const [clientEmail, setClientEmail] = useState("");
+  const [clientTried, setClientTried] = useState(false);
   const [clientKind, setClientKind] = useState<"owner" | "tenant">("owner");
   const linkClient = useMutation({
     mutationFn: async () => {
@@ -164,9 +177,10 @@ function OfficeTeam() {
     onSuccess: () => {
       toast.success("أُرسلت الدعوة — يرتبط الحساب بمكتبك بعد قبولها");
       setClientEmail("");
+      setClientTried(false);
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الدعوة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الدعوة")),
   });
 
   const removeMember = useMutation({
@@ -178,7 +192,7 @@ function OfficeTeam() {
       toast.success("أُزيل الحساب من فريق المكتب");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّرت الإزالة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت الإزالة")),
   });
 
   const setManager = useMutation({
@@ -190,7 +204,7 @@ function OfficeTeam() {
       if (error) throw error;
     },
     onSuccess: refresh,
-    onError: (e: Error) => toast.error(e.message || "تعذّر التحديث"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر التحديث")),
   });
 
   const decideLinkRequest = useMutation({
@@ -206,7 +220,7 @@ function OfficeTeam() {
       toast.success(v.accept ? "ارتبط الحساب بمكتبك" : "رُفض الطلب");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تنفيذ القرار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ القرار")),
   });
 
   const unlinkClient = useMutation({
@@ -218,7 +232,7 @@ function OfficeTeam() {
       toast.success("أُلغي الربط");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إلغاء الربط"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إلغاء الربط")),
   });
 
   if (me && !staff) {
@@ -234,6 +248,8 @@ function OfficeTeam() {
   const iAmManager = list.some((p) => p.user_id === me?.userId && p.is_manager);
   const team = list.filter((p) => p.relation === "member");
   const clients = list.filter((p) => p.relation !== "member");
+  const memberEmailError = memberTried ? emailError(memberEmail) : null;
+  const clientEmailError = clientTried ? emailError(clientEmail) : null;
 
   return (
     <>
@@ -245,7 +261,9 @@ function OfficeTeam() {
       {people.isLoading ? (
         <Skeleton className="h-64" />
       ) : people.error ? (
-        <p className="text-destructive">تعذّر تحميل الفريق: {(people.error as Error).message}</p>
+        <p className="text-destructive">
+          {userErrorMessage(people.error, "تعذّر تحميل الفريق — حاول مرة أخرى")}
+        </p>
       ) : (
         <div className="space-y-6">
           {iAmManager ? (
@@ -260,8 +278,11 @@ function OfficeTeam() {
                 <CardContent>
                   <form
                     className="space-y-3"
+                    noValidate
                     onSubmit={(e) => {
                       e.preventDefault();
+                      setMemberTried(true);
+                      if (emailError(memberEmail)) return;
                       addMember.mutate();
                     }}
                   >
@@ -273,8 +294,15 @@ function OfficeTeam() {
                         dir="ltr"
                         value={memberEmail}
                         onChange={(e) => setMemberEmail(e.target.value)}
-                        required
+                        onBlur={() => memberEmail.trim() && setMemberTried(true)}
+                        aria-invalid={Boolean(memberEmailError)}
+                        aria-describedby={memberEmailError ? "member-email-error" : undefined}
                       />
+                      {memberEmailError ? (
+                        <p id="member-email-error" className="text-xs text-destructive">
+                          {memberEmailError}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="space-y-1.5">
                       <Label>الدور</Label>
@@ -317,8 +345,11 @@ function OfficeTeam() {
                 <CardContent>
                   <form
                     className="space-y-3"
+                    noValidate
                     onSubmit={(e) => {
                       e.preventDefault();
+                      setClientTried(true);
+                      if (emailError(clientEmail)) return;
                       linkClient.mutate();
                     }}
                   >
@@ -330,8 +361,15 @@ function OfficeTeam() {
                         dir="ltr"
                         value={clientEmail}
                         onChange={(e) => setClientEmail(e.target.value)}
-                        required
+                        onBlur={() => clientEmail.trim() && setClientTried(true)}
+                        aria-invalid={Boolean(clientEmailError)}
+                        aria-describedby={clientEmailError ? "client-email-error" : undefined}
                       />
+                      {clientEmailError ? (
+                        <p id="client-email-error" className="text-xs text-destructive">
+                          {clientEmailError}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="space-y-1.5">
                       <Label>النوع</Label>

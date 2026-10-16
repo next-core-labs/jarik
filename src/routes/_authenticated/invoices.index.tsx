@@ -11,7 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { sar2, shortDate } from "@/lib/format";
 import { myOrgId } from "@/lib/use-org-branding";
 
-export const Route = createFileRoute("/_authenticated/invoices")({
+// The list is the index route, not an `invoices.tsx` parent: a parent with no <Outlet/> rendered
+// this list on /invoices/new too, so the new-invoice form could never be reached.
+export const Route = createFileRoute("/_authenticated/invoices/")({
   staticData: { sitemap: false },
   head: () => ({
     meta: [

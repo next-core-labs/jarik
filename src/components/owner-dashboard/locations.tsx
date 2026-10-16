@@ -100,10 +100,18 @@ export function Locations({
   const nearby = useQuery({
     // Same key as the public listing's NearbyPlacesSection, so the two share the cache.
     queryKey: ["nearby-places", selected?.location.lat, selected?.location.lng],
-    queryFn: () =>
-      fetchPlaces({ data: { lat: selected!.location.lat, lng: selected!.location.lng } }),
+    queryFn: async () => {
+      const result = await fetchPlaces({
+        data: { lat: selected!.location.lat, lng: selected!.location.lng },
+      });
+      // A failed lookup is an error, not "nothing nearby" — and errors aren't cached for an hour.
+      if (result.failed) throw new Error("nearby-places-failed");
+      return result;
+    },
     enabled: !!selected,
     staleTime: 60 * 60 * 1000,
+    // The lookup already waits up to 10 s; the owner can retry from the message instead.
+    retry: false,
   });
   const places = useMemo(() => {
     if (!selected || !nearby.data) return [];
@@ -233,7 +241,14 @@ export function Locations({
             </div>
           </Panel>
 
-          <NearbyPanel property={selected} loading={nearby.isLoading} places={places} />
+          <NearbyPanel
+            property={selected}
+            loading={nearby.isLoading}
+            failed={nearby.isError}
+            retrying={nearby.isFetching}
+            onRetry={() => void nearby.refetch()}
+            places={places}
+          />
         </div>
       )}
     </Section>
@@ -268,10 +283,16 @@ function LegendDot({ color, label, glyph }: { color: string; label: string; glyp
 function NearbyPanel({
   property,
   loading,
+  failed,
+  retrying,
+  onRetry,
   places,
 }: {
   property: PropertyGroup | null;
   loading: boolean;
+  failed: boolean;
+  retrying: boolean;
+  onRetry: () => void;
   places: (NearbyPlace & { distance: number })[];
 }) {
   if (!property) {
@@ -298,6 +319,13 @@ function NearbyPanel({
           <Skeleton className="h-20" />
           <Skeleton className="h-20" />
           <Skeleton className="h-20" />
+        </div>
+      ) : failed ? (
+        <div className="flex flex-wrap items-center gap-3 px-5 py-8 text-sm text-muted-foreground">
+          <p>تعذّر تحميل الخدمات القريبة.</p>
+          <Button size="sm" variant="outline" disabled={retrying} onClick={onRetry}>
+            {retrying ? "جارٍ المحاولة..." : "إعادة المحاولة"}
+          </Button>
         </div>
       ) : places.length === 0 ? (
         <p className="px-5 py-8 text-sm text-muted-foreground">

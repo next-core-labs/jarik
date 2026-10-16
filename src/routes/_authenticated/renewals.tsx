@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { BellRing, CalendarClock, CalendarPlus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -108,7 +109,7 @@ function Renewals() {
       );
       queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الإرسال"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الإرسال")),
   });
 
   const list = data ?? [];
@@ -271,7 +272,7 @@ function RenewDialog({
       else if (res.suggestedRent) toast.info(res.reasoning);
       else toast.warning(res.reasoning);
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر جلب التسعير"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر جلب التسعير")),
   });
 
   const renew = useMutation({
@@ -303,7 +304,7 @@ function RenewDialog({
       toast.success("تم تجديد العقد وإنشاء دفعاته");
       onDone();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر التجديد"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر التجديد")),
   });
 
   return (
@@ -710,7 +711,7 @@ function DepositsSection() {
       toast.success("سُوّيت الوديعة وأُبلغ المستأجر");
       queryClient.invalidateQueries({ queryKey: ["deposit-leases"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّرت التسوية"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت التسوية")),
   });
 
   if (isLoading || !data || data.length === 0) return null;

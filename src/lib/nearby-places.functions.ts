@@ -90,6 +90,12 @@ export function pickNearest(
     .map(({ p }) => p);
 }
 
+/** `failed` = the lookup itself didn't answer (timeout, rate limit, outage), so the UI says
+ *  "couldn't load" and offers a retry instead of claiming nothing is nearby. */
+export type NearbyPlacesResult = { places: NearbyPlace[]; failed: boolean };
+
+const FAILED: NearbyPlacesResult = { places: [], failed: true };
+
 /**
  * أقرب الخدمات لإحداثية عامة (Overpass API — بيانات OSM المفتوحة، بلا مفتاح مدفوع): مساجد، مدارس،
  * أسواق، مستشفيات وصيدليات، حدائق، محطات وقود، مطاعم ومقاهٍ، مولات، ومحطات نقل عام.
@@ -103,7 +109,7 @@ export const nearbyPlaces = createServerFn({ method: "GET" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<NearbyPlacesResult> => {
     const at = (r: number) => `(around:${r},${data.lat},${data.lng})`;
     const wide = at(1500);
     // Restaurants and bus stops are dense — a tighter circle keeps the answer small and relevant.
@@ -131,8 +137,11 @@ export const nearbyPlaces = createServerFn({ method: "GET" })
         body: query,
         signal: AbortSignal.timeout(10_000),
       });
-      if (!res.ok) return { places: [] as NearbyPlace[] };
-      const json = (await res.json()) as { elements?: OverpassElement[] };
+      if (!res.ok) return FAILED;
+      const json = (await res.json()) as { elements?: OverpassElement[]; remark?: string };
+      // Overpass reports its own timeouts and memory limits as a 200 with a "remark" — that is a
+      // failure too, not an empty neighbourhood.
+      if (json.remark && /error/i.test(json.remark) && !json.elements?.length) return FAILED;
 
       const places: NearbyPlace[] = [];
       for (const el of json.elements ?? []) {
@@ -147,9 +156,9 @@ export const nearbyPlaces = createServerFn({ method: "GET" })
           lng: lon,
         });
       }
-      return { places: pickNearest(data, places) };
+      return { places: pickNearest(data, places), failed: false };
     } catch {
-      // Overpass تحت ضغط أو غير متاحة — نعرض القسم بلا نقاط بدل كسر صفحة العرض.
-      return { places: [] as NearbyPlace[] };
+      // Overpass تحت ضغط أو غير متاحة — نُبلغ الواجهة بالفشل (لا «لا خدمات») بدل كسر صفحة العرض.
+      return FAILED;
     }
   });
