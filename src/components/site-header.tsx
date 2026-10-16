@@ -5,7 +5,7 @@ import { LayoutDashboard, Menu } from "lucide-react";
 import { JarakLogo, JarakSymbol } from "@/components/jarak-logo";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
-import { translate, useLocale, type Locale } from "@/lib/i18n";
+import { langSearch, translate, useLocale } from "@/lib/i18n";
 
 /** null until the stored session has been read (avoids flashing the wrong button). */
 export function useIsSignedIn(): boolean | null {
@@ -42,17 +42,13 @@ const MENU_ITEM_ACTIVE = {
 
 /**
  * Header of the public pages (offers market, listing, owner and office pages): a white 64px bar
- * with the horizontal lockup, underlined nav tabs, and an ink sign-in button. The AR/EN toggle only
- * appears where a caller passes `locale`/`onLocaleChange` (today: the marketplace homepage and the
- * unit listing page) — every other public page stays Arabic-only.
+ * with the horizontal lockup, underlined nav tabs, an AR/EN toggle and an ink sign-in button. The
+ * language is the page's ?lang (useLocale), and every header link carries it, so an English visitor
+ * stays in English from page to page.
  */
-export function SiteHeader({
-  locale = "ar",
-  onLocaleChange,
-}: {
-  locale?: Locale;
-  onLocaleChange?: (l: Locale) => void;
-}) {
+export function SiteHeader() {
+  const [locale, setLocale] = useLocale();
+  const search = langSearch(locale);
   const signedIn = useIsSignedIn();
   const [menuOpen, setMenuOpen] = useState(false);
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
@@ -64,7 +60,12 @@ export function SiteHeader({
   return (
     <header className="relative z-20 h-16 shrink-0 border-b border-border bg-card text-foreground">
       <div className="flex h-full items-center gap-2 px-3 sm:gap-5 sm:px-5">
-        <Link to="/" className="flex shrink-0 items-center" aria-label="جارك">
+        <Link
+          to="/"
+          search={search}
+          className="flex shrink-0 items-center"
+          aria-label={locale === "en" ? "Jarak" : "جارك"}
+        >
           <JarakLogo size="sm" className="hidden sm:inline-flex" />
           <JarakSymbol className="size-[34px] sm:hidden" />
         </Link>
@@ -74,6 +75,7 @@ export function SiteHeader({
             <Link
               key={l.to}
               to={l.to}
+              search={search}
               className={NAV_TAB}
               activeProps={NAV_TAB_ACTIVE}
               activeOptions={{ exact: l.exact }}
@@ -105,6 +107,7 @@ export function SiteHeader({
                   <Link
                     key={l.to}
                     to={l.to}
+                    search={search}
                     className={MENU_ITEM}
                     activeProps={MENU_ITEM_ACTIVE}
                     activeOptions={{ exact: l.exact }}
@@ -116,16 +119,14 @@ export function SiteHeader({
               </nav>
             </SheetContent>
           </Sheet>
-          {onLocaleChange ? (
-            <button
-              type="button"
-              onClick={() => onLocaleChange(locale === "ar" ? "en" : "ar")}
-              className="flex h-10 items-center border border-border px-2.5 font-[Archivo] text-sm font-semibold transition-colors hover:bg-muted sm:px-3"
-              aria-label="Switch language"
-            >
-              {locale === "ar" ? "EN" : "عربي"}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() => setLocale(locale === "ar" ? "en" : "ar")}
+            className="flex h-10 items-center border border-border px-2.5 font-[Archivo] text-sm font-semibold transition-colors hover:bg-muted sm:px-3"
+            aria-label="Switch language"
+          >
+            {locale === "ar" ? "EN" : "عربي"}
+          </button>
           {signedIn ? (
             <Link
               to="/dashboard"

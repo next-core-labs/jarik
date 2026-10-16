@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { parseSaudiMobile } from "@/lib/public-form";
+import { toLatinDigits, validateFalLicense } from "@/lib/saudi-id";
 import { compressImage, mediaUrl, uploadListingImage, validateImageFile } from "@/lib/unit-photos";
 import { useOrgBranding } from "@/lib/use-org-branding";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
@@ -85,22 +86,36 @@ function Settings() {
   const phone = form.office_phone.trim() ? parseSaudiMobile(form.office_phone) : null;
   const phoneError =
     form.office_phone.trim() && !phone ? "رقم الجوال غير صحيح — مثال: 05xxxxxxxx" : null;
+  // Both are optional. Spaces typed for readability are dropped; Arabic-Indic digits are accepted.
+  const fal = toLatinDigits(form.fal_license_no).replace(/\s/g, "");
+  const falError = !fal
+    ? null
+    : !/^\d+$/.test(fal)
+      ? "رقم رخصة فال أرقام فقط"
+      : validateFalLicense(fal);
+  // A Saudi VAT number (it prints on ZATCA invoices): 15 digits, starting and ending with 3.
+  const vat = toLatinDigits(form.vat_number).replace(/\s/g, "");
+  const vatError =
+    vat && !/^3\d{13}3$/.test(vat)
+      ? "الرقم الضريبي 15 رقمًا يبدأ وينتهي بـ3 — مثال: 300000000000003"
+      : null;
+  const formError = nameError ?? phoneError ?? falError ?? vatError;
 
   const save = useMutation({
     mutationFn: async () => {
       const id = org.data?.id;
       if (!id) throw new Error("لا توجد إعدادات للمكتب");
-      if (nameError || phoneError) throw new Error(nameError ?? phoneError ?? "");
+      if (formError) throw new Error(formError);
       const { error } = await supabase
         .from("org_settings")
         .update({
           company_name: form.company_name.trim(),
-          fal_license_no: form.fal_license_no.trim() || null,
+          fal_license_no: fal || null,
           office_phone: phone,
           city: form.city.trim() || null,
           district: form.district.trim() || null,
           office_code: form.office_code.trim() || null,
-          vat_number: form.vat_number.trim() || null,
+          vat_number: vat || null,
           cr_number: form.cr_number.trim() || null,
           listed_publicly: form.listed_publicly,
           // Only an admin may change the lock (the database enforces it too). Sending the field
@@ -122,6 +137,8 @@ function Settings() {
     mutationFn: async (file: File) => {
       const id = org.data?.id;
       if (!id) throw new Error("لا توجد إعدادات للمكتب");
+      const problem = validateImageFile(file);
+      if (problem) throw new Error(problem);
       // The branding bucket only accepts files inside the office's own folder.
       const path = `${id}/logo-${Date.now()}-${file.name.replace(/[^\w.-]/g, "")}`;
       const up = await supabase.storage.from("branding").upload(path, file, { upsert: true });
@@ -168,16 +185,21 @@ function Settings() {
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">علامة المكتب التجارية</Label>
+                <Label htmlFor="office-logo" className="text-xs text-muted-foreground">
+                  علامة المكتب التجارية
+                </Label>
                 <Input
+                  id="office-logo"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   disabled={!canEdit || uploadLogo.isPending}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) uploadLogo.mutate(file);
+                    e.target.value = "";
                   }}
                 />
+                <p className="text-xs text-muted-foreground">JPG أو PNG أو WebP</p>
               </div>
             </div>
 
@@ -195,10 +217,13 @@ function Settings() {
             <F label="رقم ترخيص فال">
               <Input
                 dir="ltr"
+                inputMode="numeric"
                 value={form.fal_license_no}
                 disabled={!canEdit}
                 onChange={(e) => set("fal_license_no", e.target.value)}
+                aria-invalid={Boolean(falError)}
               />
+              {canEdit && falError ? <p className="text-xs text-destructive">{falError}</p> : null}
             </F>
             <F label="رقم الجوال">
               <Input
@@ -238,10 +263,14 @@ function Settings() {
             <F label="الرقم الضريبي">
               <Input
                 dir="ltr"
+                inputMode="numeric"
                 value={form.vat_number}
                 disabled={!canEdit}
                 onChange={(e) => set("vat_number", e.target.value)}
+                placeholder="3xxxxxxxxxxxxx3"
+                aria-invalid={Boolean(vatError)}
               />
+              {canEdit && vatError ? <p className="text-xs text-destructive">{vatError}</p> : null}
             </F>
             <F label="السجل التجاري">
               <Input
@@ -284,7 +313,7 @@ function Settings() {
               <div className="sm:col-span-2">
                 <Button
                   onClick={() => save.mutate()}
-                  disabled={save.isPending || Boolean(nameError) || Boolean(phoneError)}
+                  disabled={save.isPending || Boolean(formError)}
                 >
                   حفظ هوية المكتب
                 </Button>
@@ -419,6 +448,7 @@ function OfficePageCard({ orgId, canEdit }: { orgId: string; canEdit: boolean })
               <input
                 ref={fileRef}
                 type="file"
+                aria-label="صورة غلاف صفحة المكتب"
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={(e) => {

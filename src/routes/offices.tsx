@@ -8,7 +8,16 @@ import { distanceMeters } from "@/lib/map-markers";
 import { phoneHref, whatsappHref } from "@/lib/market";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { arCount } from "@/lib/format";
+import { listingsCount, publicNum } from "@/lib/format";
+import {
+  langSearch,
+  localeFromSearch,
+  useLocale,
+  type Locale,
+  type TranslationKey,
+} from "@/lib/i18n";
+import { distanceText } from "@/lib/market-format";
+import { tf } from "@/components/listing-detail/format";
 import { SiteHeader } from "@/components/site-header";
 import { ArchEmptyState, SquareLogo, VerifiedMark } from "@/components/public/identity";
 import { Input } from "@/components/ui/input";
@@ -80,19 +89,16 @@ async function loadOffices(): Promise<Office[]> {
 }
 
 export const Route = createFileRoute("/offices")({
-  staticData: { sitemap: true },
+  staticData: { sitemap: true, publicLocale: true },
   loader: loadOffices,
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, match }) => ({
     meta: [
-      { title: "دليل المكاتب العقارية — جارك" },
-      {
-        name: "description",
-        content: "ابحث عن المكاتب العقارية في حيّك وشاهد شعار كل مكتب ورقم ترخيص فال ورقم جواله.",
-      },
-      { property: "og:title", content: "دليل المكاتب العقارية — جارك" },
+      { title: tf(localeFromSearch(match.search), "meta_offices_title") },
+      { name: "description", content: tf(localeFromSearch(match.search), "meta_offices_desc") },
+      { property: "og:title", content: tf(localeFromSearch(match.search), "meta_offices_title") },
       {
         property: "og:description",
-        content: "مكاتب عقارية موثّقة بترخيص فال مع بيانات التواصل حسب الحي.",
+        content: tf(localeFromSearch(match.search), "meta_offices_og_desc"),
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -135,6 +141,8 @@ export const Route = createFileRoute("/offices")({
 
 function Offices() {
   useTrackSiteVisit("/offices");
+  const [locale] = useLocale();
+  const t = (key: TranslationKey) => tf(locale, key);
   const [q, setQ] = useState("");
   const offices = Route.useLoaderData();
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
@@ -147,7 +155,7 @@ function Offices() {
       return;
     }
     if (!navigator.geolocation) {
-      toast.error("متصفحك لا يدعم تحديد الموقع");
+      toast.error(t("offices_geo_unsupported"));
       return;
     }
     setLocating(true);
@@ -158,7 +166,7 @@ function Offices() {
       },
       () => {
         setLocating(false);
-        toast.error("تعذّر تحديد موقعك — ابحث باسم الحي بدلًا من ذلك");
+        toast.error(t("offices_geo_denied"));
       },
       { timeout: 8000, maximumAge: 60_000 },
     );
@@ -184,17 +192,15 @@ function Offices() {
     .sort((a, b) => (me ? (a.km ?? Infinity) - (b.km ?? Infinity) : 0));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-6 px-5 pt-9 pb-16">
         {/* "Near me" measures to where each office's public listings are (office_directory has no
             coordinates of its own), so it is offered only when at least one office has listings. */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-1.5">
-            <h1 className="text-[32px] leading-tight font-bold">المكاتب العقارية</h1>
-            <p className="text-[15px] text-muted-foreground">
-              مكاتب موثّقة برخصة فال — ابحث بالحي أو المدينة أو اسم المكتب.
-            </p>
+            <h1 className="text-[32px] leading-tight font-bold">{t("offices_title")}</h1>
+            <p className="text-[15px] text-muted-foreground">{t("offices_subtitle")}</p>
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             {canNear ? (
@@ -211,7 +217,7 @@ function Offices() {
                   className={cn("size-[18px]", me ? "text-[#FF6B50]" : "text-primary")}
                   aria-hidden
                 />
-                {locating ? "جارٍ تحديد موقعك…" : me ? "الأقرب إليك أولًا" : "المكاتب القريبة مني"}
+                {t(locating ? "near_locating" : me ? "offices_near_on" : "offices_near")}
               </button>
             ) : null}
             <div className="relative w-full sm:w-80">
@@ -221,10 +227,10 @@ function Offices() {
               />
               <Input
                 className="ps-9"
-                placeholder="ابحث بالحي أو المدينة أو اسم المكتب"
+                placeholder={t("offices_search_ph")}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                aria-label="بحث في المكاتب"
+                aria-label={t("offices_search_aria")}
               />
             </div>
           </div>
@@ -232,23 +238,19 @@ function Offices() {
 
         {list.length === 0 ? (
           <ArchEmptyState
-            title={offices.length === 0 ? "لا توجد مكاتب مدرجة بعد" : "لا توجد مكاتب مطابقة لبحثك"}
-            hint={
-              offices.length === 0
-                ? "ستظهر هنا المكاتب الموثّقة برخصة فال فور إدراجها."
-                : "جرّب اسم حي أو مدينة أخرى، أو جزءًا من اسم المكتب."
-            }
+            title={t(offices.length === 0 ? "offices_empty_all" : "offices_empty_match")}
+            hint={t(offices.length === 0 ? "offices_empty_all_hint" : "offices_empty_match_hint")}
           >
             {term ? (
               <Button variant="outline" onClick={() => setQ("")}>
-                مسح البحث
+                {t("search_clear")}
               </Button>
             ) : null}
           </ArchEmptyState>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
             {list.map(({ o, km }) => (
-              <OfficeCard key={o.id} office={o} km={km} />
+              <OfficeCard key={o.id} office={o} km={km} locale={locale} />
             ))}
           </div>
         )}
@@ -257,9 +259,19 @@ function Offices() {
   );
 }
 
-function OfficeCard({ office: o, km }: { office: Office; km: number | null }) {
+function OfficeCard({
+  office: o,
+  km,
+  locale,
+}: {
+  office: Office;
+  km: number | null;
+  locale: Locale;
+}) {
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) => tf(locale, key, vars);
+  const search = langSearch(locale);
   const place = o.district ?? o.city;
-  const idLine = [o.fal_license_no ? `فال ${o.fal_license_no}` : null, place]
+  const idLine = [o.fal_license_no ? t("fal_short", { n: o.fal_license_no }) : null, place]
     .filter(Boolean)
     .join(" · ");
   const wa = whatsappHref(
@@ -284,6 +296,7 @@ function OfficeCard({ office: o, km }: { office: Office; km: number | null }) {
             <Link
               to="/office/$officeId"
               params={{ officeId: o.id }}
+              search={search}
               className="min-w-0 truncate hover:underline hover:underline-offset-4"
             >
               {o.company_name}
@@ -299,23 +312,22 @@ function OfficeCard({ office: o, km }: { office: Office; km: number | null }) {
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-semibold">
             {km != null ? (
               <span className="text-red-text tabular-nums">
-                يبعد {km < 1 ? `${Math.round((km * 1000) / 10) * 10} م` : `${km.toFixed(1)} كم`}
+                {t("offices_distance", { d: distanceText(km, locale) })}
               </span>
             ) : null}
             {o.listings_count != null ? (
               <span>
                 {o.listings_count === 0
-                  ? "لا عروض حاليًا"
-                  : arCount(o.listings_count, {
-                      one: "عرض واحد",
-                      two: "عرضان",
-                      few: "عروض",
-                      many: "عرضًا",
-                    })}
+                  ? t("offices_no_listings")
+                  : listingsCount(o.listings_count, locale)}
               </span>
             ) : null}
             {showRating ? (
-              <span className="text-success-tint-foreground">جودة الصيانة {o.avg_rating}</span>
+              <span className="text-success-tint-foreground tabular-nums">
+                {t("maint_quality", {
+                  r: publicNum(o.avg_rating ?? 0, { maximumFractionDigits: 1 }),
+                })}
+              </span>
             ) : null}
           </div>
         ) : null}
@@ -325,7 +337,7 @@ function OfficeCard({ office: o, km }: { office: Office; km: number | null }) {
               <Button variant="whatsapp" asChild className={tel ? undefined : "col-span-2"}>
                 <a href={wa} target="_blank" rel="noreferrer">
                   <MessageCircle aria-hidden />
-                  واتساب
+                  {t("card_whatsapp")}
                 </a>
               </Button>
             ) : null}
@@ -333,7 +345,7 @@ function OfficeCard({ office: o, km }: { office: Office; km: number | null }) {
               <Button variant="outline" asChild className={wa ? undefined : "col-span-2"}>
                 <a href={tel}>
                   <Phone aria-hidden />
-                  اتصال
+                  {t("card_call")}
                 </a>
               </Button>
             ) : null}
@@ -343,9 +355,10 @@ function OfficeCard({ office: o, km }: { office: Office; km: number | null }) {
           <Link
             to="/office/$officeId"
             params={{ officeId: o.id }}
+            search={search}
             className="w-fit text-sm font-semibold underline underline-offset-4 hover:text-red-text"
           >
-            كل عروض المكتب
+            {t("offices_all_listings")}
           </Link>
         ) : null}
       </div>

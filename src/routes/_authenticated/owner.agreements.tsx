@@ -34,6 +34,7 @@ import {
   PERMISSION_OPTIONS,
   UNENFORCED_PERMISSIONS,
 } from "@/lib/agreement-permissions";
+import { todayRiyadh } from "@/lib/dates";
 import { sar, shortDate } from "@/lib/format";
 import { toLatinDigits } from "@/lib/saudi-id";
 
@@ -410,7 +411,7 @@ function RequestAgreementDialog({
   const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
   const [commissionType, setCommissionType] = useState<"percent" | "fixed">("percent");
   const [commissionValue, setCommissionValue] = useState("5");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayRiyadh());
   const [endDate, setEndDate] = useState("");
   const [noticeDays, setNoticeDays] = useState("30");
   const [maintenanceCap, setMaintenanceCap] = useState("");

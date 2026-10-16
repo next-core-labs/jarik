@@ -3,7 +3,7 @@ import { Bath, BedDouble, Heart, LocateFixed, MessageCircle, Phone, Ruler } from
 
 import { JarakSymbol } from "@/components/jarak-logo";
 import { inquiryText } from "@/components/listing-row";
-import { translate, type Locale } from "@/lib/i18n";
+import { langSearch, translate, type Locale } from "@/lib/i18n";
 import { distanceText, priceParts } from "@/lib/market-format";
 import { listingTitle, phoneHref, priceDropPct, whatsappHref, type Listing } from "@/lib/market";
 import { PURPOSE_LABEL } from "@/lib/property-types";
@@ -136,6 +136,7 @@ export function MarketCard({
         <Link
           to="/unit/$unitId"
           params={{ unitId: l.id }}
+          search={langSearch(locale)}
           className="truncate text-[15px] font-semibold after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:shadow-[inset_0_0_0_2px_var(--color-ring)]"
         >
           {listingTitle(l)}

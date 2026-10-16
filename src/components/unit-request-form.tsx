@@ -48,13 +48,14 @@ export function UnitRequestForm({
   const [want, setWant] = useState<ListingPurpose>(purpose);
   const [referralCode, setReferralCode] = useState("");
   const [sent, setSent] = useState(false);
-  const [touched, setTouched] = useState({ phone: false, budget: false });
+  const [touched, setTouched] = useState({ name: false, phone: false, budget: false });
   const id = useId();
   const t = (key: Parameters<typeof tf>[1], vars?: Record<string, string | number>) =>
     tf(locale, key, vars);
 
   const mobile = parseSaudiMobile(phone);
   const budgetValue = parseAmount(budget);
+  const nameError = fullName.trim().length < 2 ? t("req_name_short") : null;
   const phoneError = mobile ? null : t("ld_req_phone_invalid");
   const budgetError =
     budgetValue === null
@@ -62,6 +63,7 @@ export function UnitRequestForm({
       : budgetValue !== undefined && budgetValue > MAX_BUDGET
         ? t("ld_req_budget_max")
         : null;
+  const showNameError = touched.name && fullName.trim() !== "" && nameError;
   const showPhoneError = touched.phone && phone.trim() !== "" && phoneError;
   const showBudgetError = touched.budget && budgetError;
 
@@ -88,7 +90,7 @@ export function UnitRequestForm({
       setBudget("");
       setNotes("");
       setReferralCode("");
-      setTouched({ phone: false, budget: false });
+      setTouched({ name: false, phone: false, budget: false });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, t("ld_req_error"))),
   });
@@ -119,8 +121,8 @@ export function UnitRequestForm({
       className="flex flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault();
-        setTouched({ phone: true, budget: true });
-        if (phoneError || budgetError) return;
+        setTouched({ name: true, phone: true, budget: true });
+        if (nameError || phoneError || budgetError) return;
         submit.mutate();
       }}
     >
@@ -161,7 +163,15 @@ export function UnitRequestForm({
           placeholder={t("ld_req_name_ph")}
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, name: true }))}
+          aria-invalid={showNameError ? true : undefined}
+          aria-describedby={showNameError ? field("name-error") : undefined}
         />
+        {showNameError ? (
+          <p id={field("name-error")} className="text-xs text-destructive">
+            {nameError}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={field("phone")}>{t("ld_req_phone")}</Label>
@@ -252,7 +262,7 @@ export function UnitRequestForm({
         type="submit"
         size="lg"
         className="w-full justify-center"
-        disabled={submit.isPending || fullName.trim().length < 2 || !phone.trim()}
+        disabled={submit.isPending || !fullName.trim() || !phone.trim()}
       >
         {submit.isPending ? t("ld_req_sending") : t("ld_req_submit")}
       </Button>

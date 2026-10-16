@@ -3,7 +3,7 @@ import { BadgeCheck, MessageCircle, Phone } from "lucide-react";
 
 import { formatNumber, tf } from "@/components/listing-detail/format";
 import { Button } from "@/components/ui/button";
-import { translate, type Locale } from "@/lib/i18n";
+import { langSearch, translate, type Locale } from "@/lib/i18n";
 import { phoneHref, whatsappHref } from "@/lib/market";
 import { cn } from "@/lib/utils";
 
@@ -47,9 +47,17 @@ export function AdvertiserCard({
   // An office with a FAL licence on file is the only "verified" signal the public data carries.
   const licensed = a.kind === "office" && Boolean(a.licenseNo);
   const ratings = a.ratingsCount ?? 0;
-  const allOffers = `${tf(locale, "ld_adv_all_offers", { name: a.name })}${
-    a.listingsCount != null ? ` (${formatNumber(a.listingsCount, locale)})` : ""
-  }`;
+  // The name is isolated (<bdi>) so an Arabic name inside the English sentence can't pull the
+  // count across it («All listings by (12) …»).
+  const [before, after] = translate(locale, "ld_adv_all_offers").split("{name}");
+  const allOffers = (
+    <>
+      {before}
+      <bdi>{a.name}</bdi>
+      {after}
+      {a.listingsCount != null ? ` (${formatNumber(a.listingsCount, locale)})` : ""}
+    </>
+  );
   const linkClass =
     "w-fit text-sm font-semibold text-foreground underline underline-offset-4 hover:text-red-text";
 
@@ -150,11 +158,21 @@ export function AdvertiserCard({
       ) : null}
 
       {a.kind === "owner" ? (
-        <Link to="/owner/$ownerId" params={{ ownerId: a.id }} className={linkClass}>
+        <Link
+          to="/owner/$ownerId"
+          params={{ ownerId: a.id }}
+          search={langSearch(locale)}
+          className={linkClass}
+        >
           {allOffers}
         </Link>
       ) : a.id ? (
-        <Link to="/office/$officeId" params={{ officeId: a.id }} className={linkClass}>
+        <Link
+          to="/office/$officeId"
+          params={{ officeId: a.id }}
+          search={langSearch(locale)}
+          className={linkClass}
+        >
           {allOffers}
         </Link>
       ) : null}

@@ -9,6 +9,7 @@ import { PasswordField } from "@/components/password-field";
 import { authErrorMessage, emailProblem } from "@/lib/auth-errors";
 import { isNativeApp, nativeOAuthSignIn } from "@/lib/native";
 import { resolvePostLoginPath } from "@/lib/portal-routing";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { safeNext } from "@/lib/safe-redirect";
 import {
   ACCOUNT_TYPE_LABEL,
@@ -36,6 +37,7 @@ export const Route = createFileRoute("/auth")({
       { title: "تسجيل الدخول — جارك" },
       { name: "description", content: "الدخول إلى منصة جارك لإدارة الأملاك والعقود والتحصيل." },
       { property: "og:title", content: "تسجيل الدخول — جارك" },
+      { property: "og:url", content: "https://jarak-ksa.com/auth" },
       { property: "og:description", content: "الدخول إلى منصة جارك لإدارة الأملاك." },
     ],
     links: [{ rel: "canonical", href: "https://jarak-ksa.com/auth" }],
@@ -63,6 +65,9 @@ function AuthPage() {
   const search = Route.useSearch() as { next?: string };
   const next = safeNext(search.next);
   const [loading, setLoading] = useState(false);
+  // Until React has hydrated, a click would submit the bare form as a browser GET (no handler yet).
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -163,6 +168,9 @@ function AuthPage() {
   async function signUp(e: React.FormEvent) {
     e.preventDefault();
     if (blocked(fullName.trim() ? null : "اكتب الاسم")) return;
+    // Optional, but when given it must be a Saudi mobile; it is stored as 05XXXXXXXX.
+    const mobile = phone.trim() ? parseSaudiMobile(phone) : null;
+    if (blocked(phone.trim() && !mobile ? "رقم الجوال غير صحيح — مثال: 05xxxxxxxx" : null)) return;
     const idProblem = validateSaudiId(nationalId, accountType);
     if (idProblem) {
       toast.error(idProblem);
@@ -185,7 +193,7 @@ function AuthPage() {
         emailRedirectTo: `${window.location.origin}${next ?? "/dashboard"}`,
         data: {
           full_name: fullName,
-          phone: digitsOnly(phone) || null,
+          phone: mobile,
           account_type: accountType,
           national_id: digitsOnly(nationalId),
           id_type: accountType === "office" ? "national" : idTypeOf(nationalId),
@@ -367,7 +375,7 @@ function AuthPage() {
                     onChange={(e) => setCode(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                   تفعيل الحساب
                 </Button>
               </form>
@@ -406,7 +414,7 @@ function AuthPage() {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                   أرسل الرمز
                 </Button>
               </form>
@@ -447,7 +455,7 @@ function AuthPage() {
                   minLength={6}
                   autoComplete="new-password"
                 />
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                   حفظ كلمة المرور
                 </Button>
               </form>
@@ -507,7 +515,7 @@ function AuthPage() {
                         نسيت كلمة المرور؟
                       </button>
                     </div>
-                    <Button type="submit" className="w-full" disabled={loading}>
+                    <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                       دخول
                     </Button>
                   </form>
@@ -620,7 +628,7 @@ function AuthPage() {
                       autoComplete="new-password"
                     />
                     {rememberBox}
-                    <Button type="submit" className="w-full" disabled={loading}>
+                    <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                       إنشاء الحساب
                     </Button>
                     <p className="text-xs text-muted-foreground">

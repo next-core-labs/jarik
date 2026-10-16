@@ -236,7 +236,7 @@ const propertyId = await one(
     city: "الرياض",
     district: "QA-حي الاختبار",
     address: "QA test address",
-    property_type: "residential_building",
+    property_type: "سكني",
     lat: 24.7136,
     lng: 46.6753,
   },
@@ -365,6 +365,10 @@ must(
     .eq("org_id", orgId)
     .eq("priority", "normal"),
   "fix priority",
+);
+must(
+  await admin.from("properties").update({ property_type: "سكني" }).eq("id", propertyId),
+  "fix property type",
 );
 
 // 7. Every account must sign in. Also create each account's referral and reference codes here:

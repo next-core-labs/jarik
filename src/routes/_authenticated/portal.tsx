@@ -1,8 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Download, Paperclip, Phone, Star } from "lucide-react";
+import { Download, LayoutDashboard, Paperclip, Phone, Star } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  arNum,
   sar,
   shortDate,
   paymentStatusLabel,
@@ -24,7 +25,7 @@ import {
   unitStatusLabel,
 } from "@/lib/format";
 import { effectiveStatus, toDatetimeLocalValue } from "@/lib/dates";
-import { roleLabel, useMyRoles, type AppRole } from "@/lib/use-role";
+import { isStaffRole, roleLabel, useMyRoles, type AppRole } from "@/lib/use-role";
 import { downloadElementAsPdf } from "@/lib/pdf";
 import { useOrgBranding } from "@/lib/use-org-branding";
 import {
@@ -74,6 +75,16 @@ function Portal() {
   // A technician-only account has no leases, payments, invoices or units of its own: skip those
   // queries and cards and show just the assigned jobs.
   const technicianOnly = isTechnician && !isOwner && !isTenant;
+  // The route head is static ("صفحتي"); a technician's tab should match their nav label.
+  useEffect(() => {
+    if (technicianOnly) document.title = "أعمال الصيانة — جارك";
+  }, [technicianOnly]);
+  // Office staff reach /portal from the nav too. Staff RLS returns the whole office, so nothing
+  // here may rely on RLS for "mine": an account with no owner/tenant/technician role gets a plain
+  // staff view, and every query below is scoped to the signed-in user.
+  const hasPortalRole = isOwner || isTenant || isTechnician;
+  // Bumped after a failed visit-time save so the uncontrolled fields re-mount with the saved value.
+  const [visitResetNonce, setVisitResetNonce] = useState(0);
 
   // A single-role owner or tenant gets a dashboard built around that one role instead of this
   // combined page; anyone with more than one role (or a technician) keeps the combined view,
@@ -170,68 +181,97 @@ function Portal() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["portal", me?.userId ?? null, technicianOnly],
-    enabled: !!me,
+    queryKey: ["portal", me?.userId ?? null, roles.join(",")],
+    enabled: !!me?.userId && hasPortalRole,
     queryFn: async () => {
+      const uid = me!.userId!;
       const skip = { data: null } as const;
-      const [tenant, leases, payments, invoices, maintenance, properties] = await Promise.all([
-        technicianOnly
-          ? skip
-          : supabase.from("tenants").select("id, full_name, phone").maybeSingle(),
-        technicianOnly
-          ? skip
-          : supabase
-              .from("leases")
-              .select(
-                "id, start_date, end_date, annual_rent, installments, ejar_contract_no, ejar_status, status, units(id, unit_number, properties(name))",
-              )
-              .order("end_date", { ascending: false }),
-        technicianOnly
-          ? skip
-          : supabase
+
+      // As a tenant: only the tenant records linked to this account, and the leases, payments and
+      // invoices hanging off them.
+      const tenantRows = isTenant
+        ? await supabase.from("tenants").select("id, full_name, phone").eq("user_id", uid)
+        : skip;
+      const tenantIds = (tenantRows.data ?? []).map((t) => t.id);
+      const leases = tenantIds.length
+        ? await supabase
+            .from("leases")
+            .select(
+              "id, tenant_id, start_date, end_date, annual_rent, installments, ejar_contract_no, ejar_status, status, units(id, unit_number, properties(name))",
+            )
+            .in("tenant_id", tenantIds)
+            .order("end_date", { ascending: false })
+        : skip;
+      const leaseIds = (leases.data ?? []).map((l) => l.id);
+
+      const [payments, invoices, maintenance, properties, units, market, roi] = await Promise.all([
+        leaseIds.length
+          ? supabase
               .from("payments")
               .select(
                 "id, amount, due_date, paid_date, status, transfer_reference, method, leases(units(unit_number, properties(name)))",
               )
-              .order("due_date"),
-        technicianOnly
-          ? skip
-          : supabase
+              .in("lease_id", leaseIds)
+              .order("due_date")
+          : skip,
+        leaseIds.length
+          ? supabase
               .from("invoices")
               .select("id, invoice_number, issue_date, total, zatca_status")
-              .order("issue_date", { ascending: false }),
+              .in("lease_id", leaseIds)
+              .order("issue_date", { ascending: false })
+          : skip,
         supabase
           .from("maintenance_requests")
           .select(
-            "id, title, description, priority, status, cost, created_at, approval_status, rating, technician_id, unit_id, scheduled_at, photo_path, audio_path, units(unit_number, owner_id, properties(name))",
+            "id, title, description, priority, status, cost, created_at, approval_status, rating, technician_id, tenant_id, unit_id, scheduled_at, photo_path, audio_path, units(unit_number, owner_id, properties(name, owner_id))",
           )
           .order("created_at", { ascending: false }),
-        technicianOnly
-          ? skip
-          : supabase
+        isOwner
+          ? supabase
               .from("properties")
               .select("id, name, city, owner_id, units(id, status, annual_rent)")
-              .order("created_at"),
-      ]);
-      const [units, events, market] = await Promise.all([
-        technicianOnly
-          ? skip
-          : supabase
+              .eq("owner_id", uid)
+              .order("created_at")
+          : skip,
+        isOwner
+          ? supabase
               .from("units")
               .select(
                 "id, unit_number, unit_type, status, annual_rent, owner_id, properties(name, city, owner_id)",
               )
-              .order("unit_number"),
-        technicianOnly
-          ? skip
-          : supabase
+              .order("unit_number")
+          : skip,
+        isOwner ? supabase.rpc("market_stats") : skip,
+        isOwner ? supabase.rpc("owner_property_roi") : skip,
+      ]);
+
+      // As an owner: the units this account owns (same rule as private.unit_owner(): the unit's own
+      // owner, else the property's), and the rent still due on them.
+      const ownedUnits = (units.data ?? []).filter(
+        (u) => (u.owner_id ?? u.properties?.owner_id) === uid,
+      );
+      const ownedUnitIds = ownedUnits.map((u) => u.id);
+      const leasedUnitIds = (leases.data ?? []).flatMap((l) => (l.units?.id ? [l.units.id] : []));
+      const myUnitIds = [...new Set([...ownedUnitIds, ...leasedUnitIds])];
+      const [ownerDue, events] = await Promise.all([
+        ownedUnitIds.length
+          ? supabase
+              .from("payments")
+              .select("amount, status, leases!inner(unit_id)")
+              .in("leases.unit_id", ownedUnitIds)
+              .neq("status", "paid")
+          : skip,
+        myUnitIds.length
+          ? supabase
               .from("unit_events")
               .select("id, title, body, kind, created_at, units(unit_number, properties(name))")
+              .in("unit_id", myUnitIds)
               .order("created_at", { ascending: false })
-              .limit(40),
-        technicianOnly ? skip : supabase.rpc("market_stats"),
+              .limit(40)
+          : skip,
       ]);
-      const roi = technicianOnly ? skip : await supabase.rpc("owner_property_roi");
+
       // Tenant name + phone for the technician's open jobs (the tenants table itself stays
       // closed to technicians). If the call fails, the card simply shows no contact row.
       let contacts: JobContact[] = [];
@@ -243,20 +283,28 @@ function Portal() {
           // No contact row on the card; the rest of the job still renders.
         }
       }
-      // Technicians and tenants can read the units/properties they work in or rent; the owner
-      // views below (وحداتي، عقاراتي، the statement PDF) count only what this account owns.
-      const userId = me?.userId ?? null;
-      const ownedUnits = (units.data ?? []).filter(
-        (u) => (u.owner_id ?? u.properties?.owner_id) === userId,
-      );
-      const ownedProperties = (properties.data ?? []).filter((p) => p.owner_id === userId);
+
+      const allRequests = maintenance.data ?? [];
+      const isClosed = (status: string) => status === "done" || status === "cancelled";
       return {
-        tenant: tenant.data,
+        tenant: tenantRows.data?.[0] ?? null,
         leases: leases.data ?? [],
         payments: payments.data ?? [],
         invoices: invoices.data ?? [],
-        maintenance: maintenance.data ?? [],
-        properties: ownedProperties,
+        // Jobs assigned to me, open ones first (newest first within each group).
+        myJobs: allRequests
+          .filter((m) => m.technician_id === uid)
+          .sort((a, b) => Number(isClosed(a.status)) - Number(isClosed(b.status))),
+        // Requests I opened as a tenant.
+        myRequests: allRequests.filter((m) => m.tenant_id && tenantIds.includes(m.tenant_id)),
+        // Requests on units I own that wait for my approval.
+        ownerPending: allRequests.filter(
+          (m) =>
+            m.approval_status === "pending" &&
+            (m.units?.owner_id ?? m.units?.properties?.owner_id) === uid,
+        ),
+        ownerDueTotal: (ownerDue.data ?? []).reduce((sum, p) => sum + Number(p.amount), 0),
+        properties: properties.data ?? [],
         units: ownedUnits,
         events: events.data ?? [],
         market: market.data ?? [],
@@ -268,12 +316,13 @@ function Portal() {
 
   const createRequest = useMutation({
     mutationFn: async () => {
-      const unitId = data?.leases[0]?.units?.id ?? null;
+      const lease = data?.leases[0];
+      if (!lease) throw new Error("no lease");
       const { error } = await supabase.from("maintenance_requests").insert({
         title,
         description: description || null,
-        tenant_id: data?.tenant?.id ?? null,
-        unit_id: unitId,
+        tenant_id: lease.tenant_id,
+        unit_id: lease.units?.id ?? null,
         source: "app",
       });
       if (error) throw error;
@@ -314,7 +363,10 @@ function Portal() {
       toast.success(at ? "حُفظ موعد الزيارة" : "أُلغي موعد الزيارة");
       queryClient.invalidateQueries({ queryKey: ["portal"] });
     },
-    onError: () => toast.error("تعذّر حفظ الموعد"),
+    onError: () => {
+      toast.error("تعذّر حفظ الموعد");
+      setVisitResetNonce((n) => n + 1);
+    },
   });
 
   const openMedia = async (path: string) => {
@@ -325,31 +377,70 @@ function Portal() {
     else toast.error("تعذّر فتح المرفق");
   };
 
-  if (isLoading || !data || !me) {
+  const roleBadges = (
+    <div className="mb-6 flex flex-wrap items-center gap-2">
+      {roles.length === 0 ? (
+        <Badge variant="outline">بدون دور — راجع مدير النظام</Badge>
+      ) : (
+        roles.map((r) => <Badge key={r}>{roleLabel[r as AppRole] ?? r}</Badge>)
+      )}
+    </div>
+  );
+
+  if (me && !hasPortalRole) {
+    // Office staff (or an account with no role yet): no tenant/owner/technician sections at all.
     return (
       <>
         <PageHeader title="صفحتي" />
+        <OfficeIdentity />
+        {roleBadges}
+        <Card className="shadow-deed">
+          <CardContent className="space-y-3 py-6 text-sm text-muted-foreground">
+            <p>
+              هذه الصفحة للملاك والمستأجرين والفنيين: عقودهم ودفعاتهم وأعمال الصيانة المسندة لهم.
+              {isStaffRole(roles) ? " أعمال المكتب كلها في لوحة التحكم." : ""}
+            </p>
+            {isStaffRole(roles) ? (
+              <Button asChild>
+                <Link to="/dashboard">
+                  <LayoutDashboard className="size-4" />
+                  لوحة التحكم
+                </Link>
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
+
+  if (isLoading || !data || !me) {
+    return (
+      <>
+        <PageHeader title={technicianOnly ? "أعمال الصيانة" : "صفحتي"} />
         <Skeleton className="h-64" />
       </>
     );
   }
 
-  const dueTotal = data.payments
-    .filter((p) => p.status !== "paid")
-    .reduce((s, p) => s + Number(p.amount), 0);
+  const dueTotal = data.ownerDueTotal;
   const allUnits = data.properties.flatMap((p) => p.units ?? []);
   // A sold unit has left the owner's rental pool and must not dilute their occupancy rate.
   const rentableUnits = allUnits.filter((u) => u.status !== "sold");
   const occupied = rentableUnits.filter((u) => u.status === "occupied").length;
-  // Only the jobs assigned to this account — an owner who is also a technician can read their
-  // units' requests too, and those aren't "my jobs".
-  const myJobs = data.maintenance.filter((m) => m.technician_id === me.userId);
+  const myJobs = data.myJobs;
+  // The earliest visit time the field accepts (datetime-local is in the viewer's local time).
+  const visitMin = toDatetimeLocalValue(new Date().toISOString());
 
   return (
     <>
       <PageHeader
-        title="صفحتي"
-        subtitle="كل ما يخصّك في مكان واحد — والنظام يلاحق المهام والاستحقاقات نيابةً عنك."
+        title={technicianOnly ? "أعمال الصيانة" : "صفحتي"}
+        subtitle={
+          technicianOnly
+            ? "الأعمال المسندة لك: موعد الزيارة، مرفقات الطلب، والتواصل مع المستأجر."
+            : "كل ما يخصّك في مكان واحد — والنظام يلاحق المهام والاستحقاقات نيابةً عنك."
+        }
         action={
           isOwner && data.units.length > 0 ? (
             <Button variant="outline" disabled={downloading} onClick={downloadStatement}>
@@ -369,13 +460,7 @@ function Portal() {
         </>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        {roles.length === 0 ? (
-          <Badge variant="outline">بدون دور — راجع مدير النظام</Badge>
-        ) : (
-          roles.map((r) => <Badge key={r}>{roleLabel[r as AppRole] ?? r}</Badge>)
-        )}
-      </div>
+      {roleBadges}
 
       {isTechnician ? (
         <Card className="mb-6 shadow-deed">
@@ -424,17 +509,24 @@ function Portal() {
                         id={`visit-${m.id}`}
                         // Uncontrolled: re-mount when the saved time changes so the field shows
                         // the server value.
-                        key={`${m.id}-${m.scheduled_at ?? ""}`}
+                        key={`${m.id}-${m.scheduled_at ?? ""}-${visitResetNonce}`}
                         type="datetime-local"
                         dir="ltr"
+                        min={visitMin}
                         disabled={schedule.isPending}
                         className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                         defaultValue={toDatetimeLocalValue(m.scheduled_at)}
                         onBlur={(e) => {
                           const v = e.target.value;
-                          if (v !== toDatetimeLocalValue(m.scheduled_at)) {
-                            schedule.mutate({ id: m.id, at: v });
+                          const saved = toDatetimeLocalValue(m.scheduled_at);
+                          if (v === saved) return;
+                          // A minute's grace so "now" picked a moment ago still counts.
+                          if (v && new Date(v).getTime() < Date.now() - 60_000) {
+                            toast.error("موعد الزيارة لا يمكن أن يكون في الماضي");
+                            e.target.value = saved;
+                            return;
                           }
+                          schedule.mutate({ id: m.id, at: v });
                         }}
                       />
                     </div>
@@ -622,40 +714,38 @@ function Portal() {
         </Card>
       ) : null}
 
-      {isOwner && data.maintenance.some((m) => m.approval_status === "pending") ? (
+      {isOwner && data.ownerPending.length > 0 ? (
         <Card className="mb-6 border-brass/50 shadow-deed">
           <CardHeader>
             <CardTitle className="text-base">صيانة تنتظر موافقتك</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {data.maintenance
-              .filter((m) => m.approval_status === "pending")
-              .map((m) => (
-                <div key={m.id} className="rounded-md border border-border bg-background p-4">
-                  <p className="font-medium">{m.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {m.units?.properties?.name ?? ""} · وحدة {m.units?.unit_number ?? "—"} · التكلفة{" "}
-                    <span className="font-bold text-foreground">{sar(m.cost)}</span>
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      disabled={decide.isPending}
-                      onClick={() => decide.mutate({ requestId: m.id, approved: true })}
-                    >
-                      موافقة
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={decide.isPending}
-                      onClick={() => decide.mutate({ requestId: m.id, approved: false })}
-                    >
-                      رفض
-                    </Button>
-                  </div>
+            {data.ownerPending.map((m) => (
+              <div key={m.id} className="rounded-md border border-border bg-background p-4">
+                <p className="font-medium">{m.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {m.units?.properties?.name ?? ""} · وحدة {m.units?.unit_number ?? "—"} · التكلفة{" "}
+                  <span className="font-bold text-foreground">{sar(m.cost)}</span>
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={decide.isPending}
+                    onClick={() => decide.mutate({ requestId: m.id, approved: true })}
+                  >
+                    موافقة
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={decide.isPending}
+                    onClick={() => decide.mutate({ requestId: m.id, approved: false })}
+                  >
+                    رفض
+                  </Button>
                 </div>
-              ))}
+              </div>
+            ))}
           </CardContent>
         </Card>
       ) : null}
@@ -696,7 +786,7 @@ function Portal() {
         </Card>
       ) : null}
 
-      {technicianOnly ? null : (
+      {isOwner || isTenant ? (
         <Card className="mb-6 shadow-deed">
           <CardHeader>
             <CardTitle className="text-base">تحديثات الوحدات</CardTitle>
@@ -721,9 +811,9 @@ function Portal() {
             ) : null}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {technicianOnly ? null : (
+      {isTenant ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="shadow-deed">
             <CardHeader>
@@ -853,7 +943,7 @@ function Portal() {
             </CardContent>
           </Card>
 
-          {!isTechnician ? (
+          {data.leases.length > 0 ? (
             <Card className="shadow-deed">
               <CardHeader>
                 <CardTitle className="text-base">طلب صيانة</CardTitle>
@@ -877,7 +967,7 @@ function Portal() {
                 </Button>
 
                 <div className="space-y-2 pt-2">
-                  {data.maintenance.map((m) => (
+                  {data.myRequests.map((m) => (
                     <div
                       key={m.id}
                       className="rounded-md border border-border bg-background px-4 py-3 text-sm"
@@ -910,6 +1000,7 @@ function Portal() {
                                   className="size-8"
                                   disabled={rate.isPending}
                                   title={`${n} من 5`}
+                                  aria-label={`تقييم ${arNum(n)} من ${arNum(5)}`}
                                   onClick={() =>
                                     rate.mutate(
                                       ratingNotes[m.id]
@@ -932,7 +1023,7 @@ function Portal() {
             </Card>
           ) : null}
         </div>
-      )}
+      ) : null}
 
       {receipt ? (
         <div

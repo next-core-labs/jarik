@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, CheckCheck } from "lucide-react";
+import { Bell, BellOff, CheckCheck, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -10,7 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { shortDate } from "@/lib/format";
+import { arNum, shortDate } from "@/lib/format";
+import { isStaffRole, useMyRoles, type AppRole } from "@/lib/use-role";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/notifications")({
       { title: "الإشعارات — جارك" },
       {
         name: "description",
-        content: "إشعارات المنصة: رسائل واتساب المحوّلة، طلبات الصيانة، والمستحقات.",
+        content: "كل ما يحتاج متابعتك: طلبات الصيانة، الدفعات، والرسائل.",
       },
       { property: "og:title", content: "الإشعارات — جارك" },
       { property: "og:description", content: "كل ما يحتاج متابعة في مكان واحد." },
@@ -42,8 +43,40 @@ const kindLabel: Record<string, string> = {
   deal: "صفقة",
 };
 
+/** What this page is about, in the words of the role reading it. */
+function subtitleFor(roles: AppRole[]) {
+  if (isStaffRole(roles))
+    return "رسائل واتساب المحوّلة إلى إجراءات، طلبات الصيانة، وتنبيهات التحصيل.";
+  if (roles.includes("owner")) return "تحديثات وحداتك، والصيانة التي تنتظر موافقتك، والدفعات.";
+  if (roles.includes("tenant")) return "تحديثات طلبات الصيانة، ودفعاتك، وإعلانات المبنى.";
+  if (roles.includes("technician")) return "الأعمال المسندة لك وتحديثاتها.";
+  return "كل ما يحتاج متابعتك في مكان واحد.";
+}
+
+type MaintenanceLink =
+  | { to: "/maintenance" }
+  | { to: "/portal" }
+  | { to: "/tenant-dashboard"; hash: "maintenance" }
+  | { to: "/owner-dashboard"; hash: "approvals" };
+
+/**
+ * Where a maintenance notification's job lives for this account. Notifications carry only
+ * related_table/related_id (a unit for status updates, the request for approvals), so this links
+ * to the role's maintenance screen rather than to one specific request.
+ */
+function maintenanceLinkFor(roles: AppRole[]): MaintenanceLink | null {
+  if (isStaffRole(roles)) return { to: "/maintenance" };
+  if (roles.includes("owner")) return { to: "/owner-dashboard", hash: "approvals" };
+  if (roles.includes("tenant")) return { to: "/tenant-dashboard", hash: "maintenance" };
+  if (roles.includes("technician")) return { to: "/portal" };
+  return null;
+}
+
 function Notifications() {
   const queryClient = useQueryClient();
+  const { data: me } = useMyRoles();
+  const roles = me?.roles ?? [];
+  const jobLink = maintenanceLinkFor(roles);
 
   const { data, isLoading } = useQuery({
     queryKey: ["notifications"],
@@ -82,13 +115,12 @@ function Notifications() {
 
   return (
     <>
-      <PageHeader
-        title="الإشعارات"
-        subtitle="رسائل واتساب المحوّلة إلى إجراءات، طلبات الصيانة، وتنبيهات التحصيل."
-      />
+      <PageHeader title="الإشعارات" subtitle={subtitleFor(roles)} />
 
       <div className="mb-4 flex items-center gap-3">
-        <Badge variant={unread.length ? "default" : "outline"}>{unread.length} غير مقروء</Badge>
+        <Badge variant={unread.length ? "default" : "outline"}>
+          {arNum(unread.length)} غير مقروء
+        </Badge>
         {unread.length > 0 ? (
           <Button
             variant="outline"
@@ -130,6 +162,14 @@ function Notifications() {
                     <p className="mt-1 text-sm whitespace-pre-wrap text-muted-foreground">
                       {n.body}
                     </p>
+                  ) : null}
+                  {n.kind === "maintenance" && jobLink ? (
+                    <Button variant="link" size="sm" className="h-auto px-0" asChild>
+                      <Link {...jobLink}>
+                        <Wrench className="size-4" />
+                        عرض طلبات الصيانة
+                      </Link>
+                    </Button>
                   ) : null}
                 </div>
                 {!n.read_at ? (

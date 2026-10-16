@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { digitsOnly } from "@/lib/saudi-id";
 import { cn } from "@/lib/utils";
 
 /** قائمة المحادثات المباشرة + بدء محادثة جديدة برقم تعريفي — مشتركة بين /messages (أي حساب) و/hq
@@ -178,7 +179,8 @@ export function DirectMessagesTab({
               className="text-center text-lg tracking-[0.4em]"
               placeholder="000000"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              // Arabic-Indic digits (٠١٢…) from an Arabic keyboard count too.
+              onChange={(e) => setCode(digitsOnly(e.target.value).slice(0, 6))}
             />
           </div>
           <DialogFooter>

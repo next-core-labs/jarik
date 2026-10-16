@@ -7,6 +7,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { classifyMaintenancePriority } from "@/lib/maintenance-triage";
 import { getMyOrgId, requireStaff, type ServerCtx } from "@/lib/server-context";
 import { aiChatUrl, aiKey, aiModel } from "@/lib/ai.server";
+import { todayRiyadh } from "@/lib/dates";
 
 /** تشغيل التذكير الذكي الآن (يعمل تلقائيًا كل صباح 11 بتوقيت السعودية أيضًا). */
 export const runSmartReminders = createServerFn({ method: "POST" })
@@ -428,16 +429,40 @@ export const submitRenewalDecision = createServerFn({ method: "POST" })
   });
 
 /** الموظف يسوّي وديعة التأمين عند خروج المستأجر (مرة واحدة فقط). */
+/**
+ * A deposit is settled once the tenant is leaving: the lease ended or was terminated, or it is
+ * still marked active but its end date has arrived. Never while the lease is running.
+ */
+export function depositSettleable(
+  lease: { status: string; end_date: string },
+  today: string = todayRiyadh(),
+): boolean {
+  if (lease.status === "expired" || lease.status === "terminated") return true;
+  return lease.status === "active" && lease.end_date.slice(0, 10) <= today;
+}
+
+const riyals = (n: number) => `${n.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+
 export const settleDeposit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { leaseId: string; status: "refunded" | "deducted"; note?: string }) =>
-    z
-      .object({
-        leaseId: z.string().uuid(),
-        status: z.enum(["refunded", "deducted"]),
-        note: z.string().max(300).optional(),
-      })
-      .parse(input),
+  .inputValidator(
+    (input: {
+      leaseId: string;
+      status: "refunded" | "deducted";
+      note?: string;
+      deductedAmount?: number;
+    }) =>
+      z
+        .object({
+          leaseId: z.string().uuid(),
+          status: z.enum(["refunded", "deducted"]),
+          note: z.string().trim().max(200).optional(),
+          deductedAmount: z.number().positive().optional(),
+        })
+        .refine((v) => v.status !== "deducted" || (v.deductedAmount && v.note), {
+          message: "أدخل مبلغ الخصم وسببه",
+        })
+        .parse(input),
   )
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
@@ -445,16 +470,26 @@ export const settleDeposit = createServerFn({ method: "POST" })
 
     const { data: lease, error } = await ctx.supabase
       .from("leases")
-      .select("id, unit_id, deposit, deposit_status")
+      .select("id, unit_id, deposit, deposit_status, status, end_date")
       .eq("id", data.leaseId)
       .maybeSingle();
     if (error || !lease) throw new Error("لم نجد العقد");
     if (lease.deposit_status !== "held") throw new Error("سبقت تسوية هذه الوديعة");
+    if (!depositSettleable(lease)) throw new Error("لا تُسوّى الوديعة قبل انتهاء العقد");
+
+    const deposit = Number(lease.deposit) || 0;
+    let note = data.note || null;
+    if (data.status === "deducted") {
+      const amount = data.deductedAmount ?? 0;
+      if (amount > deposit) throw new Error(`مبلغ الخصم أكبر من الوديعة (${riyals(deposit)})`);
+      // leases has no column for the deducted amount, so it is recorded in the settlement note.
+      note = `خُصم ${riyals(amount)} من ${riyals(deposit)} ويُعاد ${riyals(deposit - amount)} — ${data.note}`;
+    }
 
     // Conditional update so two staff members cannot settle (and notify) the same deposit twice.
     const { data: settled, error: upErr } = await ctx.supabase
       .from("leases")
-      .update({ deposit_status: data.status, deposit_note: data.note ?? null })
+      .update({ deposit_status: data.status, deposit_note: note })
       .eq("id", data.leaseId)
       .eq("deposit_status", "held")
       .select("id");
@@ -465,7 +500,10 @@ export const settleDeposit = createServerFn({ method: "POST" })
       const { error: notifyErr } = await ctx.supabase.rpc("notify_unit_staff", {
         _unit_id: lease.unit_id,
         _title: data.status === "refunded" ? "تم استرداد وديعة التأمين" : "تم تسوية وديعة التأمين",
-        _body: `الوديعة ${(Number(lease.deposit) || 0).toLocaleString("ar-SA")} ريال — ${data.status === "refunded" ? "استُردت كاملة" : "خُصص منها جزء أو كله"}${data.note ? ` · ${data.note}` : ""}`,
+        _body:
+          data.status === "refunded"
+            ? `الوديعة ${riyals(deposit)} — استُردت كاملة${note ? ` · ${note}` : ""}`
+            : `الوديعة ${riyals(deposit)} — ${note}`,
         _kind: "lease",
       });
       if (notifyErr) console.error("[settleDeposit] notify_unit_staff failed:", notifyErr.message);

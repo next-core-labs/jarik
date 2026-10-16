@@ -24,6 +24,21 @@ export const Route = createFileRoute("/tenant/activate")({
  * آلية رابط استرجاع كلمة المرور)، وهذه الصفحة تطلب من المستأجر تعيين كلمة مرور لأول مرة، ثم تربط
  * حسابه بسجل tenants الخاص بعقده عبر completeTenantActivation.
  */
+/** True when the session's latest sign-in was a password one (the JWT `amr` claim), not the
+ * invite or recovery link. */
+function signedInWithPassword(accessToken: string): boolean {
+  try {
+    const payload = accessToken.split(".")[1] ?? "";
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as {
+      amr?: { method?: string; timestamp?: number }[];
+    };
+    const latest = [...(json.amr ?? [])].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))[0];
+    return latest?.method === "password";
+  } catch {
+    return false;
+  }
+}
+
 function ActivateTenant() {
   const navigate = useNavigate();
   // null while the invite link's session is still being read, so the "expired" note doesn't flash.
@@ -32,8 +47,26 @@ function ActivateTenant() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setReady(!!data.session));
-  }, []);
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) return setReady(false);
+      // The invite link signs the tenant in without a password. A tenant who signed in with their
+      // password is already active, so they go to their dashboard instead of setting one again.
+      // (Someone signed in by password who isn't a tenant yet, e.g. an owner invited onto a lease,
+      // still finishes here.)
+      if (signedInWithPassword(session.access_token)) {
+        const { data: roleRows } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id);
+        if ((roleRows ?? []).some((r) => r.role === "tenant")) {
+          navigate({ to: "/tenant-dashboard", replace: true });
+          return;
+        }
+      }
+      setReady(true);
+    });
+  }, [navigate]);
 
   async function activate(e: React.FormEvent) {
     e.preventDefault();

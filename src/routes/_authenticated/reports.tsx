@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Download, BellRing } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -41,6 +42,10 @@ export const Route = createFileRoute("/_authenticated/reports")({
   }),
   component: Reports,
 });
+
+const NO_EXPENSES = "لا توجد مصروفات في هذه الفترة.";
+const NO_PERFORMANCE =
+  "لا توجد بيانات أداء بعد — الأداء يُحسب من الصفقات المُسندة للموظف والدفعات التي سجّلها.";
 
 /** "2026-10" → "أكتوبر ٢٠٢٦" (Gregorian month name, Arabic-Indic digits). */
 function monthLabel(key: string) {
@@ -104,11 +109,19 @@ function Reports() {
       toast.success(
         n > 0 ? `أُرسل تنبيه عن ${n} عقد ينتهي قريبًا` : "لا توجد عقود تنتهي خلال 60 يومًا",
       ),
-    onError: () => toast.error("تعذّر إرسال التنبيهات — الصلاحية للموظفين"),
+    onError: (e) => toast.error(userErrorMessage(e, "تعذّر إرسال تنبيهات العقود المنتهية")),
   });
 
+  // A reversed or half-empty range matches nothing and would print a report of zeros.
+  const rangeError =
+    !from || !to
+      ? "اختر تاريخ البداية وتاريخ النهاية"
+      : from > to
+        ? "تاريخ البداية بعد تاريخ النهاية — عدّل الفترة"
+        : null;
+
   const download = async () => {
-    if (!reportRef.current || org.isPending) return;
+    if (!reportRef.current || org.isPending || rangeError) return;
     setDownloading(true);
     try {
       await downloadElementAsPdf(reportRef.current, `تقرير-${from.slice(0, 7)}.pdf`);
@@ -242,6 +255,7 @@ function Reports() {
   };
 
   const exportExcel = () => {
+    if (rangeError) return;
     exportWorkbook(`تقرير-${from.slice(0, 7)}.xlsx`, [
       {
         name: "الملخص",
@@ -319,7 +333,7 @@ function Reports() {
                 onChange={(e) => setTo(e.target.value)}
               />
             </div>
-            <Button variant="outline" onClick={exportExcel}>
+            <Button variant="outline" disabled={!!rangeError} onClick={exportExcel}>
               <Download className="size-4" />
               تصدير Excel
             </Button>
@@ -332,7 +346,7 @@ function Reports() {
               تنبيه العقود المنتهية
             </Button>
             {/* The PDF prints the office name and code, so wait for them instead of printing the fallback. */}
-            <Button disabled={downloading || org.isPending} onClick={download}>
+            <Button disabled={downloading || org.isPending || !!rangeError} onClick={download}>
               <Download className="size-4" />
               {downloading ? "جارٍ إنشاء الملف…" : "تنزيل تقرير الشهر PDF"}
             </Button>
@@ -340,64 +354,72 @@ function Reports() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
-          <Card key={c.label} className="shadow-deed">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">{c.label}</p>
-              <p className="mt-2 font-display text-2xl font-bold">{c.value}</p>
+      {rangeError ? (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 p-4 text-sm text-destructive"
+        >
+          {rangeError}
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {cards.map((c) => (
+              <Card key={c.label} className="shadow-deed">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">{c.label}</p>
+                  <p className="mt-2 font-display text-2xl font-bold">{c.value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card className="mt-6 shadow-deed">
+            <CardHeader>
+              <CardTitle className="text-base">أداء الموظفين</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {performance.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm"
+                >
+                  <p className="font-medium">{p.name}</p>
+                  <p className="text-muted-foreground">
+                    صفقات {arNum(p.deals)} · مغلقة <Badge variant="outline">{arNum(p.won)}</Badge> ·
+                    عمولات <span className="font-bold text-foreground">{sar(p.commission)}</span> ·
+                    تحصيلات {arNum(p.collections)} بمبلغ{" "}
+                    <span className="font-bold text-foreground">{sar(p.collected)}</span>
+                  </p>
+                </div>
+              ))}
+              {performance.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{NO_PERFORMANCE}</p>
+              ) : null}
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      <Card className="mt-6 shadow-deed">
-        <CardHeader>
-          <CardTitle className="text-base">أداء الموظفين</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {performance.map((p) => (
-            <div
-              key={p.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm"
-            >
-              <p className="font-medium">{p.name}</p>
-              <p className="text-muted-foreground">
-                صفقات {arNum(p.deals)} · مغلقة <Badge variant="outline">{arNum(p.won)}</Badge> ·
-                عمولات <span className="font-bold text-foreground">{sar(p.commission)}</span> ·
-                تحصيلات {arNum(p.collections)} بمبلغ{" "}
-                <span className="font-bold text-foreground">{sar(p.collected)}</span>
-              </p>
-            </div>
-          ))}
-          {performance.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              لا توجد بيانات أداء بعد — الأداء يُحسب من الصفقات المُسندة للموظف والدفعات التي
-              سجّلها.
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6 shadow-deed">
-        <CardHeader>
-          <CardTitle className="text-base">المصروفات حسب التصنيف</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {byCategory.map(([category, total]) => (
-            <div
-              key={category}
-              className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3 text-sm"
-            >
-              <p className="font-medium">{category}</p>
-              <p className="font-bold text-foreground">{sar(total)}</p>
-            </div>
-          ))}
-          {byCategory.length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا توجد مصروفات في هذه الفترة.</p>
-          ) : null}
-        </CardContent>
-      </Card>
+          <Card className="mt-6 shadow-deed">
+            <CardHeader>
+              <CardTitle className="text-base">المصروفات حسب التصنيف</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {byCategory.map(([category, total]) => (
+                <div
+                  key={category}
+                  className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3 text-sm"
+                >
+                  <p className="font-medium">{category}</p>
+                  <p className="font-bold text-foreground">{sar(total)}</p>
+                </div>
+              ))}
+              {byCategory.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{NO_EXPENSES}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Card className="mt-6 shadow-deed">
         <CardHeader>
@@ -496,6 +518,9 @@ function Reports() {
             ))}
           </tbody>
         </table>
+        {byCategory.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-600">{NO_EXPENSES}</p>
+        ) : null}
         <p className="mt-6 text-sm font-bold">أداء الموظفين</p>
         <table className="mt-2 w-full text-sm">
           <tbody>
@@ -508,6 +533,9 @@ function Reports() {
             ))}
           </tbody>
         </table>
+        {performance.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-600">{NO_PERFORMANCE}</p>
+        ) : null}
         <p className="mt-6 text-xs text-gray-500">
           صدر بتاريخ {shortDate(new Date().toISOString())} من منصة جارك.
         </p>

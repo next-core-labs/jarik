@@ -121,11 +121,18 @@ function Assistant() {
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              aria-label="رسالتك للمساعد"
               placeholder="اكتب هنا…"
               rows={2}
               className="resize-none"
             />
-            <Button type="submit" disabled={send.isPending} size="icon" className="h-10 w-10">
+            <Button
+              type="submit"
+              disabled={send.isPending || !input.trim()}
+              size="icon"
+              className="h-10 w-10"
+              aria-label="إرسال"
+            >
               <Send className="size-4" />
             </Button>
           </form>

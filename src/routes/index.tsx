@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useFavorites } from "@/lib/favorites";
-import { translate, useLocale, type Locale } from "@/lib/i18n";
+import { langSearch, localeFromSearch, translate, useLocale, type Locale } from "@/lib/i18n";
 import { distanceMeters } from "@/lib/map-markers";
 import {
   defaultFilters,
@@ -37,25 +37,26 @@ import { cn } from "@/lib/utils";
 const MarketMap = lazy(() => import("@/components/market-map"));
 
 export const Route = createFileRoute("/")({
-  staticData: { sitemap: true },
-  head: () => ({
-    meta: [
-      { title: "جارك — سوق العروض العقارية" },
-      {
-        name: "description",
-        content:
-          "كل العروض تحت سقفٍ واحد: وحدات شاغرة للإيجار من مكاتب ومُلّاك موثوقين، بصور حقيقية وأسعار واضحة، مع التواصل المباشر بالاتصال أو واتساب.",
-      },
-      { property: "og:title", content: "جارك — سوق العروض العقارية" },
-      {
-        property: "og:description",
-        content: "وحدات شاغرة للإيجار من مكاتب ومُلّاك موثوقين — صور حقيقية وأسعار واضحة.",
-      },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://jarak-ksa.com/" },
-    ],
-    links: [{ rel: "canonical", href: "https://jarak-ksa.com/" }],
-  }),
+  staticData: { sitemap: true, publicLocale: true },
+  // The listings are read on the server too, so the first HTML already holds the cards (and their
+  // /unit links) instead of a loading state; the query picks them up as its initial data.
+  loader: async () => ({ listings: await fetchMarketListings().catch(() => null), at: Date.now() }),
+  staleTime: 60_000,
+  head: ({ match }) => {
+    const t = (key: Parameters<typeof translate>[1]) =>
+      translate(localeFromSearch(match.search), key);
+    return {
+      meta: [
+        { title: t("meta_market_title") },
+        { name: "description", content: t("meta_market_desc") },
+        { property: "og:title", content: t("meta_market_title") },
+        { property: "og:description", content: t("meta_market_og_desc") },
+        { property: "og:type", content: "website" },
+        { property: "og:url", content: "https://jarak-ksa.com/" },
+      ],
+      links: [{ rel: "canonical", href: "https://jarak-ksa.com/" }],
+    };
+  },
   component: Market,
 });
 
@@ -80,15 +81,19 @@ type Origin = {
 };
 type Row = { l: Listing; d: number | null };
 
+async function fetchMarketListings(): Promise<Listing[]> {
+  const { data, error } = await supabase.from("vacant_units_public").select("*").limit(500);
+  if (error) throw error;
+  return (data ?? []).map(toListing).filter((l): l is Listing => l !== null);
+}
+
 function useMarketListings() {
+  const loaded = Route.useLoaderData();
   return useQuery({
     queryKey: ["market"],
     staleTime: 60_000,
-    queryFn: async (): Promise<Listing[]> => {
-      const { data, error } = await supabase.from("vacant_units_public").select("*").limit(500);
-      if (error) throw error;
-      return (data ?? []).map(toListing).filter((l): l is Listing => l !== null);
-    },
+    queryFn: fetchMarketListings,
+    ...(loaded.listings ? { initialData: loaded.listings, initialDataUpdatedAt: loaded.at } : {}),
   });
 }
 
@@ -120,7 +125,7 @@ function inBounds(l: Listing, b: MapBounds) {
 function Market() {
   useTrackSiteVisit("/");
   const market = useMarketListings();
-  const [locale, setLocale] = useLocale();
+  const [locale] = useLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const km = (r: number) => `${r} ${t("unit_km")}`;
 
@@ -278,7 +283,7 @@ function Market() {
 
   return (
     <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
-      <SiteHeader locale={locale} onLocaleChange={setLocale} />
+      <SiteHeader />
       <h1 className="sr-only">{t("hero_title")}</h1>
 
       <div className="flex h-[calc(100dvh-4rem)] min-h-[520px] flex-col">
@@ -336,7 +341,7 @@ function Market() {
                       on ? "text-background/70" : "text-muted-foreground",
                     )}
                   >
-                    {tab.n.toLocaleString("en-US")}
+                    {all ? tab.n.toLocaleString("en-US") : "–"}
                   </span>
                 </button>
               );
@@ -783,10 +788,20 @@ function Market() {
             {locale === "ar" ? " · فواتير متوافقة مع متطلبات هيئة الزكاة والضريبة والجمارك" : ""}
           </span>
           <span className="flex gap-4">
-            <Link to="/legal/$slug" params={{ slug: "terms" }} className="hover:underline">
+            <Link
+              to="/legal/$slug"
+              params={{ slug: "terms" }}
+              search={langSearch(locale)}
+              className="hover:underline"
+            >
               {locale === "ar" ? "الشروط والأحكام" : "Terms"}
             </Link>
-            <Link to="/legal/$slug" params={{ slug: "privacy" }} className="hover:underline">
+            <Link
+              to="/legal/$slug"
+              params={{ slug: "privacy" }}
+              search={langSearch(locale)}
+              className="hover:underline"
+            >
               {locale === "ar" ? "سياسة الخصوصية" : "Privacy"}
             </Link>
           </span>

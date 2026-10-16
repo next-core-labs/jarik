@@ -15,7 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { phoneHref, whatsappHref } from "@/lib/market";
 import {
-  requestBudget,
   searchRequests,
   toPublicMarketRequest,
   type PublicMarketRequest,
@@ -25,21 +24,30 @@ import { PROPERTY_TYPE_GROUPS, type ListingPurpose } from "@/lib/property-types"
 import { parseAmount, parseSaudiMobile } from "@/lib/public-form";
 import { isStaffRole, useMyRoles } from "@/lib/use-role";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
-import { arCount, daysLabel } from "@/lib/format";
+import { tf } from "@/components/listing-detail/format";
+import { publicCount, publicNum } from "@/lib/format";
+import { localeFromSearch, useLocale, type Locale, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/requests-market")({
-  staticData: { sitemap: true },
-  head: () => ({
-    meta: [
-      { title: "سوق الطلبات — جارك" },
-      {
-        name: "description",
-        content:
-          "زوّار يبحثون عن وحدة للإيجار أو الشراء وينشرون طلبهم هنا — يراه كل مكتب ومالك، بلا حصرية لمكتب واحد.",
-      },
-    ],
-    links: [{ rel: "canonical", href: "https://jarak-ksa.com/requests-market" }],
-  }),
+  staticData: { sitemap: true, publicLocale: true },
+  head: ({ match }) => {
+    const locale = localeFromSearch(match.search);
+    const title = tf(locale, "meta_requests_title");
+    const description = tf(locale, "meta_requests_desc");
+    const url = "https://jarak-ksa.com/requests-market";
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "website" },
+        { property: "og:url", content: url },
+        { name: "twitter:card", content: "summary" },
+      ],
+      links: [{ rel: "canonical", href: url }],
+    };
+  },
   component: RequestsMarket,
 });
 
@@ -83,30 +91,50 @@ function useStaffContacts(enabled: boolean) {
 }
 
 const PURPOSE_OPTIONS = [
-  { value: "rent", label: "إيجار" },
-  { value: "sale", label: "شراء" },
+  { value: "rent", key: "rq_rent" },
+  { value: "sale", key: "rq_buy" },
 ] as const;
 
-const FILTER_OPTIONS = [{ value: "all", label: "الكل" }, ...PURPOSE_OPTIONS] as const;
+const FILTER_OPTIONS = [{ value: "all", key: "tab_all" }, ...PURPOSE_OPTIONS] as const;
 
-/** Native select dressed like the design-system Input (44px, hairline, ink focus). */
 /** submitMarketRequest's own ceiling — checked here so the visitor gets a readable message. */
 const MAX_BUDGET = 50_000_000;
 
+/** Native select dressed like the design-system Input (44px, hairline, ink focus). */
 const SELECT_CLASS =
   "h-11 w-full border border-input bg-card px-3 text-[15px] focus-visible:border-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none";
 
-/** «اليوم»، «أمس»، «منذ يومين»، «منذ ٣ أيام»… — requests load client-side, so no SSR drift. */
-function postedAgo(iso: string): string {
+/** «اليوم»، «أمس»، «منذ يومين»، «منذ 3 أيام»… — requests load client-side, so no SSR drift. */
+function postedAgo(iso: string, locale: Locale): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return "اليوم";
-  if (days === 1) return "أمس";
-  if (days === 2) return "منذ يومين";
-  return `منذ ${daysLabel(days)}`;
+  if (days <= 0) return tf(locale, "rq_today");
+  if (days === 1) return tf(locale, "rq_yesterday");
+  if (days === 2) return tf(locale, "rq_two_days");
+  return tf(locale, "rq_days_ago", {
+    n: publicCount(
+      days,
+      locale,
+      { one: "يوم واحد", two: "يومان", few: "أيام", many: "يومًا" },
+      { one: "day", many: "days" },
+    ),
+  });
+}
+
+/** The budget line, in the public site's Western digits: «حتى 60,000 ر.س سنويًا». */
+function budgetText(r: PublicMarketRequest, locale: Locale): string | null {
+  const unit = tf(locale, r.purpose === "rent" ? "price_rent_unit" : "price_sale_unit");
+  if (r.budgetMin && r.budgetMax) {
+    return `${publicNum(r.budgetMin)} – ${publicNum(r.budgetMax)} ${unit}`;
+  }
+  if (r.budgetMax) return `${tf(locale, "rq_budget_upto", { v: publicNum(r.budgetMax) })} ${unit}`;
+  if (r.budgetMin) return `${tf(locale, "rq_budget_from", { v: publicNum(r.budgetMin) })} ${unit}`;
+  return null;
 }
 
 function RequestsMarket() {
   useTrackSiteVisit("/requests-market");
+  const [locale] = useLocale();
+  const t = (key: TranslationKey) => tf(locale, key);
   const requests = usePublicRequests();
   const roles = useMyRoles();
   const isStaff = isStaffRole(roles.data?.roles);
@@ -122,16 +150,15 @@ function RequestsMarket() {
   }, [requests.data, purposeFilter, text]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
       <SiteHeader />
 
       <main className="mx-auto grid w-full max-w-[1240px] items-start gap-7 px-5 pt-9 pb-16 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <h1 className="text-[32px] leading-tight font-bold">سوق الطلبات</h1>
+            <h1 className="text-[32px] leading-tight font-bold">{t("rq_title")}</h1>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              ما يبحث عنه الناس الآن. تُعرض الطلبات المفتوحة لآخر ٤٥ يومًا بدون أسماء أو أرقام،
-              والتواصل متاح للمكاتب المسجّلة فقط.
+              {t("rq_intro")}
               {!isStaff && !roles.isLoading ? (
                 <>
                   {" "}
@@ -139,7 +166,7 @@ function RequestsMarket() {
                     to="/auth"
                     className="font-semibold text-foreground underline underline-offset-4 hover:text-red-text"
                   >
-                    سجّل دخولك كمكتب
+                    {t("rq_signin")}
                   </Link>
                 </>
               ) : null}
@@ -150,14 +177,14 @@ function RequestsMarket() {
           <Button variant="outline" asChild className="w-fit lg:hidden">
             <a href="#add-request">
               <Plus aria-hidden />
-              أضف طلبك
+              {t("rq_add")}
             </a>
           </Button>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div
               role="group"
-              aria-label="نوع الطلب"
+              aria-label={t("rq_filter_aria")}
               className="flex border-[1.5px] border-foreground"
             >
               {FILTER_OPTIONS.map((o) => (
@@ -172,7 +199,7 @@ function RequestsMarket() {
                       : "bg-card text-foreground hover:bg-muted"
                   }`}
                 >
-                  {o.label}
+                  {t(o.key)}
                 </button>
               ))}
             </div>
@@ -183,22 +210,22 @@ function RequestsMarket() {
               />
               <Input
                 className="ps-9"
-                placeholder="ابحث بالحي أو النوع…"
+                placeholder={t("rq_search_ph")}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                aria-label="بحث في الطلبات"
+                aria-label={t("rq_search_aria")}
               />
             </div>
             {requests.data ? (
               <span className="text-sm text-muted-foreground sm:ms-auto">
                 {shown.length === 0
-                  ? "لا طلبات"
-                  : arCount(shown.length, {
-                      one: "طلب واحد",
-                      two: "طلبان",
-                      few: "طلبات",
-                      many: "طلبًا",
-                    })}
+                  ? t("rq_none")
+                  : publicCount(
+                      shown.length,
+                      locale,
+                      { one: "طلب واحد", two: "طلبان", few: "طلبات", many: "طلبًا" },
+                      { one: "request", many: "requests" },
+                    )}
               </span>
             ) : null}
           </div>
@@ -210,23 +237,17 @@ function RequestsMarket() {
               ))}
             </div>
           ) : requests.isError ? (
-            <ArchEmptyState title="تعذّر تحميل الطلبات" hint="تحقّق من الاتصال ثم أعد المحاولة.">
+            <ArchEmptyState title={t("rq_error")} hint={t("results_error_body")}>
               <Button variant="outline" onClick={() => requests.refetch()}>
-                إعادة المحاولة
+                {t("results_retry")}
               </Button>
             </ArchEmptyState>
           ) : shown.length === 0 ? (
             <ArchEmptyState
-              title={
-                (requests.data ?? []).length === 0
-                  ? "لا توجد طلبات منشورة حاليًا"
-                  : "لا توجد طلبات مطابقة"
-              }
-              hint={
-                (requests.data ?? []).length === 0
-                  ? "كن أول من ينشر طلبه — تراه كل المكاتب والملّاك في جارك."
-                  : "جرّب كلمة أخرى أو نوع طلب مختلف."
-              }
+              title={t((requests.data ?? []).length === 0 ? "rq_empty_all" : "rq_empty_match")}
+              hint={t(
+                (requests.data ?? []).length === 0 ? "rq_empty_all_hint" : "rq_empty_match_hint",
+              )}
             >
               {text || purposeFilter !== "all" ? (
                 <Button
@@ -236,7 +257,7 @@ function RequestsMarket() {
                     setPurposeFilter("all");
                   }}
                 >
-                  مسح التصفية
+                  {t("results_clear")}
                 </Button>
               ) : null}
             </ArchEmptyState>
@@ -248,6 +269,7 @@ function RequestsMarket() {
                     request={r}
                     staff={isStaff}
                     contact={isStaff ? contacts.data?.get(r.id) : undefined}
+                    locale={locale}
                   />
                 </li>
               ))}
@@ -259,7 +281,7 @@ function RequestsMarket() {
           id="add-request"
           className="scroll-mt-4 border border-border bg-card p-[22px] lg:sticky lg:top-4"
         >
-          <RequestForm />
+          <RequestForm locale={locale} />
         </aside>
       </main>
     </div>
@@ -270,13 +292,18 @@ function RequestRow({
   request: r,
   staff,
   contact,
+  locale,
 }: {
   request: PublicMarketRequest;
   staff: boolean;
   contact?: { fullName: string; phone: string } | undefined;
+  locale: Locale;
 }) {
-  const budget = requestBudget(r);
-  const where = [r.district, r.city].filter(Boolean).join("، ") || "أي حي";
+  const t = (key: TranslationKey) => tf(locale, key);
+  const budget = budgetText(r, locale);
+  const where =
+    [r.district, r.city].filter(Boolean).join(locale === "en" ? ", " : "، ") ||
+    t("rq_any_district");
   const tel = contact ? phoneHref(contact.phone) : null;
   const wa = contact
     ? whatsappHref(contact.phone, `مرحبًا ${contact.fullName}، بخصوص طلبك في سوق طلبات جارك`)
@@ -289,15 +316,15 @@ function RequestRow({
         variant={r.purpose === "sale" ? "outline" : "default"}
         className="h-7 shrink-0 px-2.5 text-[13px]"
       >
-        {r.purpose === "sale" ? "شراء" : "إيجار"}
+        {t(r.purpose === "sale" ? "rq_buy" : "rq_rent")}
       </Badge>
 
       <div className="flex min-w-[200px] flex-1 flex-col gap-0.5">
         <h2 className="text-base font-semibold">
-          {r.unitType ?? (r.purpose === "sale" ? "عقار للشراء" : "عقار للإيجار")}
+          {r.unitType ?? t(r.purpose === "sale" ? "rq_any_sale" : "rq_any_rent")}
         </h2>
         <p className="text-[13px] text-muted-foreground">
-          {where} · {postedAgo(r.createdAt)}
+          {where} · {postedAgo(r.createdAt, locale)}
         </p>
         {r.notes ? (
           <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">{r.notes}</p>
@@ -313,7 +340,7 @@ function RequestRow({
             <Button size="sm" variant="whatsapp" asChild>
               <a href={wa} target="_blank" rel="noreferrer">
                 <MessageCircle aria-hidden />
-                واتساب
+                {t("card_whatsapp")}
               </a>
             </Button>
           ) : null}
@@ -321,7 +348,7 @@ function RequestRow({
             <Button size="sm" variant="outline" asChild>
               <a href={tel}>
                 <Phone aria-hidden />
-                اتصال
+                {t("card_call")}
               </a>
             </Button>
           ) : null}
@@ -329,11 +356,11 @@ function RequestRow({
       ) : staff ? null : (
         <Link
           to="/auth"
-          title="بيانات التواصل تظهر لموظفي المكاتب المسجَّلين فقط"
+          title={t("rq_offices_only_hint")}
           className="flex h-9 items-center gap-1.5 border border-border px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
         >
           <Lock className="size-3.5" aria-hidden />
-          للمكاتب فقط
+          {t("rq_offices_only")}
         </Link>
       )}
     </article>
@@ -341,7 +368,8 @@ function RequestRow({
 }
 
 /** «أضف طلبك» — public, no sign-in; the server function enforces validation and the rate limit. */
-function RequestForm() {
+function RequestForm({ locale }: { locale: Locale }) {
+  const t = (key: TranslationKey) => tf(locale, key);
   const id = useId();
   const queryClient = useQueryClient();
   const [sent, setSent] = useState(false);
@@ -353,17 +381,19 @@ function RequestForm() {
   const [district, setDistrict] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
   const [notes, setNotes] = useState("");
-  const [touched, setTouched] = useState({ phone: false, budget: false });
+  const [touched, setTouched] = useState({ name: false, phone: false, budget: false });
 
   const mobile = parseSaudiMobile(phone);
   const budgetValue = parseAmount(budgetMax);
-  const phoneError = mobile ? null : "أدخل رقم جوال سعودي صحيح، مثل 0501234567";
+  const nameError = fullName.trim().length < 2 ? t("req_name_short") : null;
+  const phoneError = mobile ? null : t("ld_req_phone_invalid");
   const budgetError =
     budgetValue === null
-      ? "اكتب الميزانية بالأرقام فقط"
+      ? t("ld_req_budget_invalid")
       : budgetValue !== undefined && budgetValue > MAX_BUDGET
-        ? "الميزانية أكبر من الحد المسموح"
+        ? t("ld_req_budget_max")
         : null;
+  const showNameError = touched.name && fullName.trim() !== "" && nameError;
   const showPhoneError = touched.phone && phone.trim() !== "" && phoneError;
   const showBudgetError = touched.budget && budgetError;
 
@@ -375,7 +405,7 @@ function RequestForm() {
     setDistrict("");
     setBudgetMax("");
     setNotes("");
-    setTouched({ phone: false, budget: false });
+    setTouched({ name: false, phone: false, budget: false });
   };
 
   const submit = useMutation({
@@ -397,7 +427,7 @@ function RequestForm() {
       setSent(true);
       void queryClient.invalidateQueries({ queryKey: ["market-requests-public"] });
     },
-    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر نشر الطلب")),
+    onError: (e: Error) => toast.error(userErrorMessage(e, t("rq_send_error"))),
   });
 
   if (sent) {
@@ -406,12 +436,10 @@ function RequestForm() {
         <span className="grid size-10 place-items-center bg-success text-success-foreground">
           <Check className="size-[22px]" aria-hidden />
         </span>
-        <p className="text-lg font-bold">نُشر طلبك</p>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          سيبقى مفتوحًا ٤٥ يومًا في السوق، وتتواصل معك المكاتب والملّاك المهتمون مباشرة.
-        </p>
+        <p className="text-lg font-bold">{t("rq_sent_title")}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{t("rq_sent_body")}</p>
         <Button variant="link" className="h-auto w-fit px-0" onClick={() => setSent(false)}>
-          أضف طلبًا آخر
+          {t("rq_send_another")}
         </Button>
       </div>
     );
@@ -422,19 +450,21 @@ function RequestForm() {
       className="flex flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault();
-        setTouched({ phone: true, budget: true });
-        if (phoneError || budgetError) return;
+        setTouched({ name: true, phone: true, budget: true });
+        if (nameError || phoneError || budgetError) return;
         submit.mutate();
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <h2 className="text-xl font-bold">أضف طلبك</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          بدون تسجيل. يراه كل مكاتب وملّاك «جارك»، وليس مكتبًا واحدًا فقط.
-        </p>
+        <h2 className="text-xl font-bold">{t("rq_add")}</h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">{t("rq_form_hint")}</p>
       </div>
 
-      <div role="radiogroup" aria-label="أبحث عن" className="flex border-[1.5px] border-foreground">
+      <div
+        role="radiogroup"
+        aria-label={t("ld_req_looking_for")}
+        className="flex border-[1.5px] border-foreground"
+      >
         {PURPOSE_OPTIONS.map((o) => (
           <button
             key={o.value}
@@ -448,20 +478,28 @@ function RequestForm() {
                 : "bg-card text-foreground hover:bg-muted"
             }`}
           >
-            {o.label}
+            {t(o.key)}
           </button>
         ))}
       </div>
 
-      <Field id={`${id}-name`} label="الاسم">
+      <Field id={`${id}-name`} label={t("rq_name")}>
         <Input
           id={`${id}-name`}
           autoComplete="name"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, name: true }))}
+          aria-invalid={showNameError ? true : undefined}
+          aria-describedby={showNameError ? `${id}-name-error` : undefined}
         />
+        {showNameError ? (
+          <p id={`${id}-name-error`} className="text-xs text-destructive">
+            {nameError}
+          </p>
+        ) : null}
       </Field>
-      <Field id={`${id}-phone`} label="رقم الجوال">
+      <Field id={`${id}-phone`} label={t("ld_req_phone")}>
         <Input
           id={`${id}-phone`}
           dir="ltr"
@@ -481,19 +519,19 @@ function RequestForm() {
           </p>
         ) : null}
       </Field>
-      <Field id={`${id}-type`} label="نوع الوحدة">
+      <Field id={`${id}-type`} label={t("rq_type")}>
         <select
           id={`${id}-type`}
           className={SELECT_CLASS}
           value={unitType}
           onChange={(e) => setUnitType(e.target.value)}
         >
-          <option value="">اختر النوع</option>
+          <option value="">{t("ld_req_type_ph")}</option>
           {PROPERTY_TYPE_GROUPS.map((g) => (
             <optgroup key={g.group} label={g.group}>
-              {g.types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {g.types.map((type) => (
+                <option key={type} value={type}>
+                  {type}
                 </option>
               ))}
             </optgroup>
@@ -502,7 +540,7 @@ function RequestForm() {
       </Field>
       <Field
         id={`${id}-budget`}
-        label={purpose === "sale" ? "أقصى ميزانية للشراء (ريال)" : "أقصى إيجار سنوي (ريال)"}
+        label={t(purpose === "sale" ? "rq_budget_sale" : "rq_budget_rent")}
       >
         <Input
           id={`${id}-budget`}
@@ -522,10 +560,10 @@ function RequestForm() {
         ) : null}
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field id={`${id}-city`} label="المدينة">
+        <Field id={`${id}-city`} label={t("rq_city")}>
           <Input id={`${id}-city`} value={city} onChange={(e) => setCity(e.target.value)} />
         </Field>
-        <Field id={`${id}-district`} label="الحي المفضّل">
+        <Field id={`${id}-district`} label={t("rq_district")}>
           <Input
             id={`${id}-district`}
             value={district}
@@ -533,7 +571,7 @@ function RequestForm() {
           />
         </Field>
       </div>
-      <Field id={`${id}-notes`} label="تفاصيل إضافية (عدد الغرف، المواصفات…)">
+      <Field id={`${id}-notes`} label={t("rq_notes")}>
         <Textarea
           id={`${id}-notes`}
           rows={3}
@@ -546,13 +584,11 @@ function RequestForm() {
         type="submit"
         size="lg"
         className="mt-1 w-full"
-        disabled={submit.isPending || fullName.trim().length < 2 || !phone.trim()}
+        disabled={submit.isPending || !fullName.trim() || !phone.trim()}
       >
-        {submit.isPending ? "جارٍ النشر…" : "نشر الطلب"}
+        {t(submit.isPending ? "rq_submitting" : "rq_submit")}
       </Button>
-      <p className="text-xs text-muted-foreground">
-        لا يظهر اسمك أو رقمك للعموم — تراه المكاتب المسجّلة فقط. حد أقصى ٣ طلبات في الساعة لكل رقم.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("rq_privacy")}</p>
     </form>
   );
 }

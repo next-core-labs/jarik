@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { formatDistance, formatNumber, tf } from "@/components/listing-detail/format";
-import { translate, type Locale } from "@/lib/i18n";
+import { langSearch, translate, type Locale } from "@/lib/i18n";
 import { distanceMeters } from "@/lib/map-markers";
 import { listingPrice, listingTitle, type Listing } from "@/lib/market";
 import { mediaUrl } from "@/lib/unit-photos";
@@ -28,6 +28,7 @@ export function SimilarCard({
     <Link
       to="/unit/$unitId"
       params={{ unitId: l.id }}
+      search={langSearch(locale)}
       className="flex flex-col gap-2 bg-card p-2 shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow hover:shadow-[inset_0_0_0_2px_var(--color-foreground)] focus-visible:shadow-[inset_0_0_0_2px_var(--color-foreground)] focus-visible:outline-none"
     >
       <div className="h-[120px] overflow-hidden rounded-arch bg-muted">

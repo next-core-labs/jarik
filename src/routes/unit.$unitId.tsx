@@ -17,9 +17,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useFavorites } from "@/lib/favorites";
 import { isNativeApp, nativeShare } from "@/lib/native";
-import { translate, useLocale } from "@/lib/i18n";
+import { langSearch, localeFromSearch, translate, useLocale } from "@/lib/i18n";
 import { trackListingEvent } from "@/lib/office-tools.functions";
-import { sar, shortDate } from "@/lib/format";
+import { publicDate, publicNum, publicSar } from "@/lib/format";
 import {
   listingLocation,
   listingPrice,
@@ -140,27 +140,42 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
 }
 
 export const Route = createFileRoute("/unit/$unitId")({
-  staticData: { sitemap: false },
+  staticData: { sitemap: false, publicLocale: true },
   loader: ({ params }) => loadUnitPage(params.unitId),
-  head: ({ loaderData, params }) => {
+  head: ({ loaderData, params, match }) => {
+    const en = localeFromSearch(match.search) === "en";
     if (loaderData?.status !== "ok") {
+      const title = en ? "Property listing — Jarak" : "عرض عقاري — جارك";
+      const description = en
+        ? "Browse the property listings on Jarak."
+        : "تصفح العروض العقارية المتاحة على جارك.";
       return {
         meta: [
-          { title: "عرض عقاري — جارك" },
-          { name: "description", content: "تصفح العروض العقارية المتاحة على جارك." },
+          { title },
+          { name: "description", content: description },
           { name: "robots", content: "noindex" },
-          { property: "og:title", content: "عرض عقاري — جارك" },
-          { property: "og:description", content: "تصفح العروض العقارية المتاحة على جارك." },
+          { property: "og:title", content: title },
+          { property: "og:description", content: description },
           { property: "og:type", content: "website" },
           { name: "twitter:card", content: "summary" },
         ],
       };
     }
     const { listing: l, photos } = loaderData;
-    const title = `${listingTitle(l)} — جارك`;
-    const description = `${sar(listingPrice(l))}${PRICE_SUFFIX[l.purpose] ? " سنويًا" : ""}${l.rooms != null ? ` · ${l.rooms} غرف` : ""}${
-      l.area ? ` · ${l.area} م²` : ""
-    }${listingLocation(l) ? ` · ${listingLocation(l)}` : ""}. ${l.office.name}.`;
+    const title = `${listingTitle(l)} — ${en ? "Jarak" : "جارك"}`;
+    const facts = [
+      `${publicSar(listingPrice(l), en ? "en" : "ar")}${
+        PRICE_SUFFIX[l.purpose] ? (en ? " / year" : " سنويًا") : ""
+      }`,
+      l.rooms != null ? `${publicNum(l.rooms)} ${en ? "rooms" : "غرف"}` : null,
+      l.area ? `${publicNum(l.area)} ${en ? "m²" : "م²"}` : null,
+      listingLocation(l) || null,
+    ].filter(Boolean);
+    const description = `${facts.join(" · ")}. ${l.office.name}.`;
+    // The address the page itself shows (listingLocation): street and district, and the city.
+    const streetAddress = [l.street, l.district ? `حي ${l.district}` : null]
+      .filter(Boolean)
+      .join("، ");
     const image = photos[0] ?? l.coverPath;
     const url = `https://jarak-ksa.com/unit/${encodeURIComponent(params.unitId)}`;
     return {
@@ -193,6 +208,16 @@ export const Route = createFileRoute("/unit/$unitId")({
                 ? { floorSize: { "@type": "QuantitativeValue", value: l.area, unitCode: "MTK" } }
                 : {}),
               ...(image ? { image: mediaUrl(image) } : {}),
+              ...(streetAddress || l.office.city
+                ? {
+                    address: {
+                      "@type": "PostalAddress",
+                      ...(streetAddress ? { streetAddress } : {}),
+                      ...(l.office.city ? { addressLocality: l.office.city } : {}),
+                      addressCountry: "SA",
+                    },
+                  }
+                : {}),
               offers: {
                 "@type": "Offer",
                 price: listingPrice(l),
@@ -236,7 +261,7 @@ function UnitPublic() {
   useTrackSiteVisit("/unit/$unitId");
   const data = Route.useLoaderData();
   const router = useRouter();
-  const [locale, setLocale] = useLocale();
+  const [locale] = useLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   const unitId = data.status === "ok" ? data.listing.id : null;
@@ -258,7 +283,7 @@ function UnitPublic() {
         lang={locale}
         className="min-h-screen bg-background"
       >
-        <SiteHeader locale={locale} onLocaleChange={setLocale} />
+        <SiteHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
           <h1 className="font-display text-2xl font-bold">
             {data.status === "error"
@@ -285,7 +310,9 @@ function UnitPublic() {
               </Button>
             ) : null}
             <Button asChild>
-              <Link to="/">{locale === "en" ? "Back to the market" : "العودة إلى سوق العروض"}</Link>
+              <Link to="/" search={langSearch(locale)}>
+                {locale === "en" ? "Back to the market" : "العودة إلى سوق العروض"}
+              </Link>
             </Button>
           </div>
         </main>
@@ -342,7 +369,7 @@ function UnitPublic() {
   const moreFacts = [
     l.floorNo ? `${t("info_floor")}: ${l.floorNo}` : null,
     l.halls > 0 ? `${t("info_halls")}: ${num(l.halls)}` : null,
-    l.createdAt ? `${t("info_added")}: ${shortDate(l.createdAt)}` : null,
+    l.createdAt ? `${t("info_added")}: ${publicDate(l.createdAt, locale)}` : null,
   ].filter(Boolean);
   const features = [
     ...l.amenities,
@@ -364,11 +391,12 @@ function UnitPublic() {
 
   return (
     <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
-      <SiteHeader locale={locale} onLocaleChange={setLocale} />
+      <SiteHeader />
       <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 pt-5 pb-28 sm:px-5 lg:pb-16">
         <div className="flex items-center justify-between gap-3">
           <Link
             to="/"
+            search={langSearch(locale)}
             className="flex items-center gap-1.5 text-[15px] font-semibold underline-offset-4 hover:underline"
           >
             <ArrowLeft className="size-[18px] rtl:rotate-180" aria-hidden />

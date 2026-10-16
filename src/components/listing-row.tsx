@@ -12,16 +12,9 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { sar } from "@/lib/format";
-import {
-  listingLocation,
-  listingPrice,
-  listingTitle,
-  phoneHref,
-  whatsappHref,
-  type Listing,
-} from "@/lib/market";
-import { PRICE_SUFFIX, PURPOSE_LABEL } from "@/lib/property-types";
+import { langSearch, translate, type Locale } from "@/lib/i18n";
+import { listingLocation, listingTitle, phoneHref, whatsappHref, type Listing } from "@/lib/market";
+import { priceParts } from "@/lib/market-format";
 import { brandingUrl, mediaUrl } from "@/lib/unit-photos";
 
 /** The message a visitor sends to the advertiser from a listing (includes the link to it). */
@@ -56,10 +49,16 @@ export function Avatar({
 export function ListingRow({
   listing: l,
   showAdvertiser = true,
+  locale = "ar",
 }: {
   listing: Listing;
   showAdvertiser?: boolean;
+  locale?: Locale;
 }) {
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const search = langSearch(locale);
+  // Same price form as the market cards: Western digits, «ر.س / سنوياً» or «مليون ر.س».
+  const [price, priceUnit] = priceParts(l, locale);
   const cover = l.coverPath ? mediaUrl(l.coverPath) : null;
   const advertiserName = l.owner?.name || l.office.name;
   const advertiserImage = l.owner?.avatarPath
@@ -81,6 +80,7 @@ export function ListingRow({
       <Link
         to="/unit/$unitId"
         params={{ unitId: l.id }}
+        search={search}
         className="relative mx-2.5 mt-2.5 block aspect-[16/10] overflow-hidden rounded-arch bg-muted sm:aspect-[16/9]"
         aria-label={title}
       >
@@ -94,17 +94,19 @@ export function ListingRow({
         ) : (
           <span className="grid size-full place-content-center justify-items-center gap-1 px-3 text-center text-muted-foreground">
             <ImageOff className="size-9 opacity-50" aria-hidden />
-            <span className="text-xs">لا توجد صور لهذا العرض</span>
+            <span className="text-xs">{t("card_no_photos")}</span>
           </span>
         )}
         <span className="absolute start-2.5 bottom-2.5 flex flex-wrap gap-1">
           {/* Red is reserved for price, the primary action and the "available" mark — the rent/sale
               purpose label is neither, so both read in ink/plaster, distinguished by text only. */}
           <Badge className="bg-brass text-brass-foreground hover:bg-brass">
-            {PURPOSE_LABEL[l.purpose]}
+            {t(l.purpose === "rent" ? "tab_rent" : "tab_sale")}
           </Badge>
           {l.furnished ? (
-            <Badge className="bg-card/90 text-card-foreground hover:bg-card/90">مؤثثة</Badge>
+            <Badge className="bg-card/90 text-card-foreground hover:bg-card/90">
+              {t("filter_furnished_yes")}
+            </Badge>
           ) : null}
         </span>
         {/* The advertiser's mark rides on the photo, so it is visible without reading the card. */}
@@ -128,33 +130,29 @@ export function ListingRow({
 
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="font-display text-2xl font-bold">
-            {sar(listingPrice(l))}
-            {PRICE_SUFFIX[l.purpose] ? (
-              <span className="ms-1 text-sm font-normal text-muted-foreground">
-                {PRICE_SUFFIX[l.purpose]}
-              </span>
-            ) : null}
+          <p className="font-display text-2xl font-bold tabular-nums">
+            {price}
+            <span className="ms-1 text-sm font-normal text-muted-foreground">{priceUnit}</span>
           </p>
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             {l.rooms != null ? (
               <span className="inline-flex items-center gap-1">
                 <BedDouble className="size-4" aria-hidden />
                 {l.rooms}
-                <span className="sr-only">غرف</span>
+                <span className="sr-only">{t("info_rooms")}</span>
               </span>
             ) : null}
             {l.bathrooms > 0 ? (
               <span className="inline-flex items-center gap-1">
                 <Bath className="size-4" aria-hidden />
                 {l.bathrooms}
-                <span className="sr-only">حمامات</span>
+                <span className="sr-only">{t("info_bathrooms")}</span>
               </span>
             ) : null}
             {l.area ? (
               <span className="inline-flex items-center gap-1">
                 <Ruler className="size-4" aria-hidden />
-                {l.area} م²
+                {l.area} {t("unit_sqm")}
               </span>
             ) : null}
           </div>
@@ -164,6 +162,7 @@ export function ListingRow({
           <Link
             to="/unit/$unitId"
             params={{ unitId: l.id }}
+            search={search}
             className="text-foreground underline underline-offset-4 hover:text-red-text"
           >
             {title}
@@ -182,13 +181,13 @@ export function ListingRow({
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-2">
-          {showAdvertiser ? <Advertiser l={l} /> : <span />}
+          {showAdvertiser ? <Advertiser l={l} locale={locale} /> : <span />}
           <div className="flex gap-2">
             {tel ? (
               <Button size="sm" variant="outline" asChild>
                 <a href={tel}>
                   <Phone className="size-4" aria-hidden />
-                  اتصال
+                  {t("card_call")}
                 </a>
               </Button>
             ) : null}
@@ -196,7 +195,7 @@ export function ListingRow({
               <Button size="sm" variant="whatsapp" asChild>
                 <a href={wa} target="_blank" rel="noreferrer">
                   <MessageCircle className="size-4" aria-hidden />
-                  واتساب
+                  {t("card_whatsapp")}
                 </a>
               </Button>
             ) : null}
@@ -208,7 +207,7 @@ export function ListingRow({
 }
 
 /** Who is advertising: the owner's page when the office published one, otherwise the office. */
-function Advertiser({ l }: { l: Listing }) {
+function Advertiser({ l, locale }: { l: Listing; locale: Locale }) {
   const owner = l.owner;
   const name = owner?.name || l.office.name;
   const image = owner?.avatarPath
@@ -223,7 +222,7 @@ function Advertiser({ l }: { l: Listing }) {
         <span className="block max-w-48 truncate font-medium">{name}</span>
         {owner ? (
           <span className="block max-w-48 truncate text-xs text-muted-foreground">
-            عبر {l.office.name}
+            {translate(locale, "via_name").replace("{name}", l.office.name)}
           </span>
         ) : null}
       </span>
@@ -231,14 +230,24 @@ function Advertiser({ l }: { l: Listing }) {
   );
   if (owner) {
     return (
-      <Link to="/owner/$ownerId" params={{ ownerId: owner.id }} className="hover:underline">
+      <Link
+        to="/owner/$ownerId"
+        params={{ ownerId: owner.id }}
+        search={langSearch(locale)}
+        className="hover:underline"
+      >
         {content}
       </Link>
     );
   }
   if (l.office.id) {
     return (
-      <Link to="/office/$officeId" params={{ officeId: l.office.id }} className="hover:underline">
+      <Link
+        to="/office/$officeId"
+        params={{ officeId: l.office.id }}
+        search={langSearch(locale)}
+        className="hover:underline"
+      >
         {content}
       </Link>
     );
