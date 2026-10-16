@@ -6,12 +6,14 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { localeFromSearch } from "@/lib/i18n";
 import { initNativeApp } from "@/lib/native";
 import { markRouterMounted } from "@/lib/router-mount";
 
@@ -106,8 +108,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  // English only on the public pages that support it (?lang=en); everything else stays Arabic RTL.
+  const en = useRouterState({
+    select: (s) =>
+      localeFromSearch(s.location.search) === "en" &&
+      s.matches.some((m) => m.staticData?.publicLocale),
+  });
   return (
-    <html lang="ar" dir="rtl">
+    <html lang={en ? "en" : "ar"} dir={en ? "ltr" : "rtl"}>
       <head>
         <HeadContent />
       </head>

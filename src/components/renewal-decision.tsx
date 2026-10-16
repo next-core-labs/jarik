@@ -85,7 +85,6 @@ export function RenewalDecision() {
 
   const soon = data.leases.filter((l) => daysUntil(l.end_date) <= 90);
   const pending = soon.filter((l) => !data.requests.some((r) => r.lease_id === l.id));
-  const decided = soon.filter((l) => data.requests.some((r) => r.lease_id === l.id));
 
   if (soon.length === 0 && data.leases.every((l) => !Number(l.deposit))) {
     // لا عقد قارب على الانتهاء ولا وديعة معلّقة — نوضّح متى يظهر خيار التجديد/الإخلاء بدل ما
@@ -112,7 +111,7 @@ export function RenewalDecision() {
       <CardContent className="space-y-3">
         {soon.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            لا يوجد عقد قارب على الانتهاء خلال 90 يومًا.
+            خيارات التجديد أو الإخلاء تظهر هنا قبل 90 يومًا من نهاية عقدك.
           </p>
         ) : null}
         {soon.map((l) => {
@@ -185,19 +184,16 @@ export function RenewalDecision() {
             </div>
           );
         })}
-        {decided.length === 0 && soon.length === 0 && data.leases.length > 0 ? (
-          <p className="text-sm text-muted-foreground">
-            ودائع عقودك تظهر هنا مع حالتها (محجوزة / مستردة / مخصومة).
-          </p>
-        ) : null}
         {soon.length === 0 && data.leases.some((l) => Number(l.deposit)) ? (
           <div className="space-y-2">
             {data.leases
               .filter((l) => Number(l.deposit))
               .map((l) => (
                 <p key={l.id} className="text-sm text-muted-foreground">
-                  {l.units?.properties?.name} · وحدة {l.units?.unit_number} — وديعة {sar(l.deposit)}{" "}
-                  ({depositLabel[l.deposit_status] ?? l.deposit_status})
+                  {[l.units?.properties?.name, l.units ? `وحدة ${l.units.unit_number}` : null]
+                    .filter(Boolean)
+                    .join(" · ")}{" "}
+                  — وديعة {sar(l.deposit)} ({depositLabel[l.deposit_status] ?? l.deposit_status})
                   {l.deposit_note ? ` · ${l.deposit_note}` : ""}
                 </p>
               ))}

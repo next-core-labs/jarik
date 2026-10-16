@@ -224,7 +224,7 @@ function Properties() {
                         {p.city} {p.district ? `· ${p.district}` : ""} · {p.property_type}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{all.length} وحدة</Badge>
                       <Badge>{occupied} مشغولة</Badge>
                       {isStaff ? (
@@ -350,16 +350,20 @@ function Properties() {
                                 })
                               }
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label="إسناد الوحدة لمالك">
                                 <SelectValue placeholder="إسناد الوحدة لمالك" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">بدون مالك</SelectItem>
-                                {(clients.data ?? []).map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.fullName || c.email}
-                                  </SelectItem>
-                                ))}
+                                {/* Owner accounts only (not staff, tenants or technicians); a unit
+                                    already assigned to someone else keeps that option visible. */}
+                                {(clients.data ?? [])
+                                  .filter((c) => c.roles.includes("owner") || c.id === u.owner_id)
+                                  .map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.fullName || c.email}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                             <Button

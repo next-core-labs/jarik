@@ -18,20 +18,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { submitDemoRequest } from "@/lib/demo-requests.functions";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { toLatinDigits } from "@/lib/saudi-id";
 
 const EMPTY = { fullName: "", phone: "", officeName: "", city: "", unitsCount: "", notes: "" };
 const NO_TOUCH = { fullName: false, phone: false, unitsCount: false };
 
-// Same rules as submitDemoRequest's validator, so the form explains a refusal before sending.
+// At least as strict as submitDemoRequest's validator (the phone must be a Saudi mobile), so the
+// form explains a refusal before sending.
 function problems(form: typeof EMPTY) {
-  const phone = toLatinDigits(form.phone.trim());
+  const phone = form.phone.trim();
   const units = toLatinDigits(form.unitsCount.trim());
   return {
     fullName: form.fullName.trim().length < 2 ? "اكتب اسمك (حرفان على الأقل)" : null,
     phone: !phone
       ? "أدخل رقم الجوال"
-      : /^[0-9+\s-]{9,15}$/.test(phone)
+      : parseSaudiMobile(phone)
         ? null
         : "رقم الجوال غير صحيح — مثال: 05XXXXXXXX",
     unitsCount:
@@ -56,7 +58,7 @@ export function DemoRequestDialog({ trigger }: { trigger: ReactNode }) {
       submit({
         data: {
           fullName: form.fullName,
-          phone: toLatinDigits(form.phone.trim()),
+          phone: parseSaudiMobile(form.phone) ?? form.phone.trim(),
           officeName: form.officeName || undefined,
           city: form.city || undefined,
           unitsCount: form.unitsCount ? Number(toLatinDigits(form.unitsCount)) : undefined,

@@ -1,4 +1,5 @@
 import { daysBetween, todayRiyadh } from "@/lib/dates";
+import type { Locale } from "@/lib/i18n";
 
 /** Whole riyals when the amount is whole, halalas (up to 2 decimals) when it is not. */
 export function sar(amount: number | null | undefined) {
@@ -22,6 +23,30 @@ export function shortDate(value: string | null | undefined) {
     day: "numeric",
     timeZone: "Asia/Riyadh",
   });
+}
+
+/**
+ * The public marketplace (listings, offices, requests) prints Western digits (0–9) in both Arabic
+ * and English — the design system's rule, and what the market cards and listing pages already show.
+ * The signed-in app keeps sar()/arNum() above.
+ */
+export function publicNum(n: number, opts: Intl.NumberFormatOptions = {}) {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 0, ...opts });
+}
+
+/** A price on the public site: «65,000 ر.س» / «65,000 SAR». */
+export function publicSar(amount: number | null | undefined, locale: Locale) {
+  const value = publicNum(Number(amount ?? 0), { maximumFractionDigits: 2 });
+  return `${value} ${locale === "en" ? "SAR" : "ر.س"}`;
+}
+
+/** A date on the public site: «16 أكتوبر 2026» / «16 Oct 2026», pinned to Riyadh like shortDate. */
+export function publicDate(value: string | null | undefined, locale: Locale) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString(
+    locale === "en" ? "en-GB" : "ar-SA-u-ca-gregory-nu-latn",
+    { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Riyadh" },
+  );
 }
 
 export const unitStatusLabel: Record<string, string> = {
@@ -94,11 +119,37 @@ export function arPct(n: number) {
  * (وحدة شاغرة، وحدتان شاغرتان), 3–10 take the plural (٣ وحدات), 11+ and 0 the singular accusative
  * or singular (١١ يومًا، ١١ وحدة).
  */
-export function arCount(n: number, forms: { one: string; two: string; few: string; many: string }) {
+export function arCount(
+  n: number,
+  forms: { one: string; two: string; few: string; many: string },
+  /** How the numeral is written — publicNum on the public site. */
+  num: (n: number) => string = arNum,
+) {
   const abs = Math.abs(Math.trunc(n));
   if (abs === 1) return forms.one;
   if (abs === 2) return forms.two;
-  return `${arNum(abs)} ${abs >= 3 && abs <= 10 ? forms.few : forms.many}`;
+  return `${num(abs)} ${abs >= 3 && abs <= 10 ? forms.few : forms.many}`;
+}
+
+/** A counted noun on the public site, Western digits: «12 عرضًا» / «12 listings». */
+export function publicCount(
+  n: number,
+  locale: Locale,
+  ar: { one: string; two: string; few: string; many: string },
+  en: { one: string; many: string },
+) {
+  if (locale === "en") return `${publicNum(n)} ${Math.abs(n) === 1 ? en.one : en.many}`;
+  return arCount(n, ar, publicNum);
+}
+
+/** «12 عرضًا» / «12 listings». */
+export function listingsCount(n: number, locale: Locale) {
+  return publicCount(
+    n,
+    locale,
+    { one: "عرض واحد", two: "عرضان", few: "عروض", many: "عرضًا" },
+    { one: "listing", many: "listings" },
+  );
 }
 
 /** A day count in correct Arabic number agreement: يوم واحد، يومان، ٣ أيام، ١١ يومًا. */

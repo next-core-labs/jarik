@@ -32,7 +32,8 @@ import {
 } from "@/components/ui/dialog";
 import { addDays } from "@/lib/dates";
 import { sar, shortDate, daysUntil } from "@/lib/format";
-import { settleDeposit } from "@/lib/office-tools.functions";
+import { depositSettleable, settleDeposit } from "@/lib/office-tools.functions";
+import { parseAmount } from "@/lib/public-form";
 import { suggestRent } from "@/lib/pricing.functions";
 
 export const Route = createFileRoute("/_authenticated/renewals")({
@@ -685,29 +686,48 @@ function RenewalRequestsSection() {
   );
 }
 
+type DepositLease = {
+  id: string;
+  deposit: number;
+  deposit_status: string;
+  deposit_note: string | null;
+  status: string;
+  end_date: string;
+  tenants: { full_name: string } | null;
+  units: { unit_number: string; properties: { name: string } | null } | null;
+};
+
 function DepositsSection() {
   const queryClient = useQueryClient();
   const settle = useServerFn(settleDeposit);
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [settling, setSettling] = useState<{
+    lease: DepositLease;
+    mode: "refunded" | "deducted";
+  } | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["deposit-leases"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leases")
         .select(
-          "id, deposit, deposit_status, deposit_note, tenants(full_name), units(unit_number, properties(name))",
+          "id, deposit, deposit_status, deposit_note, status, end_date, tenants(full_name), units(unit_number, properties(name))",
         )
         .gt("deposit", 0)
         .order("end_date");
       if (error) throw error;
-      return data;
+      return data as DepositLease[];
     },
   });
 
   const settleMut = useMutation({
-    mutationFn: (payload: { leaseId: string; status: "refunded" | "deducted"; note?: string }) =>
-      settle({ data: payload }),
+    mutationFn: (payload: {
+      leaseId: string;
+      status: "refunded" | "deducted";
+      note?: string;
+      deductedAmount?: number;
+    }) => settle({ data: payload }),
     onSuccess: () => {
+      setSettling(null);
       toast.success("سُوّيت الوديعة وأُبلغ المستأجر");
       queryClient.invalidateQueries({ queryKey: ["deposit-leases"] });
     },
@@ -741,25 +761,13 @@ function DepositsSection() {
                 {l.deposit_note ? ` · ${l.deposit_note}` : ""}
               </Badge>
             </div>
-            {l.deposit_status === "held" ? (
+            {l.deposit_status !== "held" ? null : depositSettleable(l) ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <input
-                  className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-xs"
-                  placeholder="ملاحظة التسوية (أضرار، خصم جزئي…)"
-                  value={notes[l.id] ?? ""}
-                  onChange={(e) => setNotes((s) => ({ ...s, [l.id]: e.target.value }))}
-                />
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={settleMut.isPending}
-                  onClick={() =>
-                    settleMut.mutate({
-                      leaseId: l.id,
-                      status: "refunded",
-                      ...(notes[l.id] ? { note: notes[l.id] } : {}),
-                    })
-                  }
+                  onClick={() => setSettling({ lease: l, mode: "refunded" })}
                 >
                   استرداد كاملة
                 </Button>
@@ -767,21 +775,134 @@ function DepositsSection() {
                   size="sm"
                   variant="outline"
                   disabled={settleMut.isPending}
-                  onClick={() =>
-                    settleMut.mutate({
-                      leaseId: l.id,
-                      status: "deducted",
-                      ...(notes[l.id] ? { note: notes[l.id] } : {}),
-                    })
-                  }
+                  onClick={() => setSettling({ lease: l, mode: "deducted" })}
                 >
                   خصم من الوديعة
                 </Button>
               </div>
-            ) : null}
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                تُسوّى الوديعة بعد انتهاء العقد في {shortDate(l.end_date)}
+              </p>
+            )}
           </div>
         ))}
       </CardContent>
+      {settling ? (
+        <SettleDepositDialog
+          lease={settling.lease}
+          mode={settling.mode}
+          pending={settleMut.isPending}
+          onClose={() => setSettling(null)}
+          onConfirm={(payload) => settleMut.mutate({ leaseId: settling.lease.id, ...payload })}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+function SettleDepositDialog({
+  lease,
+  mode,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  lease: DepositLease;
+  mode: "refunded" | "deducted";
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (payload: {
+    status: "refunded" | "deducted";
+    note?: string;
+    deductedAmount?: number;
+  }) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const deposit = Number(lease.deposit) || 0;
+  const deducting = mode === "deducted";
+  const parsed = parseAmount(amount);
+  const amountError = !deducting
+    ? null
+    : parsed == null || parsed <= 0
+      ? amount.trim()
+        ? "أدخل مبلغًا صحيحًا"
+        : null
+      : parsed > deposit
+        ? `مبلغ الخصم أكبر من الوديعة (${sar(deposit)})`
+        : null;
+  const valid = !deducting || (parsed != null && parsed > 0 && !amountError && !!note.trim());
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{deducting ? "خصم من الوديعة" : "استرداد الوديعة كاملة"}</DialogTitle>
+          <DialogDescription>
+            {lease.tenants?.full_name ?? "—"} · {lease.units?.properties?.name ?? ""} وحدة{" "}
+            {lease.units?.unit_number ?? "—"} — الوديعة {sar(deposit)}. سيُبلَّغ المستأجر بعد
+            التأكيد، ولا يمكن التراجع.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          {deducting ? (
+            <div className="space-y-1">
+              <Label htmlFor="deduct-amount">مبلغ الخصم</Label>
+              <Input
+                id="deduct-amount"
+                dir="ltr"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                aria-invalid={!!amountError}
+              />
+              {amountError ? (
+                <p className="text-xs text-destructive">{amountError}</p>
+              ) : parsed != null && parsed > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  يُعاد للمستأجر {sar(deposit - parsed)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="space-y-1">
+            <Label htmlFor="deposit-note">
+              {deducting ? "سبب الخصم" : "ملاحظة التسوية (اختياري)"}
+            </Label>
+            <Input
+              id="deposit-note"
+              maxLength={200}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={deducting ? "أضرار في المطبخ، فاتورة كهرباء متأخرة…" : ""}
+              aria-describedby={deducting && !note.trim() ? "deposit-note-hint" : undefined}
+            />
+            {deducting && !note.trim() ? (
+              <p id="deposit-note-hint" className="text-xs text-muted-foreground">
+                اكتب سبب الخصم — يظهر للمستأجر في إشعار التسوية.
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            إلغاء
+          </Button>
+          <Button
+            disabled={!valid || pending}
+            onClick={() =>
+              onConfirm({
+                status: mode,
+                ...(note.trim() ? { note: note.trim() } : {}),
+                ...(deducting && parsed ? { deductedAmount: parsed } : {}),
+              })
+            }
+          >
+            {pending ? "جارٍ التسوية…" : deducting ? "تأكيد الخصم" : "تأكيد الاسترداد"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

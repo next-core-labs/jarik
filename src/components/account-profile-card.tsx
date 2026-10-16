@@ -114,12 +114,17 @@ export function AccountProfileCard() {
                 {(profile.data?.fullName || "?").trim().slice(0, 1) || "؟"}
               </AvatarFallback>
             </Avatar>
-            <label className="absolute -bottom-1 -end-1 flex size-6 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Camera className="size-3.5" />
+            {/* The input is visually hidden but still focusable, and named for screen readers. */}
+            <label
+              title="تغيير الصورة الشخصية"
+              className="absolute -bottom-1 -end-1 flex size-6 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+            >
+              <Camera className="size-3.5" aria-hidden />
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                className="hidden"
+                aria-label="تغيير الصورة الشخصية"
+                className="sr-only"
                 disabled={uploadPhoto.isPending}
                 onChange={(e) => {
                   const file = e.target.files?.[0];

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Eye, Gift, Handshake, MessageCircle, PieChart, Phone } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -90,7 +91,7 @@ function OfficeStats() {
       queryClient.invalidateQueries({ queryKey: ["office-stats"] });
       queryClient.invalidateQueries({ queryKey: ["deals", "with-vacant"] });
     },
-    onError: () => toast.error("تعذّر التحويل — الصلاحية للموظفين فقط"),
+    onError: (e) => toast.error(userErrorMessage(e, "تعذّر تحويل الوحدة إلى صفقة")),
   });
 
   const AD_PERFORMANCE_DAYS = 30;

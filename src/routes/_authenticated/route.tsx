@@ -52,10 +52,13 @@ export const Route = createFileRoute("/_authenticated")({
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
     // Keep the page the user asked for, so a deep link survives the login round-trip.
+    // Tenant and owner portal pages send a signed-out visitor to that portal's own sign-in, not
+    // the office one at /auth.
     if (!user) {
       const next = location.href;
-      if (firstLoad) return { user: null, bounce: { to: "/auth" as const, next } };
-      throw redirect({ to: "/auth", search: { next } });
+      const signIn = signInPathFor(location.pathname);
+      if (firstLoad) return { user: null, bounce: { to: signIn, next } };
+      throw redirect({ to: signIn, search: { next } });
     }
 
     // /hq also needs the delegation row: fetch it alongside the roles, not after them.
@@ -131,6 +134,14 @@ export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
 });
 
+function signInPathFor(path: string) {
+  return TENANT_PATHS.has(path)
+    ? ("/tenant/login" as const)
+    : OWNER_PATHS.has(path)
+      ? ("/owner/login" as const)
+      : ("/auth" as const);
+}
+
 type BounceTarget =
   "/dashboard" | "/owner-dashboard" | "/tenant-dashboard" | "/hq" | "/register-office" | "/portal";
 
@@ -139,8 +150,8 @@ function AuthenticatedLayout() {
   if (bounce) {
     return (
       <>
-        {bounce.to === "/auth" ? (
-          <Navigate to="/auth" search={{ next: bounce.next }} replace />
+        {"next" in bounce ? (
+          <Navigate to={bounce.to} search={{ next: bounce.next }} replace />
         ) : (
           <Navigate to={bounce.to} replace />
         )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label";
 import { bandPatternStyle } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 import { authErrorMessage, emailProblem, NETWORK_ERROR_AR } from "@/lib/auth-errors";
+import { digitsOnly } from "@/lib/saudi-id";
 import { resolvePostLoginPath } from "@/lib/portal-routing";
+import { safeNext } from "@/lib/safe-redirect";
 import { portalSignIn } from "@/lib/tenant-portal.functions";
 import type { AppRole } from "@/lib/use-role";
 
@@ -25,16 +27,22 @@ export function PortalLoginPage({
   heroTitle,
   heroBody,
   allowSelfRegister,
+  next,
 }: {
   title: string;
   heroTitle: string;
   heroBody: string;
   allowSelfRegister: boolean;
+  /** Where the route gate was sending the visitor before it asked them to sign in. */
+  next?: string | undefined;
 }) {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  // Until React has hydrated, a click would submit the bare form as a browser GET (no handler yet).
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const [step, setStep] = useState<null | "forgot" | "reset">(null);
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -51,6 +59,13 @@ export function PortalLoginPage({
       const { access_token, refresh_token } = await portalSignIn({ data: { email, password } });
       const { error } = await supabase.auth.setSession({ access_token, refresh_token });
       if (error) throw error;
+      // Back to the page that asked for the sign-in. Relative paths only (safeNext); if the account
+      // lacks the role for it, the route gate bounces it to the account's own home.
+      const target = safeNext(next);
+      if (target) {
+        window.location.href = target;
+        return;
+      }
       const { data: userData } = await supabase.auth.getUser();
       const { data: roleRows } = await supabase
         .from("user_roles")
@@ -107,7 +122,8 @@ export function PortalLoginPage({
     try {
       const { error: otpError } = await supabase.auth.verifyOtp({
         email,
-        token: code.replace(/\D/g, ""),
+        // digitsOnly reads Arabic-Indic digits too; a bare \D strip turned "١٢٣٤٥٦" into "".
+        token: digitsOnly(code),
         type: "recovery",
       });
       if (otpError) {
@@ -168,7 +184,7 @@ export function PortalLoginPage({
               >
                 نسيت كلمة المرور؟
               </button>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                 دخول
               </Button>
               {allowSelfRegister ? (
@@ -176,7 +192,7 @@ export function PortalLoginPage({
                   ما عندك حساب؟{" "}
                   <Link
                     to="/auth"
-                    search={{ next: "/owner-dashboard" }}
+                    search={{ next: safeNext(next) ?? "/owner-dashboard" }}
                     className="text-foreground underline underline-offset-4 hover:text-red-text"
                   >
                     سجّل حساب جديد
@@ -200,7 +216,7 @@ export function PortalLoginPage({
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                 أرسل الرمز
               </Button>
               <button
@@ -236,7 +252,7 @@ export function PortalLoginPage({
                 minLength={6}
                 autoComplete="new-password"
               />
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading || !hydrated}>
                 تغيير كلمة المرور
               </Button>
               <div className="flex justify-between text-sm">

@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 
 import { AdvertiserPage, type AdvertiserPageData } from "@/components/advertiser-page";
+import { tf } from "@/components/listing-detail/format";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { langSearch, localeFromSearch, useLocale } from "@/lib/i18n";
 import { toListing, type Listing } from "@/lib/market";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
 import { mediaUrl } from "@/lib/unit-photos";
@@ -51,18 +53,27 @@ async function loadOwnerPage(ownerId: string): Promise<OwnerPageResult> {
 }
 
 export const Route = createFileRoute("/owner/$ownerId")({
-  staticData: { sitemap: false },
+  staticData: { sitemap: false, publicLocale: true },
   loader: ({ params }) => loadOwnerPage(params.ownerId),
-  head: ({ loaderData, params }) => {
+  head: ({ loaderData, params, match }) => {
+    const locale = localeFromSearch(match.search);
     if (loaderData?.status !== "ok")
-      return { meta: [{ title: "صفحة مالك — جارك" }, { name: "robots", content: "noindex" }] };
+      return {
+        meta: [
+          { title: tf(locale, "meta_owner_missing_title") },
+          { name: "robots", content: "noindex" },
+        ],
+      };
     const { page } = loaderData;
-    const title = `${page.name} — عروض عقارية على جارك`;
+    const title = tf(locale, "meta_adv_title", { name: page.name });
     const url = `https://jarak-ksa.com/owner/${encodeURIComponent(params.ownerId)}`;
     return {
       meta: [
         { title },
-        { name: "description", content: page.bio?.slice(0, 160) ?? `عروض ${page.name} على جارك` },
+        {
+          name: "description",
+          content: page.bio?.slice(0, 160) ?? tf(locale, "meta_adv_desc", { name: page.name }),
+        },
         { property: "og:title", content: title },
         { property: "og:url", content: url },
         ...(page.imageUrl ? [{ property: "og:image", content: page.imageUrl }] : []),
@@ -77,27 +88,33 @@ function OwnerPage() {
   useTrackSiteVisit("/owner/$ownerId");
   const data = Route.useLoaderData();
   const router = useRouter();
+  const [locale] = useLocale();
   if (data.status !== "ok") {
+    const error = data.status === "error";
     return (
-      <div className="min-h-screen bg-background">
+      <div
+        dir={locale === "en" ? "ltr" : "rtl"}
+        lang={locale}
+        className="min-h-screen bg-background"
+      >
         <SiteHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
           <h1 className="font-display text-2xl font-bold">
-            {data.status === "error" ? "تعذّر تحميل الصفحة" : "هذه الصفحة غير متاحة"}
+            {tf(locale, error ? "page_error_title" : "owner_missing_title")}
           </h1>
           <p className="mt-2 text-muted-foreground">
-            {data.status === "error"
-              ? "تحقّق من الاتصال ثم أعد المحاولة."
-              : "قد لا تكون منشورة بعد."}
+            {tf(locale, error ? "results_error_body" : "owner_missing_body")}
           </p>
           <div className="mt-6 flex justify-center gap-2">
-            {data.status === "error" ? (
+            {error ? (
               <Button variant="outline" onClick={() => router.invalidate()}>
-                إعادة المحاولة
+                {tf(locale, "results_retry")}
               </Button>
             ) : null}
             <Button asChild>
-              <Link to="/">العودة إلى سوق العروض</Link>
+              <Link to="/" search={langSearch(locale)}>
+                {tf(locale, "back_market")}
+              </Link>
             </Button>
           </div>
         </main>

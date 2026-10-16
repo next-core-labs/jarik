@@ -3,6 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { escapeHtml } from "@/lib/escape-html";
+import { arNum } from "@/lib/format";
 import { occupancyColor, serviceSquareHtml } from "@/lib/map-markers";
 import { addBrandTiles, htmlIcon } from "@/lib/map-style";
 import type { NearbyPlace } from "@/lib/nearby-places.functions";
@@ -20,6 +21,7 @@ export type MapProperty = {
   occupied: number;
   vacant: number;
   sold: number;
+  /** Annual rent of the occupied units (the owner dashboard uses the lease's contracted rent). */
   rent: number;
 };
 
@@ -82,10 +84,11 @@ export default function UnitsMap({
         // Leaflet renders string popups with innerHTML, and name/city/district are user-entered.
         `<div dir="rtl" style="font-family:inherit"><b>${escapeHtml(p.name)}</b><br/>` +
           `${escapeHtml([p.city, p.district ? `حي ${p.district}` : null].filter(Boolean).join(" · "))}<br/>` +
-          `الوحدات: ${p.unitsCount} · مشغولة: ${p.occupied} · شاغرة: ${p.vacant}` +
-          (p.sold > 0 ? ` · مباعة: ${p.sold}` : "") +
+          `الوحدات: ${arNum(p.unitsCount)} · مشغولة: ${arNum(p.occupied)} · شاغرة: ${arNum(p.vacant)}` +
+          (p.sold > 0 ? ` · مباعة: ${arNum(p.sold)}` : "") +
           `<br/>` +
-          `إيجارات محصّلة سنويًا: ${Math.round(p.rent).toLocaleString("ar-SA")} ر.س</div>`,
+          // `rent` is the annual rent of the occupied units (what is due), not what was collected.
+          `الإيجار السنوي للوحدات المشغولة: ${arNum(Math.round(p.rent))} ر.س</div>`,
       );
       if (p.id) {
         const id = p.id;

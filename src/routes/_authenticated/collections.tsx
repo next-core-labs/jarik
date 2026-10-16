@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
-import { BellRing, CalendarClock, Download } from "lucide-react";
+import { BellRing, CalendarClock, Download, Search } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { remindPayments } from "@/lib/whatsapp-out.functions";
@@ -15,6 +16,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -23,8 +41,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addDays, effectiveStatus, todayRiyadh } from "@/lib/dates";
-import { sar, shortDate, paymentStatusLabel } from "@/lib/format";
+import { addDays, effectiveStatus, monthRange, todayRiyadh } from "@/lib/dates";
+import { arNum, sar, shortDate, paymentStatusLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/collections")({
   staticData: { sitemap: false },
@@ -39,8 +57,32 @@ export const Route = createFileRoute("/_authenticated/collections")({
   component: Collections,
 });
 
+const PAYMENT_METHODS = ["تحويل بنكي", "مدى", "نقدًا", "شيك"];
+
+type StatusFilter = "all" | "overdue" | "due" | "paid";
+type PeriodFilter = "all" | "this-month" | "last-month" | "next-month" | "this-year";
+
+/** Due-date bounds for a period filter (inclusive, YYYY-MM-DD), or null for no bound. */
+function periodBounds(period: PeriodFilter): { start: string; end: string } | null {
+  if (period === "this-month") return monthRange(0);
+  if (period === "last-month") return monthRange(-1);
+  if (period === "next-month") return monthRange(1);
+  if (period === "this-year") {
+    const year = todayRiyadh().slice(0, 4);
+    return { start: `${year}-01-01`, end: `${year}-12-31` };
+  }
+  return null;
+}
+
 function Collections() {
   const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [period, setPeriod] = useState<PeriodFilter>("all");
+  const [search, setSearch] = useState("");
+  // The payment waiting for the "record payment" confirmation, with the form for it.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [method, setMethod] = useState(PAYMENT_METHODS[0]!);
+  const [paidDate, setPaidDate] = useState(todayRiyadh());
   const sendReminders = useServerFn(remindPayments);
   const runSmart = useServerFn(runSmartReminders);
 
@@ -127,26 +169,30 @@ function Collections() {
   });
 
   const markPaid = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (v: { id: string; method: string; paidDate: string }) => {
       const { data: auth } = await supabase.auth.getUser();
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("payments")
         .update({
           status: "paid",
-          paid_date: todayRiyadh(),
+          paid_date: v.paidDate,
+          method: v.method,
           collected_by: auth.user?.id ?? null,
         })
-        .eq("id", id)
+        .eq("id", v.id)
         // Re-marking an already-paid payment would overwrite who collected it and when.
-        .neq("status", "paid");
+        .neq("status", "paid")
+        .select("id");
       if (error) throw error;
+      if (!updated?.length) throw new Error("سبق تسجيل سداد هذه الدفعة");
     },
     onSuccess: () => {
+      setConfirmId(null);
       toast.success("تم تسجيل السداد");
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: () => toast.error("تعذّر تسجيل السداد — الصلاحية للموظفين فقط"),
+    onError: (e) => toast.error(userErrorMessage(e, "تعذّر تسجيل السداد")),
   });
 
   if (isLoading || !data) {
@@ -176,6 +222,36 @@ function Collections() {
   );
   const reminderTargets = [...overdueList, ...dueSoonList].map((p) => p.id);
 
+  const bounds = periodBounds(period);
+  const query = search.trim().toLowerCase();
+  const visiblePayments = data.payments.filter((p) => {
+    const status = effectiveStatus(p, today);
+    if (statusFilter === "paid" && status !== "paid") return false;
+    if (statusFilter === "overdue" && status !== "overdue") return false;
+    if (statusFilter === "due" && (status === "paid" || status === "overdue")) return false;
+    if (bounds && (p.due_date < bounds.start || p.due_date > bounds.end)) return false;
+    if (query) {
+      const haystack = [
+        p.leases?.tenants?.full_name,
+        p.leases?.units?.unit_number,
+        p.leases?.units?.properties?.name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+  const filtered = statusFilter !== "all" || period !== "all" || query !== "";
+
+  const confirming = data.payments.find((p) => p.id === confirmId) ?? null;
+  const paidDateError = !paidDate
+    ? "اختر تاريخ السداد"
+    : paidDate > today
+      ? "تاريخ السداد لا يكون في المستقبل"
+      : null;
+
   type Payment = (typeof data.payments)[number];
   const paymentBadge = (p: Payment) => (
     <Badge
@@ -204,7 +280,11 @@ function Collections() {
         variant="outline"
         className={full ? "w-full" : undefined}
         disabled={markPaid.isPending}
-        onClick={() => markPaid.mutate(p.id)}
+        onClick={() => {
+          setMethod(p.transfer_reference ? "تحويل بنكي" : PAYMENT_METHODS[0]!);
+          setPaidDate(todayRiyadh());
+          setConfirmId(p.id);
+        }}
       >
         تسجيل السداد
       </Button>
@@ -236,7 +316,7 @@ function Collections() {
               onClick={() => remind.mutate(reminderTargets)}
             >
               <BellRing className="size-4" />
-              تذكيرات اليوم ({reminderTargets.length})
+              تذكيرات اليوم ({arNum(reminderTargets.length)})
             </Button>
           </div>
         }
@@ -261,7 +341,7 @@ function Collections() {
         <Card className="mt-6 border-destructive/40 shadow-deed">
           <CardHeader>
             <CardTitle className="text-base text-destructive">
-              المتأخرات — مرتبة من الأعلى مبلغًا ({overdueList.length})
+              المتأخرات — مرتبة من الأعلى مبلغًا ({arNum(overdueList.length)})
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -309,13 +389,65 @@ function Collections() {
       ) : null}
 
       <Card className="mt-6 shadow-deed">
-        <CardHeader>
-          <CardTitle className="text-base">الدفعات</CardTitle>
+        <CardHeader className="space-y-3">
+          <CardTitle className="text-base">
+            الدفعات
+            {filtered ? (
+              <span className="ms-2 text-sm font-normal text-muted-foreground">
+                ({arNum(visiblePayments.length)} من {arNum(data.payments.length)})
+              </span>
+            ) : null}
+          </CardTitle>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-48 flex-1">
+              <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ابحث باسم المستأجر أو الوحدة أو العقار"
+                aria-label="بحث في الدفعات"
+                className="ps-9"
+              />
+            </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+              >
+                <SelectTrigger className="flex-1 sm:w-36" aria-label="الحالة">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الحالات</SelectItem>
+                  <SelectItem value="overdue">متأخرة</SelectItem>
+                  <SelectItem value="due">مستحقة</SelectItem>
+                  <SelectItem value="paid">مدفوعة</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={period} onValueChange={(v) => setPeriod(v as PeriodFilter)}>
+                <SelectTrigger className="flex-1 sm:w-40" aria-label="فترة الاستحقاق">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الفترات</SelectItem>
+                  <SelectItem value="this-month">تستحق هذا الشهر</SelectItem>
+                  <SelectItem value="last-month">الشهر الماضي</SelectItem>
+                  <SelectItem value="next-month">الشهر القادم</SelectItem>
+                  <SelectItem value="this-year">هذه السنة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
+          {visiblePayments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {filtered ? "لا توجد دفعات تطابق البحث أو التصفية." : "لا توجد دفعات بعد."}
+            </p>
+          ) : null}
           {/* Phones: one card per payment instead of a six-column table. */}
           <ul className="divide-y divide-border md:hidden">
-            {data.payments.map((p) => (
+            {visiblePayments.map((p) => (
               <li key={p.id} className="flex flex-col gap-2 py-4 first:pt-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -348,7 +480,7 @@ function Collections() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.payments.map((p) => (
+                {visiblePayments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">
                       {p.leases?.tenants?.full_name ?? "—"}
@@ -417,6 +549,82 @@ function Collections() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!confirming} onOpenChange={(open) => !open && setConfirmId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تأكيد تسجيل السداد</DialogTitle>
+            <DialogDescription>
+              ستُسجَّل الدفعة كاملة كمدفوعة. راجع البيانات قبل التأكيد.
+            </DialogDescription>
+          </DialogHeader>
+          {confirming ? (
+            <div className="space-y-4 text-sm">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/50 p-3">
+                <dt className="text-muted-foreground">المستأجر</dt>
+                <dd className="font-medium">{confirming.leases?.tenants?.full_name ?? "—"}</dd>
+                <dt className="text-muted-foreground">الوحدة</dt>
+                <dd>
+                  {confirming.leases?.units?.properties?.name} ·{" "}
+                  {confirming.leases?.units?.unit_number ?? "—"}
+                </dd>
+                <dt className="text-muted-foreground">تاريخ الاستحقاق</dt>
+                <dd>{shortDate(confirming.due_date)}</dd>
+                <dt className="text-muted-foreground">المبلغ</dt>
+                <dd className="font-bold">{sar(confirming.amount)}</dd>
+              </dl>
+              {confirming.transfer_reference ? (
+                <p className="text-xs text-brass">
+                  المستأجر أبلغ عن تحويل: {confirming.transfer_reference}
+                </p>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="pay-method">طريقة السداد</Label>
+                  <Select value={method} onValueChange={setMethod}>
+                    <SelectTrigger id="pay-method">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="pay-date">تاريخ السداد</Label>
+                  <Input
+                    id="pay-date"
+                    type="date"
+                    dir="ltr"
+                    max={today}
+                    value={paidDate}
+                    onChange={(e) => setPaidDate(e.target.value)}
+                    aria-invalid={!!paidDateError}
+                  />
+                  {paidDateError ? (
+                    <p className="text-xs text-destructive">{paidDateError}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmId(null)}>
+              إلغاء
+            </Button>
+            <Button
+              disabled={!confirming || !!paidDateError || markPaid.isPending}
+              onClick={() => confirming && markPaid.mutate({ id: confirming.id, method, paidDate })}
+            >
+              {markPaid.isPending ? "جارٍ التسجيل…" : "تأكيد السداد"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

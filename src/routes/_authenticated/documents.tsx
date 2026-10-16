@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -106,6 +107,7 @@ function Documents() {
     mutationFn: async () => {
       setSaving(true);
       let path: string | null = null;
+      if (file && !isPdfOrImage(file)) throw new Error("الملف يجب أن يكون PDF أو صورة");
       if (file) {
         const ext = file.name.split(".").pop() ?? "pdf";
         path = `${propertyId}/${crypto.randomUUID()}.${ext}`;
@@ -132,7 +134,7 @@ function Documents() {
       setFile(null);
       queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
-    onError: () => toast.error("تعذّر حفظ الوثيقة — الصلاحية لموظفي المكتب"),
+    onError: (e) => toast.error(userErrorMessage(e, "تعذّر حفظ الوثيقة")),
     onSettled: () => setSaving(false),
   });
 
@@ -261,7 +263,18 @@ function Documents() {
               <Input
                 type="file"
                 accept="application/pdf,image/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                aria-label="ملف الوثيقة"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0] ?? null;
+                  // accept only filters the picker; "All files" or a drop still lets anything through.
+                  if (picked && !isPdfOrImage(picked)) {
+                    toast.error("الملف يجب أن يكون PDF أو صورة");
+                    e.target.value = "";
+                    setFile(null);
+                    return;
+                  }
+                  setFile(picked);
+                }}
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
@@ -315,4 +328,9 @@ function Documents() {
       </Card>
     </>
   );
+}
+
+function isPdfOrImage(file: File) {
+  if (file.type) return file.type === "application/pdf" || file.type.startsWith("image/");
+  return /\.(pdf|png|jpe?g|webp|gif|heic)$/i.test(file.name);
 }

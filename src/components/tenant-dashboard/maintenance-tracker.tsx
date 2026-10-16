@@ -12,12 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rateMaintenance } from "@/lib/portal-actions.functions";
-import { shortDate, maintenanceStatusLabel, priorityText } from "@/lib/format";
+import { arNum, shortDate, maintenanceStatusLabel, priorityText } from "@/lib/format";
 
 const STAGES = [
   { key: "received", label: "استُلم" },
   { key: "assigned", label: "تم تعيين فني" },
-  { key: "on_way", label: "في الطريق" },
+  { key: "in_progress", label: "جاري التنفيذ" },
   { key: "done", label: "تم" },
 ] as const;
 
@@ -110,7 +110,7 @@ function RatingPicker({ requestId, unitId }: { requestId: string; unitId: string
           <button
             key={n}
             type="button"
-            aria-label={`${n} من 5`}
+            aria-label={`تقييم ${arNum(n)} من ${arNum(5)}`}
             className="text-brass"
             onMouseEnter={() => setHovered(n)}
             onMouseLeave={() => setHovered(0)}

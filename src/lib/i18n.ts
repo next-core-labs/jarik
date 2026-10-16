@@ -1,5 +1,5 @@
-import { useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useRouter, useRouterState } from "@tanstack/react-router";
+import { useCallback, useEffect } from "react";
 
 export type Locale = "ar" | "en";
 
@@ -199,6 +199,110 @@ const DICT = {
     ld_req_phone_invalid: "أدخل رقم جوال سعودي صحيح، مثل 0501234567",
     ld_req_budget_invalid: "اكتب الميزانية بالأرقام فقط",
     ld_req_budget_max: "الميزانية أكبر من الحد المسموح",
+    // صفحات السوق العام الأخرى (المكاتب، صفحة المكتب/المالك، سوق الطلبات، الصفحات القانونية)
+    brand: "جارك",
+    meta_market_title: "جارك — سوق العروض العقارية",
+    meta_market_desc:
+      "كل العروض تحت سقفٍ واحد: وحدات شاغرة للإيجار من مكاتب ومُلّاك موثوقين، بصور حقيقية وأسعار واضحة، مع التواصل المباشر بالاتصال أو واتساب.",
+    meta_market_og_desc: "وحدات شاغرة للإيجار من مكاتب ومُلّاك موثوقين — صور حقيقية وأسعار واضحة.",
+    meta_offices_title: "دليل المكاتب العقارية — جارك",
+    meta_offices_desc:
+      "ابحث عن المكاتب العقارية في حيّك وشاهد شعار كل مكتب ورقم ترخيص فال ورقم جواله.",
+    meta_offices_og_desc: "مكاتب عقارية موثّقة بترخيص فال مع بيانات التواصل حسب الحي.",
+    meta_adv_title: "{name} — عروض عقارية على جارك",
+    meta_adv_desc: "عروض {name} على جارك",
+    meta_office_missing_title: "مكتب عقاري — جارك",
+    meta_office_missing_desc: "تصفح المكاتب العقارية على جارك.",
+    meta_owner_missing_title: "صفحة مالك — جارك",
+    meta_requests_title: "سوق الطلبات — جارك",
+    meta_requests_desc:
+      "زوّار يبحثون عن وحدة للإيجار أو الشراء وينشرون طلبهم هنا — يراه كل مكتب ومالك، بلا حصرية لمكتب واحد.",
+    meta_legal_desc: "{title} لمنصة جارك.",
+    back_market: "العودة إلى سوق العروض",
+    search_clear: "مسح البحث",
+    page_error_title: "تعذّر تحميل الصفحة",
+    fal_short: "فال {n}",
+    maint_quality: "جودة الصيانة {r}",
+    via_name: "عبر {name}",
+    legal_ar_only: "",
+    offices_title: "المكاتب العقارية",
+    offices_subtitle: "مكاتب موثّقة برخصة فال — ابحث بالحي أو المدينة أو اسم المكتب.",
+    offices_search_ph: "ابحث بالحي أو المدينة أو اسم المكتب",
+    offices_search_aria: "بحث في المكاتب",
+    offices_near: "المكاتب القريبة مني",
+    offices_near_on: "الأقرب إليك أولًا",
+    offices_geo_unsupported: "متصفحك لا يدعم تحديد الموقع",
+    offices_geo_denied: "تعذّر تحديد موقعك — ابحث باسم الحي بدلًا من ذلك",
+    offices_empty_all: "لا توجد مكاتب مدرجة بعد",
+    offices_empty_all_hint: "ستظهر هنا المكاتب الموثّقة برخصة فال فور إدراجها.",
+    offices_empty_match: "لا توجد مكاتب مطابقة لبحثك",
+    offices_empty_match_hint: "جرّب اسم حي أو مدينة أخرى، أو جزءًا من اسم المكتب.",
+    offices_distance: "يبعد {d}",
+    offices_no_listings: "لا عروض حاليًا",
+    offices_all_listings: "كل عروض المكتب",
+    adv_kind_office: "مكتب عقاري",
+    adv_kind_owner: "مالك",
+    adv_tab_offers: "العروض",
+    adv_tab_about: "نبذة تعريفية",
+    adv_search_ph: "ابحث في عروض هذا المعلن (الحي، النوع…)",
+    adv_search_aria: "بحث في العروض",
+    adv_empty_none: "لا توجد عروض فعّالة حاليًا",
+    adv_empty_none_hint: "ستظهر هنا عروض {name} فور نشرها.",
+    adv_empty_match: "لا توجد عروض مطابقة",
+    adv_empty_match_hint: "جرّب كلمة أخرى، مثل اسم الحي أو نوع الوحدة.",
+    adv_browse_all: "تصفّح كل العروض",
+    adv_types: "أنواع العقارات",
+    adv_areas: "مناطق العمل",
+    adv_location: "الموقع",
+    adv_no_bio: "لم تتم إضافة نبذة بعد.",
+    office_missing_title: "هذا المكتب غير متاح",
+    office_missing_body: "قد لا يعرض المكتب عروضه علنًا.",
+    owner_missing_title: "هذه الصفحة غير متاحة",
+    owner_missing_body: "قد لا تكون منشورة بعد.",
+    rq_title: "سوق الطلبات",
+    rq_intro:
+      "ما يبحث عنه الناس الآن. تُعرض الطلبات المفتوحة لآخر 45 يومًا بدون أسماء أو أرقام، والتواصل متاح للمكاتب المسجّلة فقط.",
+    rq_signin: "سجّل دخولك كمكتب",
+    rq_add: "أضف طلبك",
+    rq_rent: "إيجار",
+    rq_buy: "شراء",
+    rq_filter_aria: "نوع الطلب",
+    rq_search_ph: "ابحث بالحي أو النوع…",
+    rq_search_aria: "بحث في الطلبات",
+    rq_none: "لا طلبات",
+    rq_error: "تعذّر تحميل الطلبات",
+    rq_empty_all: "لا توجد طلبات منشورة حاليًا",
+    rq_empty_all_hint: "كن أول من ينشر طلبه — تراه كل المكاتب والملّاك في جارك.",
+    rq_empty_match: "لا توجد طلبات مطابقة",
+    rq_empty_match_hint: "جرّب كلمة أخرى أو نوع طلب مختلف.",
+    rq_any_district: "أي حي",
+    rq_any_sale: "عقار للشراء",
+    rq_any_rent: "عقار للإيجار",
+    rq_today: "اليوم",
+    rq_yesterday: "أمس",
+    rq_two_days: "منذ يومين",
+    rq_days_ago: "منذ {n}",
+    rq_offices_only: "للمكاتب فقط",
+    rq_offices_only_hint: "بيانات التواصل تظهر لموظفي المكاتب المسجَّلين فقط",
+    rq_budget_upto: "حتى {v}",
+    rq_budget_from: "من {v}",
+    rq_form_hint: "بدون تسجيل. يراه كل مكاتب وملّاك «جارك»، وليس مكتبًا واحدًا فقط.",
+    rq_name: "الاسم",
+    rq_type: "نوع الوحدة",
+    rq_budget_sale: "أقصى ميزانية للشراء (ريال)",
+    rq_budget_rent: "أقصى إيجار سنوي (ريال)",
+    rq_city: "المدينة",
+    rq_district: "الحي المفضّل",
+    rq_notes: "تفاصيل إضافية (عدد الغرف، المواصفات…)",
+    rq_submit: "نشر الطلب",
+    rq_submitting: "جارٍ النشر…",
+    rq_privacy:
+      "لا يظهر اسمك أو رقمك للعموم — تراه المكاتب المسجّلة فقط. حد أقصى 3 طلبات في الساعة لكل رقم.",
+    rq_sent_title: "نُشر طلبك",
+    rq_sent_body: "سيبقى مفتوحًا 45 يومًا في السوق، وتتواصل معك المكاتب والملّاك المهتمون مباشرة.",
+    rq_send_another: "أضف طلبًا آخر",
+    rq_send_error: "تعذّر نشر الطلب",
+    req_name_short: "اكتب اسمك (حرفان على الأقل)",
   },
   en: {
     nav_market: "Market",
@@ -392,53 +496,184 @@ const DICT = {
     ld_req_phone_invalid: "Enter a valid Saudi mobile number, e.g. 0501234567",
     ld_req_budget_invalid: "Enter the budget in digits only",
     ld_req_budget_max: "The budget is above the allowed limit",
+    // صفحات السوق العام الأخرى (المكاتب، صفحة المكتب/المالك، سوق الطلبات، الصفحات القانونية)
+    brand: "Jarak",
+    meta_market_title: "Jarak — the property listings market",
+    meta_market_desc:
+      "Every listing in one place: vacant homes to rent and buy from trusted offices and owners, with real photos, clear prices and direct contact by call or WhatsApp.",
+    meta_market_og_desc:
+      "Vacant homes from trusted offices and owners — real photos, clear prices.",
+    meta_offices_title: "Real estate office directory — Jarak",
+    meta_offices_desc:
+      "Find real estate offices in your district, with each office's logo, FAL licence and phone number.",
+    meta_offices_og_desc:
+      "FAL-licensed real estate offices with their contact details, by district.",
+    meta_adv_title: "{name} — property listings on Jarak",
+    meta_adv_desc: "Listings by {name} on Jarak",
+    meta_office_missing_title: "Real estate office — Jarak",
+    meta_office_missing_desc: "Browse real estate offices on Jarak.",
+    meta_owner_missing_title: "Owner page — Jarak",
+    meta_requests_title: "Requests market — Jarak",
+    meta_requests_desc:
+      "People looking to rent or buy post what they need here — every office and owner sees it, not just one.",
+    meta_legal_desc: "{title} — Jarak.",
+    back_market: "Back to the market",
+    search_clear: "Clear search",
+    page_error_title: "Couldn't load the page",
+    fal_short: "FAL {n}",
+    maint_quality: "Maintenance quality {r}",
+    via_name: "via {name}",
+    legal_ar_only: "This page is available in Arabic only.",
+    offices_title: "Real estate offices",
+    offices_subtitle: "Verified, FAL-licensed offices — search by district, city or office name.",
+    offices_search_ph: "Search by district, city or office name",
+    offices_search_aria: "Search offices",
+    offices_near: "Offices near me",
+    offices_near_on: "Nearest first",
+    offices_geo_unsupported: "Your browser can't share your location",
+    offices_geo_denied: "Couldn't get your location — search by district instead",
+    offices_empty_all: "No offices listed yet",
+    offices_empty_all_hint:
+      "Verified, FAL-licensed offices will appear here as soon as they're listed.",
+    offices_empty_match: "No offices match your search",
+    offices_empty_match_hint: "Try another district or city, or part of the office name.",
+    offices_distance: "{d} away",
+    offices_no_listings: "No listings right now",
+    offices_all_listings: "All of this office's listings",
+    adv_kind_office: "Real estate office",
+    adv_kind_owner: "Owner",
+    adv_tab_offers: "Listings",
+    adv_tab_about: "About",
+    adv_search_ph: "Search this advertiser's listings (district, type…)",
+    adv_search_aria: "Search listings",
+    adv_empty_none: "No active listings right now",
+    adv_empty_none_hint: "Listings by {name} will appear here as soon as they're published.",
+    adv_empty_match: "No matching listings",
+    adv_empty_match_hint: "Try another word, like a district or unit type.",
+    adv_browse_all: "Browse all listings",
+    adv_types: "Property types",
+    adv_areas: "Areas served",
+    adv_location: "Location",
+    adv_no_bio: "No description added yet.",
+    office_missing_title: "This office isn't available",
+    office_missing_body: "The office may not show its listings publicly.",
+    owner_missing_title: "This page isn't available",
+    owner_missing_body: "It may not be published yet.",
+    rq_title: "Requests market",
+    rq_intro:
+      "What people are looking for right now. Open requests from the last 45 days are shown without names or numbers; only registered offices can contact them.",
+    rq_signin: "Sign in as an office",
+    rq_add: "Add your request",
+    rq_rent: "Rent",
+    rq_buy: "Buy",
+    rq_filter_aria: "Request type",
+    rq_search_ph: "Search by district or type…",
+    rq_search_aria: "Search requests",
+    rq_none: "No requests",
+    rq_error: "Couldn't load the requests",
+    rq_empty_all: "No requests posted right now",
+    rq_empty_all_hint: "Be the first to post — every office and owner on Jarak will see it.",
+    rq_empty_match: "No matching requests",
+    rq_empty_match_hint: "Try another word or request type.",
+    rq_any_district: "Any district",
+    rq_any_sale: "Property to buy",
+    rq_any_rent: "Property to rent",
+    rq_today: "Today",
+    rq_yesterday: "Yesterday",
+    rq_two_days: "2 days ago",
+    rq_days_ago: "{n} ago",
+    rq_offices_only: "Offices only",
+    rq_offices_only_hint: "Contact details are shown to registered office staff only",
+    rq_budget_upto: "Up to {v}",
+    rq_budget_from: "From {v}",
+    rq_form_hint:
+      "No sign-up needed. Every office and owner on Jarak sees it, not just one office.",
+    rq_name: "Name",
+    rq_type: "Unit type",
+    rq_budget_sale: "Maximum purchase budget (SAR)",
+    rq_budget_rent: "Maximum annual rent (SAR)",
+    rq_city: "City",
+    rq_district: "Preferred district",
+    rq_notes: "More details (rooms, features…)",
+    rq_submit: "Post request",
+    rq_submitting: "Posting…",
+    rq_privacy:
+      "Your name and number are never public — only registered offices see them. Up to 3 requests an hour per number.",
+    rq_sent_title: "Your request is posted",
+    rq_sent_body:
+      "It stays open for 45 days, and interested offices and owners will contact you directly.",
+    rq_send_another: "Add another request",
+    rq_send_error: "Couldn't post the request",
+    req_name_short: "Enter your name (at least 2 letters)",
   },
 } as const;
 
 export type TranslationKey = keyof (typeof DICT)["ar"];
 
+declare module "@tanstack/react-router" {
+  interface StaticDataRouteOption {
+    /** A public page that renders in English under ?lang=en — <html lang/dir> follow it there. */
+    publicLocale?: boolean;
+  }
+}
+
 function asLocale(v: unknown): Locale | null {
   return v === "en" || v === "ar" ? v : null;
 }
 
+/** The locale a URL's search asks for (?lang=en), Arabic otherwise. Usable in route head()s. */
+export function localeFromSearch(search: unknown): Locale {
+  return asLocale((search as Record<string, unknown> | null | undefined)?.["lang"]) ?? "ar";
+}
+
+/** Search params for a link that keeps an English visitor in English. */
+export function langSearch(locale: Locale): { lang?: "en" } {
+  return locale === "en" ? { lang: "en" } : {};
+}
+
 /**
- * لغة صفحات السوق العام فقط — لا تلمس dir/lang على <html> إطلاقًا (تبقى لوحة التحكم الداخلية
- * RTL بالكامل بلا أي أثر)، الصفحة نفسها تضبط dir محليًا على عنصرها الجذر.
- *
- * أول رسم يعتمد على ?lang= فقط، ويقرؤه الخادم والمتصفح من حالة الراوتر نفسها — فيطابق HTML الخادم
- * أول رسم بالمتصفح (لا hydration error)، ورابط ?lang=en يصل للزاحف والمعاينة بالإنجليزي. اختيار
- * الزائر المحفوظ في localStorage يُطبَّق بعد التركيب فقط، ولا يطغى على ?lang الصريح.
+ * لغة صفحات السوق العام (الصفحات التي تحمل staticData.publicLocale). المصدر الوحيد هو ?lang= في
+ * الرابط، ويقرؤه الخادم والمتصفح من حالة الراوتر نفسها — فيطابق HTML الخادم أول رسم بالمتصفح
+ * (لا hydration error)، ورابط ?lang=en يصل للزاحف والمعاينة بالإنجليزي، و<html lang/dir> يتبعه
+ * (__root.tsx). اختيار الزائر المحفوظ في localStorage يُطبَّق بعد التركيب بإضافة ?lang=en للرابط،
+ * ولا يطغى على ?lang الصريح.
  */
 export function useLocale(): [Locale, (l: Locale) => void] {
+  const router = useRouter();
   const fromUrl = useRouterState({
     select: (s) => asLocale((s.location.search as Record<string, unknown>)["lang"]),
   });
-  const [chosen, setChosen] = useState<Locale | null>(null);
+
+  const setUrlLocale = useCallback(
+    (l: Locale) =>
+      void router.navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, lang: l === "en" ? "en" : undefined }),
+        replace: true,
+        resetScroll: false,
+      }),
+    [router],
+  );
 
   useEffect(() => {
     if (fromUrl) return;
     try {
-      const stored = asLocale(localStorage.getItem(STORAGE_KEY));
-      if (stored) setChosen(stored);
+      if (localStorage.getItem(STORAGE_KEY) === "en") setUrlLocale("en");
     } catch {
       // localStorage معطّل (متصفح خاص) — العربية افتراضيًا
     }
-  }, [fromUrl]);
+  }, [fromUrl, setUrlLocale]);
 
   const setLocale = (l: Locale) => {
-    setChosen(l);
     try {
       localStorage.setItem(STORAGE_KEY, l);
     } catch {
       // تجاهل
     }
-    const url = new URL(window.location.href);
-    if (l === "en") url.searchParams.set("lang", "en");
-    else url.searchParams.delete("lang");
-    window.history.replaceState(window.history.state, "", url.toString());
+    setUrlLocale(l);
   };
 
-  return [chosen ?? fromUrl ?? "ar", setLocale];
+  return [fromUrl ?? "ar", setLocale];
 }
 
 export function translate(locale: Locale, key: TranslationKey): string {

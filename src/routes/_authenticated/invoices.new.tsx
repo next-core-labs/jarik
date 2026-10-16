@@ -22,6 +22,8 @@ import {
 import { todayRiyadh } from "@/lib/dates";
 import { arPct, sar2, shortDate } from "@/lib/format";
 import { parseAmount } from "@/lib/public-form";
+import { toLatinDigits } from "@/lib/saudi-id";
+import { validateImageFile } from "@/lib/unit-photos";
 import { addVat, buildZatcaQrPayload, splitVat, validateZatcaInvoice } from "@/lib/zatca";
 import { downloadElementAsPdf } from "@/lib/pdf";
 import { useOrgBranding } from "@/lib/use-org-branding";
@@ -158,6 +160,13 @@ function NewInvoice() {
     };
   }, [issued]);
 
+  // The seller VAT number prints on every ZATCA invoice: 15 digits, starting and ending with 3.
+  const vatDraft = toLatinDigits(vatNumberInput ?? org.data?.vat_number ?? "").replace(/\s/g, "");
+  const vatDraftError =
+    vatDraft && !/^3\d{13}3$/.test(vatDraft)
+      ? "الرقم الضريبي 15 رقمًا يبدأ وينتهي بـ3 — مثال: 300000000000003"
+      : null;
+
   const saveBranding = useMutation({
     mutationFn: async (patch: {
       vat_number?: string | null;
@@ -166,6 +175,7 @@ function NewInvoice() {
       logo_url?: string;
     }) => {
       if (!org.data) throw new Error("لا توجد إعدادات منشأة");
+      if (patch.vat_number !== undefined && vatDraftError) throw new Error(vatDraftError);
       const { error } = await supabase.from("org_settings").update(patch).eq("id", org.data.id);
       if (error) throw error;
     },
@@ -179,6 +189,8 @@ function NewInvoice() {
   const uploadLogo = useMutation({
     mutationFn: async (file: File) => {
       if (!org.data) throw new Error("لا توجد إعدادات منشأة");
+      const problem = validateImageFile(file);
+      if (problem) throw new Error(problem);
       const ext = file.name.split(".").pop()?.toLowerCase() || "png";
       // The branding bucket only accepts files inside the office's own folder.
       const path = `${org.data.id}/logo-${Date.now()}.${ext}`;
@@ -443,13 +455,19 @@ function NewInvoice() {
               <p className="font-medium">بيانات المنشأة على الفاتورة</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label>الرقم الضريبي</Label>
+                  <Label htmlFor="seller-vat">الرقم الضريبي</Label>
                   <Input
+                    id="seller-vat"
                     dir="ltr"
+                    inputMode="numeric"
                     value={vatNumberInput ?? org.data?.vat_number ?? ""}
                     onChange={(e) => setVatNumberInput(e.target.value)}
                     placeholder="300000000000003"
+                    aria-invalid={Boolean(vatDraftError)}
                   />
+                  {vatDraftError ? (
+                    <p className="mt-1 text-xs text-destructive">{vatDraftError}</p>
+                  ) : null}
                 </div>
                 <div>
                   <Label>السجل التجاري</Label>
@@ -474,10 +492,10 @@ function NewInvoice() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={saveBranding.isPending}
+                  disabled={saveBranding.isPending || Boolean(vatDraftError)}
                   onClick={() =>
                     saveBranding.mutate({
-                      vat_number: (vatNumberInput ?? org.data?.vat_number ?? "").trim() || null,
+                      vat_number: vatDraft || null,
                       cr_number: (crNumberInput ?? org.data?.cr_number ?? "").trim() || null,
                       office_code: (officeCodeInput ?? org.data?.office_code ?? "").trim() || null,
                     })
@@ -490,6 +508,7 @@ function NewInvoice() {
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   className="hidden"
+                  aria-label="شعار المنشأة على الفاتورة"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) uploadLogo.mutate(file);

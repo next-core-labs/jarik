@@ -14,9 +14,11 @@ const Progress = React.forwardRef<
     className={cn("relative h-2 w-full overflow-hidden rounded-full bg-primary/20", className)}
     {...props}
   >
+    {/* A width from the inline start, not translateX(-…%): the translate always filled from the
+        left, which is backwards in RTL. A block's width follows the page direction on its own. */}
     <ProgressPrimitive.Indicator
-      className="h-full w-full flex-1 bg-primary transition-all"
-      style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+      className="h-full bg-primary transition-all"
+      style={{ width: `${Math.min(100, Math.max(0, value || 0))}%` }}
     />
   </ProgressPrimitive.Root>
 ));

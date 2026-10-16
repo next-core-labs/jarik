@@ -2,13 +2,15 @@ import { Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { MapPin, MessageCircle, Phone, Search } from "lucide-react";
 
+import { tf } from "@/components/listing-detail/format";
 import { Avatar, ListingRow } from "@/components/listing-row";
 import { ArchEmptyState, SquareLogo, VerifiedMark } from "@/components/public/identity";
 import { SiteHeader, bandPatternStyle } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { arCount, arNum } from "@/lib/format";
+import { listingsCount, publicCount, publicNum } from "@/lib/format";
+import { langSearch, useLocale, type Locale, type TranslationKey } from "@/lib/i18n";
 import {
   defaultFilters,
   filterListings,
@@ -39,8 +41,13 @@ export type AdvertiserPageData = {
   ratingsCount?: number | null;
 };
 
-const offersCount = (n: number) =>
-  arCount(n, { one: "عرض واحد", two: "عرضان", few: "عروض", many: "عرضًا" });
+const ratingsCount = (n: number, locale: Locale) =>
+  publicCount(
+    n,
+    locale,
+    { one: "تقييم واحد", two: "تقييمان", few: "تقييمات", many: "تقييمًا" },
+    { one: "rating", many: "ratings" },
+  );
 
 /** Public page of an office or an owner: ink cover band, identity strip, and their active offers. */
 export function AdvertiserPage({
@@ -50,6 +57,8 @@ export function AdvertiserPage({
   page: AdvertiserPageData;
   listings: Listing[];
 }) {
+  const [locale] = useLocale();
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) => tf(locale, key, vars);
   const [text, setText] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const shown = useMemo(
@@ -67,8 +76,8 @@ export function AdvertiserPage({
   const verified = isOffice;
   const showRating = page.avgRating != null && (page.ratingsCount ?? 0) >= 3;
   const idLine = [
-    isOffice ? "مكتب عقاري" : "مالك",
-    page.licenseNo ? `فال ${page.licenseNo}` : null,
+    t(isOffice ? "adv_kind_office" : "adv_kind_owner"),
+    page.licenseNo ? t("fal_short", { n: page.licenseNo }) : null,
     page.location,
   ]
     .filter(Boolean)
@@ -78,7 +87,7 @@ export function AdvertiserPage({
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
       <SiteHeader />
 
       {/* Cover: the office's own banner when it has one, otherwise the ink band with the oversized
@@ -116,7 +125,9 @@ export function AdvertiserPage({
                   </h1>
                   <p className="text-sm text-muted-foreground tabular-nums">{idLine}</p>
                   {page.publishedBy ? (
-                    <p className="text-[13px] text-muted-foreground">عبر {page.publishedBy}</p>
+                    <p className="text-[13px] text-muted-foreground">
+                      {t("via_name", { name: page.publishedBy })}
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -124,13 +135,10 @@ export function AdvertiserPage({
               <div className="flex flex-col gap-3 md:items-end">
                 {showRating ? (
                   <span className="inline-flex h-7 w-fit items-center bg-success-tint px-2.5 text-[13px] font-semibold text-success-tint-foreground">
-                    جودة الصيانة {page.avgRating} ·{" "}
-                    {arCount(page.ratingsCount ?? 0, {
-                      one: "تقييم واحد",
-                      two: "تقييمان",
-                      few: "تقييمات",
-                      many: "تقييمًا",
-                    })}
+                    {t("maint_quality", {
+                      r: publicNum(page.avgRating ?? 0, { maximumFractionDigits: 1 }),
+                    })}{" "}
+                    · {ratingsCount(page.ratingsCount ?? 0, locale)}
                   </span>
                 ) : null}
                 {tel || wa ? (
@@ -139,7 +147,7 @@ export function AdvertiserPage({
                       <Button variant="whatsapp" asChild className={tel ? undefined : "col-span-2"}>
                         <a href={wa} target="_blank" rel="noreferrer">
                           <MessageCircle aria-hidden />
-                          واتساب
+                          {t("card_whatsapp")}
                         </a>
                       </Button>
                     ) : null}
@@ -147,7 +155,7 @@ export function AdvertiserPage({
                       <Button variant="outline" asChild className={wa ? undefined : "col-span-2"}>
                         <a href={tel}>
                           <Phone aria-hidden />
-                          اتصال
+                          {t("card_call")}
                         </a>
                       </Button>
                     ) : null}
@@ -158,9 +166,10 @@ export function AdvertiserPage({
 
             <TabsList className="w-full border-b-0">
               <TabsTrigger value="offers">
-                العروض <span className="tabular-nums">({arNum(listings.length)})</span>
+                {t("adv_tab_offers")}{" "}
+                <span className="tabular-nums">({publicNum(listings.length)})</span>
               </TabsTrigger>
-              <TabsTrigger value="about">نبذة تعريفية</TabsTrigger>
+              <TabsTrigger value="about">{t("adv_tab_about")}</TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -175,49 +184,53 @@ export function AdvertiserPage({
                 />
                 <Input
                   className="ps-9"
-                  placeholder="ابحث في عروض هذا المعلن (الحي، النوع…)"
+                  placeholder={t("adv_search_ph")}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  aria-label="بحث في العروض"
+                  aria-label={t("adv_search_aria")}
                 />
               </div>
               <select
-                aria-label="الترتيب"
+                aria-label={t("filter_sort")}
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortKey)}
                 className="h-11 border border-input bg-card px-3 text-[15px] focus-visible:border-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none"
               >
-                <option value="newest">الأحدث</option>
-                <option value="price-asc">الأقل سعرًا</option>
-                <option value="price-desc">الأعلى سعرًا</option>
-                <option value="area-desc">الأكبر مساحة</option>
+                <option value="newest">{t("sort_newest")}</option>
+                <option value="price-asc">{t("sort_price_asc")}</option>
+                <option value="price-desc">{t("sort_price_desc")}</option>
+                <option value="area-desc">{t("sort_area_desc")}</option>
               </select>
             </div>
 
             {shown.length === 0 ? (
               <ArchEmptyState
-                title={listings.length === 0 ? "لا توجد عروض فعّالة حاليًا" : "لا توجد عروض مطابقة"}
+                title={t(listings.length === 0 ? "adv_empty_none" : "adv_empty_match")}
                 hint={
                   listings.length === 0
-                    ? `ستظهر هنا عروض ${page.name} فور نشرها.`
-                    : "جرّب كلمة أخرى، مثل اسم الحي أو نوع الوحدة."
+                    ? t("adv_empty_none_hint", { name: page.name })
+                    : t("adv_empty_match_hint")
                 }
               >
                 {text ? (
                   <Button variant="outline" onClick={() => setText("")}>
-                    مسح البحث
+                    {t("search_clear")}
                   </Button>
                 ) : null}
                 <Button asChild variant={text ? "ghost" : "outline"}>
-                  <Link to="/">تصفّح كل العروض</Link>
+                  <Link to="/" search={langSearch(locale)}>
+                    {t("adv_browse_all")}
+                  </Link>
                 </Button>
               </ArchEmptyState>
             ) : (
               <>
-                <p className="mb-3 text-sm text-muted-foreground">{offersCount(shown.length)}</p>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {listingsCount(shown.length, locale)}
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {shown.map((l) => (
-                    <ListingRow key={l.id} listing={l} showAdvertiser={false} />
+                    <ListingRow key={l.id} listing={l} showAdvertiser={false} locale={locale} />
                   ))}
                 </div>
               </>
@@ -234,12 +247,12 @@ export function AdvertiserPage({
                   {page.propertyTypes || page.areas || page.location || page.licenseNo ? (
                     <dl className="grid gap-4 border-t border-border pt-5 text-[15px] sm:grid-cols-2">
                       {page.propertyTypes ? (
-                        <Row label="أنواع العقارات" value={page.propertyTypes} />
+                        <Row label={t("adv_types")} value={page.propertyTypes} />
                       ) : null}
-                      {page.areas ? <Row label="مناطق العمل" value={page.areas} /> : null}
+                      {page.areas ? <Row label={t("adv_areas")} value={page.areas} /> : null}
                       {page.location ? (
                         <Row
-                          label="الموقع"
+                          label={t("adv_location")}
                           value={
                             <span className="flex items-start gap-1.5">
                               <MapPin
@@ -253,7 +266,7 @@ export function AdvertiserPage({
                       ) : null}
                       {page.licenseNo ? (
                         <Row
-                          label="رخصة فال"
+                          label={t("ld_adv_license")}
                           value={
                             <span dir="ltr" className="tabular-nums">
                               {page.licenseNo}
@@ -265,7 +278,7 @@ export function AdvertiserPage({
                   ) : null}
                 </div>
               ) : (
-                <p className="text-muted-foreground">لم تتم إضافة نبذة بعد.</p>
+                <p className="text-muted-foreground">{t("adv_no_bio")}</p>
               )}
             </div>
           </TabsContent>

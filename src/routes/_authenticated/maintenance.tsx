@@ -57,6 +57,10 @@ function Maintenance() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  // Inline errors of the cost and visit-time fields, keyed `${requestId}-cost` / `${requestId}-at`.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const setFieldError = (key: string, message: string | null) =>
+    setFieldErrors(({ [key]: _old, ...rest }) => (message ? { ...rest, [key]: message } : rest));
   const { org } = useOrgBranding();
   const threshold = Number(org.data?.owner_approval_threshold ?? 2000);
 
@@ -387,10 +391,13 @@ function Maintenance() {
                               لا يوجد فنيون بعد — أضف فنيًا من «فريق المكتب».
                             </p>
                           ) : null}
-                          <label className="text-xs text-muted-foreground">
+                          <label htmlFor={`cost-${m.id}`} className="text-xs text-muted-foreground">
                             التكلفة المقدّرة (تحتاج موافقة المالك فوق {sar(capFor(m.unit_id))})
                           </label>
                           <input
+                            id={`cost-${m.id}`}
+                            min={0}
+                            aria-invalid={Boolean(fieldErrors[`${m.id}-cost`])}
                             // Uncontrolled: re-mount when the saved cost changes (e.g. a refetch after
                             // a colleague's edit) so the field shows the server value, not a stale one.
                             key={`${m.id}-${m.cost ?? ""}`}
@@ -400,6 +407,12 @@ function Maintenance() {
                             defaultValue={Number(m.cost) || ""}
                             onBlur={(e) => {
                               const v = Number(e.target.value || 0);
+                              // A number input reports text it can't parse as "" (badInput).
+                              if (e.target.validity.badInput || !Number.isFinite(v) || v < 0) {
+                                setFieldError(`${m.id}-cost`, "التكلفة رقم بالريال، 0 أو أكثر");
+                                return;
+                              }
+                              setFieldError(`${m.id}-cost`, null);
                               if (v !== Number(m.cost)) {
                                 saveCost.mutate({
                                   id: m.id,
@@ -412,8 +425,21 @@ function Maintenance() {
                               }
                             }}
                           />
-                          <label className="text-xs text-muted-foreground">موعد الزيارة</label>
+                          {fieldErrors[`${m.id}-cost`] ? (
+                            <p className="text-xs text-destructive">
+                              {fieldErrors[`${m.id}-cost`]}
+                            </p>
+                          ) : null}
+                          <label
+                            htmlFor={`visit-${m.id}`}
+                            className="text-xs text-muted-foreground"
+                          >
+                            موعد الزيارة
+                          </label>
                           <input
+                            id={`visit-${m.id}`}
+                            min={toDatetimeLocalValue(new Date().toISOString())}
+                            aria-invalid={Boolean(fieldErrors[`${m.id}-at`])}
                             // Uncontrolled: re-mount when the saved time changes (e.g. after the
                             // smart schedule) so the field shows the server value.
                             key={`${m.id}-${m.scheduled_at ?? ""}`}
@@ -423,11 +449,26 @@ function Maintenance() {
                             defaultValue={toDatetimeLocalValue(m.scheduled_at)}
                             onBlur={(e) => {
                               const v = e.target.value;
-                              if (v !== toDatetimeLocalValue(m.scheduled_at)) {
-                                schedule.mutate({ id: m.id, at: v });
+                              if (v === toDatetimeLocalValue(m.scheduled_at)) {
+                                setFieldError(`${m.id}-at`, null);
+                                return;
                               }
+                              // Compared as instants, so it is "now" in Riyadh whatever the
+                              // viewer's time zone; a minute of slack for the time spent typing.
+                              if (v && new Date(v).getTime() < Date.now() - 60_000) {
+                                setFieldError(
+                                  `${m.id}-at`,
+                                  "اختر موعدًا قادمًا — لا يمكن جدولة زيارة في الماضي",
+                                );
+                                return;
+                              }
+                              setFieldError(`${m.id}-at`, null);
+                              schedule.mutate({ id: m.id, at: v });
                             }}
                           />
+                          {fieldErrors[`${m.id}-at`] ? (
+                            <p className="text-xs text-destructive">{fieldErrors[`${m.id}-at`]}</p>
+                          ) : null}
                         </div>
                       ) : null}
                       {m.photo_path || m.audio_path ? (

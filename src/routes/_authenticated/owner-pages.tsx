@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { listClientAccounts } from "@/lib/admin-users.functions";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { isStaffRole, useMyRoles } from "@/lib/use-role";
 import { compressImage, mediaUrl, uploadListingImage, validateImageFile } from "@/lib/unit-photos";
 
@@ -149,17 +150,27 @@ function OwnerPageCard({ account, page }: { account: Account; page: PageRow | nu
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الصورة")),
   });
 
+  // Both numbers are optional (an empty phone falls back to the office's), but when given they are
+  // shown publicly and dialled, so they must be Saudi mobiles. Saved in the local form 05XXXXXXXX.
+  const phone = form.phone?.trim() ? parseSaudiMobile(form.phone) : null;
+  const whatsapp = form.whatsapp?.trim() ? parseSaudiMobile(form.whatsapp) : null;
+  const phoneError =
+    form.phone?.trim() && !phone ? "رقم الاتصال غير صحيح — مثال: 05xxxxxxxx" : null;
+  const whatsappError =
+    form.whatsapp?.trim() && !whatsapp ? "رقم واتساب غير صحيح — مثال: 05xxxxxxxx" : null;
+
   const save = useMutation({
     mutationFn: async () => {
       if (!form.display_name.trim()) throw new Error("اكتب اسم المالك كما سيظهر للعموم");
+      if (phoneError || whatsappError) throw new Error(phoneError ?? whatsappError ?? "");
       const { error } = await supabase.from("owner_pages").upsert({
         owner_id: account.id,
         display_name: form.display_name.trim(),
         bio: form.bio?.trim() || null,
         areas: form.areas?.trim() || null,
         property_types: form.property_types?.trim() || null,
-        phone: form.phone?.trim() || null,
-        whatsapp: form.whatsapp?.trim() || null,
+        phone,
+        whatsapp,
         avatar_path: form.avatar_path,
         published: form.published,
       });
@@ -234,6 +245,7 @@ function OwnerPageCard({ account, page }: { account: Account; page: PageRow | nu
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
+                aria-label="صورة صفحة المالك"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) upload.mutate(f);
@@ -266,18 +278,24 @@ function OwnerPageCard({ account, page }: { account: Account; page: PageRow | nu
           <Field label="رقم الاتصال (اتركه فارغًا لاستخدام رقم المكتب)">
             <Input
               dir="ltr"
+              inputMode="tel"
               value={form.phone ?? ""}
               onChange={(e) => set("phone", e.target.value)}
               placeholder="05xxxxxxxx"
+              aria-invalid={Boolean(phoneError)}
             />
+            {phoneError ? <p className="text-xs text-destructive">{phoneError}</p> : null}
           </Field>
           <Field label="رقم واتساب (اختياري)">
             <Input
               dir="ltr"
+              inputMode="tel"
               value={form.whatsapp ?? ""}
               onChange={(e) => set("whatsapp", e.target.value)}
               placeholder="05xxxxxxxx"
+              aria-invalid={Boolean(whatsappError)}
             />
+            {whatsappError ? <p className="text-xs text-destructive">{whatsappError}</p> : null}
           </Field>
           <div className="sm:col-span-2">
             <Field label="نبذة تعريفية">
@@ -306,7 +324,12 @@ function OwnerPageCard({ account, page }: { account: Account; page: PageRow | nu
           </div>
 
           <div className="sm:col-span-2">
-            <Button onClick={() => save.mutate()} disabled={save.isPending || upload.isPending}>
+            <Button
+              onClick={() => save.mutate()}
+              disabled={
+                save.isPending || upload.isPending || Boolean(phoneError) || Boolean(whatsappError)
+              }
+            >
               حفظ الصفحة
             </Button>
           </div>

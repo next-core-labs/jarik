@@ -31,6 +31,7 @@ import {
 import { todayRiyadh } from "@/lib/dates";
 import { sar, shortDate } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
+import { parseAmount } from "@/lib/public-form";
 import { suggestRent } from "@/lib/pricing.functions";
 import { AMENITIES } from "@/lib/amenities";
 import { PROPERTY_TYPE_GROUPS, PROPERTY_TYPES, type ListingPurpose } from "@/lib/property-types";
@@ -97,7 +98,15 @@ export const emptyUnit: UnitFormValues = {
   market_listed: true,
 };
 
-const num = (v: string) => (v.trim() === "" ? null : Number(v));
+/**
+ * A typed quantity: undefined when left empty, null when it is not a number ≥ 0 (or not a whole
+ * number when `whole`). Arabic-Indic digits and thousands separators are accepted (parseAmount).
+ */
+function parseQuantity(v: string, whole = false): number | null | undefined {
+  const n = parseAmount(v);
+  if (n === undefined || n === null) return n;
+  return whole && !Number.isInteger(n) ? null : n;
+}
 
 export function UnitDialog({
   open,
@@ -197,6 +206,34 @@ export function UnitDialog({
     queryFn: () => fetchClients(),
     enabled: canManage,
   });
+  // Only owner accounts can own a unit — not the office's staff, tenants or technicians. A unit
+  // already assigned to someone else keeps that option so the field doesn't show blank.
+  const ownerOptions = (clients.data ?? []).filter(
+    (c) => c.roles.includes("owner") || c.id === initial.owner_id,
+  );
+
+  const rooms = parseQuantity(form.rooms, true);
+  const halls = parseQuantity(form.halls, true);
+  const bathrooms = parseQuantity(form.bathrooms, true);
+  const area = parseQuantity(form.area);
+  const annualRent = parseQuantity(form.annual_rent);
+  const salePrice = parseQuantity(form.sale_price);
+  const priceFloor = parseQuantity(form.price_floor);
+  const errors = {
+    rooms: rooms === null ? "عدد الغرف رقم صحيح (0 أو أكثر)" : null,
+    halls: halls === null ? "عدد الصالات رقم صحيح (0 أو أكثر)" : null,
+    bathrooms: bathrooms === null ? "عدد الحمامات رقم صحيح (0 أو أكثر)" : null,
+    area: area === null ? "المساحة رقم بالمتر المربع" : null,
+    annual_rent:
+      form.listing_purpose === "rent" && annualRent === null ? "الإيجار السنوي رقم بالريال" : null,
+    sale_price:
+      form.listing_purpose === "sale" && salePrice === null ? "سعر البيع رقم بالريال" : null,
+    price_floor:
+      form.auto_price_decay && !(priceFloor && priceFloor > 0)
+        ? "حدّد حدًا أدنى صحيحًا للسعر قبل تفعيل التخفيض التلقائي"
+        : null,
+  };
+  const formError = Object.values(errors).find((e) => e !== null) ?? null;
 
   const fetchSuggestion = useServerFn(suggestRent);
   const suggest = useMutation({
@@ -205,10 +242,10 @@ export function UnitDialog({
         data: {
           unitType: form.unit_type,
           district: form.district.trim(),
-          rooms: num(form.rooms),
-          halls: Number(form.halls || 0),
-          bathrooms: Number(form.bathrooms || 0),
-          area: num(form.area),
+          rooms: rooms ?? null,
+          halls: halls ?? 0,
+          bathrooms: bathrooms ?? 0,
+          area: area ?? null,
           furnished: form.furnished,
           floorNo: form.floor_no.trim() || null,
         },
@@ -224,9 +261,7 @@ export function UnitDialog({
 
   const save = useMutation({
     mutationFn: async () => {
-      if (form.auto_price_decay && !(num(form.price_floor) && num(form.price_floor)! > 0)) {
-        throw new Error("حدّد حدًا أدنى صحيحًا للسعر قبل تفعيل التخفيض التلقائي");
-      }
+      if (formError) throw new Error(formError);
       const payload = {
         property_id: propertyId,
         unit_number: form.unit_number.trim(),
@@ -235,15 +270,15 @@ export function UnitDialog({
         district: form.district.trim() || null,
         street: form.street.trim() || null,
         floor_no: form.floor_no.trim() || null,
-        rooms: num(form.rooms),
-        halls: Number(form.halls || 0),
-        bathrooms: Number(form.bathrooms || 0),
-        area: num(form.area),
-        annual_rent: Number(form.annual_rent || 0),
-        sale_price: Number(form.sale_price || 0),
+        rooms: rooms ?? null,
+        halls: halls ?? 0,
+        bathrooms: bathrooms ?? 0,
+        area: area ?? null,
+        annual_rent: annualRent ?? 0,
+        sale_price: salePrice ?? 0,
         listing_purpose: form.listing_purpose,
         auto_price_decay: form.auto_price_decay,
-        price_floor: form.auto_price_decay ? num(form.price_floor) : null,
+        price_floor: form.auto_price_decay ? (priceFloor ?? null) : null,
         // A rental's status is derived from its lease (sync_unit_status); sending it here would
         // fight that trigger. Only a sale unit's status is staff-set, so only it is sent.
         ...(form.listing_purpose === "sale" ? { status: form.status } : {}),
@@ -353,32 +388,36 @@ export function UnitDialog({
           <Field label="الشارع">
             <Input value={form.street} onChange={(e) => set("street", e.target.value)} />
           </Field>
-          <Field label="عدد الغرف">
+          <Field label="عدد الغرف" error={errors.rooms}>
             <Input
               inputMode="numeric"
               value={form.rooms}
               onChange={(e) => set("rooms", e.target.value)}
+              aria-invalid={Boolean(errors.rooms)}
             />
           </Field>
-          <Field label="عدد الصالات">
+          <Field label="عدد الصالات" error={errors.halls}>
             <Input
               inputMode="numeric"
               value={form.halls}
               onChange={(e) => set("halls", e.target.value)}
+              aria-invalid={Boolean(errors.halls)}
             />
           </Field>
-          <Field label="عدد الحمامات">
+          <Field label="عدد الحمامات" error={errors.bathrooms}>
             <Input
               inputMode="numeric"
               value={form.bathrooms}
               onChange={(e) => set("bathrooms", e.target.value)}
+              aria-invalid={Boolean(errors.bathrooms)}
             />
           </Field>
-          <Field label="المساحة (م²)">
+          <Field label="المساحة (م²)" error={errors.area}>
             <Input
               inputMode="decimal"
               value={form.area}
               onChange={(e) => set("area", e.target.value)}
+              aria-invalid={Boolean(errors.area)}
             />
           </Field>
           <Field label="نوع العرض">
@@ -397,11 +436,12 @@ export function UnitDialog({
           </Field>
           {form.listing_purpose === "sale" ? (
             <>
-              <Field label="سعر البيع (ريال)">
+              <Field label="سعر البيع (ريال)" error={errors.sale_price}>
                 <Input
                   inputMode="decimal"
                   value={form.sale_price}
                   onChange={(e) => set("sale_price", e.target.value)}
+                  aria-invalid={Boolean(errors.sale_price)}
                 />
               </Field>
               <Field label="حالة البيع">
@@ -420,11 +460,12 @@ export function UnitDialog({
               </Field>
             </>
           ) : (
-            <Field label="الإيجار السنوي (ريال)">
+            <Field label="الإيجار السنوي (ريال)" error={errors.annual_rent}>
               <Input
                 inputMode="decimal"
                 value={form.annual_rent}
                 onChange={(e) => set("annual_rent", e.target.value)}
+                aria-invalid={Boolean(errors.annual_rent)}
               />
             </Field>
           )}
@@ -440,11 +481,12 @@ export function UnitDialog({
             </div>
           </Field>
           {form.auto_price_decay ? (
-            <Field label="الحد الأدنى للسعر (ريال) — ما ينزل عنه">
+            <Field label="الحد الأدنى للسعر (ريال) — ما ينزل عنه" error={errors.price_floor}>
               <Input
                 inputMode="decimal"
                 value={form.price_floor}
                 onChange={(e) => set("price_floor", e.target.value)}
+                aria-invalid={Boolean(errors.price_floor)}
               />
             </Field>
           ) : null}
@@ -490,7 +532,7 @@ export function UnitDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">بدون مالك</SelectItem>
-                {(clients.data ?? []).map((c) => (
+                {ownerOptions.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.fullName || c.email}
                   </SelectItem>
@@ -591,6 +633,7 @@ export function UnitDialog({
             onClick={() => save.mutate()}
             disabled={
               !form.unit_number.trim() ||
+              Boolean(formError) ||
               save.isPending ||
               // don't save over the listing text/photos before they have loaded
               (isEdit && (listingFields.isLoading || savedPhotos.isLoading))
@@ -604,11 +647,20 @@ export function UnitDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string | null;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -633,13 +685,18 @@ function RepairInvoices({ unitId, canManage }: { unitId: string; canManage: bool
     },
   });
 
+  const parsedAmount = parseAmount(amount);
+  const amountError =
+    amount.trim() && !(parsedAmount && parsedAmount > 0) ? "المبلغ رقم أكبر من صفر بالريال" : null;
+
   const add = useMutation({
     mutationFn: async () => {
+      if (!parsedAmount || parsedAmount <= 0) throw new Error("أدخل مبلغ الفاتورة بالريال");
       const { error } = await supabase.from("repair_invoices").insert({
         unit_id: unitId,
         title: title.trim(),
         vendor: vendor.trim() || null,
-        amount: Number(amount || 0),
+        amount: parsedAmount,
         invoice_date: invoiceDate,
       });
       if (error) throw error;
@@ -719,8 +776,10 @@ function RepairInvoices({ unitId, canManage }: { unitId: string; canManage: bool
             className="sm:w-28"
             inputMode="decimal"
             placeholder="المبلغ"
+            aria-label="مبلغ الفاتورة"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            aria-invalid={Boolean(amountError)}
           />
           <Input
             className="sm:w-40"
@@ -728,11 +787,14 @@ function RepairInvoices({ unitId, canManage }: { unitId: string; canManage: bool
             value={invoiceDate}
             onChange={(e) => setInvoiceDate(e.target.value)}
           />
+          {amountError ? (
+            <p className="text-xs text-destructive sm:col-span-4">{amountError}</p>
+          ) : null}
           <Button
             className="sm:col-span-4"
             variant="outline"
             onClick={() => add.mutate()}
-            disabled={!title.trim() || add.isPending}
+            disabled={!title.trim() || !parsedAmount || Boolean(amountError) || add.isPending}
           >
             <Plus className="size-4" />
             إضافة فاتورة إصلاح

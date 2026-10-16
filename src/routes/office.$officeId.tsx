@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 
 import { AdvertiserPage, type AdvertiserPageData } from "@/components/advertiser-page";
+import { tf } from "@/components/listing-detail/format";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { langSearch, localeFromSearch, useLocale } from "@/lib/i18n";
 import { toListing, type Listing } from "@/lib/market";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
 import { brandingUrl, mediaUrl } from "@/lib/unit-photos";
@@ -52,24 +54,25 @@ async function loadOfficePage(officeId: string): Promise<OfficePageResult> {
 }
 
 export const Route = createFileRoute("/office/$officeId")({
-  staticData: { sitemap: false },
+  staticData: { sitemap: false, publicLocale: true },
   loader: ({ params }) => loadOfficePage(params.officeId),
-  head: ({ loaderData, params }) => {
+  head: ({ loaderData, params, match }) => {
+    const locale = localeFromSearch(match.search);
     if (loaderData?.status !== "ok")
       return {
         meta: [
-          { title: "مكتب عقاري — جارك" },
-          { name: "description", content: "تصفح المكاتب العقارية على جارك." },
+          { title: tf(locale, "meta_office_missing_title") },
+          { name: "description", content: tf(locale, "meta_office_missing_desc") },
           { name: "robots", content: "noindex" },
-          { property: "og:title", content: "مكتب عقاري — جارك" },
-          { property: "og:description", content: "تصفح المكاتب العقارية على جارك." },
+          { property: "og:title", content: tf(locale, "meta_office_missing_title") },
+          { property: "og:description", content: tf(locale, "meta_office_missing_desc") },
           { property: "og:type", content: "website" },
           { name: "twitter:card", content: "summary" },
         ],
       };
     const { page } = loaderData;
-    const title = `${page.name} — عروض عقارية على جارك`;
-    const description = page.bio?.slice(0, 160) ?? `عروض ${page.name} على جارك`;
+    const title = tf(locale, "meta_adv_title", { name: page.name });
+    const description = page.bio?.slice(0, 160) ?? tf(locale, "meta_adv_desc", { name: page.name });
     const url = `https://jarak-ksa.com/office/${encodeURIComponent(params.officeId)}`;
     return {
       meta: [
@@ -137,27 +140,33 @@ function OfficePage() {
   useTrackSiteVisit("/office/$officeId");
   const data = Route.useLoaderData();
   const router = useRouter();
+  const [locale] = useLocale();
   if (data.status !== "ok") {
+    const error = data.status === "error";
     return (
-      <div className="min-h-screen bg-background">
+      <div
+        dir={locale === "en" ? "ltr" : "rtl"}
+        lang={locale}
+        className="min-h-screen bg-background"
+      >
         <SiteHeader />
         <main className="mx-auto max-w-3xl px-4 py-16 text-center">
           <h1 className="font-display text-2xl font-bold">
-            {data.status === "error" ? "تعذّر تحميل الصفحة" : "هذا المكتب غير متاح"}
+            {tf(locale, error ? "page_error_title" : "office_missing_title")}
           </h1>
           <p className="mt-2 text-muted-foreground">
-            {data.status === "error"
-              ? "تحقّق من الاتصال ثم أعد المحاولة."
-              : "قد لا يعرض المكتب عروضه علنًا."}
+            {tf(locale, error ? "results_error_body" : "office_missing_body")}
           </p>
           <div className="mt-6 flex justify-center gap-2">
-            {data.status === "error" ? (
+            {error ? (
               <Button variant="outline" onClick={() => router.invalidate()}>
-                إعادة المحاولة
+                {tf(locale, "results_retry")}
               </Button>
             ) : null}
             <Button asChild>
-              <Link to="/">العودة إلى سوق العروض</Link>
+              <Link to="/" search={langSearch(locale)}>
+                {tf(locale, "back_market")}
+              </Link>
             </Button>
           </div>
         </main>

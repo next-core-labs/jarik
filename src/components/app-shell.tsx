@@ -380,8 +380,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   async function signOut() {
     await queryClient.cancelQueries();
     queryClient.clear();
+    // Back to the sign-in page of the portal the user was in, not always the office one. The
+    // portal sign-in pages are opened first: signing out re-runs the route gate on the current
+    // page, which would otherwise race this navigation and win with its own /auth redirect.
+    const portalSignIn = platformTeamPage
+      ? null
+      : tenant
+        ? "/tenant/login"
+        : owner
+          ? "/owner/login"
+          : null;
+    if (portalSignIn) await navigate({ to: portalSignIn, replace: true });
     await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    if (!portalSignIn) navigate({ to: "/auth", replace: true });
   }
 
   return (
