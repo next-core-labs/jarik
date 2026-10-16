@@ -14,6 +14,8 @@
 
 -- 1) owner_pages_public: يظهر فقط لو عند المالك عقار/وحدة تحت مكتب موثَّق ومُدرَج علنًا — نفس شرط
 -- office_pages_public تمامًا، بدل الاعتماد فقط على published بجدول owner_pages.
+-- Replay-safe: an earlier definition orders the columns differently, which REPLACE can't change.
+DROP VIEW IF EXISTS public.owner_pages_public;
 CREATE OR REPLACE VIEW public.owner_pages_public AS
 SELECT op.owner_id, op.display_name, op.bio, op.areas, op.property_types, op.avatar_path,
        COALESCE(NULLIF(op.phone, ''), pri.office_phone) AS phone,

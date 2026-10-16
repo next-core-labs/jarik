@@ -93,20 +93,11 @@ Dates: review 2026-10-03, fixes 2026-10-03 → 2026-10-04.
 - Both migrations ran in PGlite against seed data built to hit each bug: 33 checks, all passing.
 - **Not done:** running against the real database, and viewing the dashboard in a browser.
 
-## Migration folder (open)
+## Migration folder (resolved 2026-10-16)
 
-The live database is fine, but `supabase/migrations` can't be replayed from scratch. It has:
-
-- 5 identical file pairs;
-- 4 version numbers each used by two files;
-- 8 hand-written files that Lovable re-saved under its own name.
-
-This needs database access to fix. See `supabase/BASELINE.md` and `scripts/migrations/`:
-
-- `node scripts/migrations/report.mjs` — read-only report; `--strict` fails while duplicates exist.
-- `scripts/migrations/baseline.sh` — export, then either:
-  - **Route A (recommended):** a bootstrap file for new databases, leaving Lovable's folder untouched;
-  - **Route B:** replace the folder, only after confirming with Lovable how it tracks applied migrations.
+The folder now replays from scratch: duplicates and Lovable re-saves were removed, and the Lovable
+files that re-implemented the Sept 20–22 hand-written migrations were made replay-safe. It built the
+new Supabase project `xjbhpdzjboexcynqtrsp`. `node scripts/migrations/report.mjs --strict` passes.
 
 ## Deliberately not changed
 

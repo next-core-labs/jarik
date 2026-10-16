@@ -5,7 +5,6 @@ import { ArrowLeft, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { PasswordField } from "@/components/password-field";
 import { safeNext } from "@/lib/safe-redirect";
 import {
@@ -245,14 +244,14 @@ function AuthPage() {
     await goNext();
   }
 
+  // Supabase's own Google provider (enable it under Authentication → Providers, and list this
+  // site's origin under Authentication → URL Configuration → Redirect URLs).
   async function google() {
-    try {
-      await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: `${window.location.origin}${next ?? ""}`,
-      });
-    } catch {
-      toast.error("تعذّر الدخول عبر Google");
-    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}${next ?? ""}` },
+    });
+    if (error) toast.error("تعذّر الدخول عبر Google");
   }
 
   const rememberBox = (

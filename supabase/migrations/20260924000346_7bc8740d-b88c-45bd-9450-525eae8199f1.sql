@@ -5,8 +5,33 @@ ALTER TABLE public.units ADD COLUMN IF NOT EXISTS listing_purpose text NOT NULL 
 ALTER TABLE public.units ADD COLUMN IF NOT EXISTS sale_price numeric;
 ALTER TABLE public.units ADD COLUMN IF NOT EXISTS listing_description text;
 ALTER TABLE public.units ADD COLUMN IF NOT EXISTS amenities text[] NOT NULL DEFAULT '{}';
-ALTER TABLE public.unit_photos RENAME COLUMN file_path TO path;
-ALTER TABLE public.unit_photos RENAME COLUMN sort_order TO position;
+-- The live database had these (added outside the migration files); the views below need market_listed.
+ALTER TABLE public.units ADD COLUMN IF NOT EXISTS market_listed boolean NOT NULL DEFAULT false;
+ALTER TABLE public.units ADD COLUMN IF NOT EXISTS market_listed_at timestamptz;
+ALTER TABLE public.units ADD COLUMN IF NOT EXISTS market_note text;
+-- Replay-safe: Lovable's database had unit_photos(file_path, sort_order); a fresh replay already
+-- has (path, position) from 20260921110000_unit_photos_and_listings.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'unit_photos' AND column_name = 'file_path') THEN
+    ALTER TABLE public.unit_photos RENAME COLUMN file_path TO path;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'unit_photos' AND column_name = 'sort_order') THEN
+    ALTER TABLE public.unit_photos RENAME COLUMN sort_order TO position;
+  END IF;
+END $$;
+
+-- Replay-safe: a fresh replay already has org_members from 20260922090000 (user_id primary key,
+-- no kind/role). Convert it to the shape below, which is what the live database had.
+DO $$ BEGIN
+  IF to_regclass('public.org_members') IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'org_members' AND column_name = 'kind'
+  ) THEN
+    ALTER TABLE public.org_members ADD COLUMN kind text NOT NULL DEFAULT 'member';
+    ALTER TABLE public.org_members ADD COLUMN role text NOT NULL DEFAULT 'staff';
+    ALTER TABLE public.org_members DROP CONSTRAINT org_members_pkey;
+    ALTER TABLE public.org_members ADD PRIMARY KEY (org_id, user_id);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.org_members (
   org_id uuid NOT NULL REFERENCES public.org_settings(id) ON DELETE CASCADE,
@@ -88,6 +113,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.org_of(text, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.org_of(text, uuid) TO service_role;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.org_user_ids(uuid);
 CREATE OR REPLACE FUNCTION public.org_user_ids(_org uuid)
 RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT ARRAY(SELECT user_id FROM public.org_members WHERE org_id = _org)
@@ -95,6 +122,8 @@ $$;
 REVOKE ALL ON FUNCTION public.org_user_ids(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.org_user_ids(uuid) TO service_role;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.orgs_of_user(uuid);
 CREATE OR REPLACE FUNCTION public.orgs_of_user(_uid uuid)
 RETURNS uuid[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT ARRAY(SELECT org_id FROM public.org_members WHERE user_id = _uid)
@@ -102,6 +131,8 @@ $$;
 REVOKE ALL ON FUNCTION public.orgs_of_user(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.orgs_of_user(uuid) TO service_role;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.office_people();
 CREATE OR REPLACE FUNCTION public.office_people()
 RETURNS TABLE(user_id uuid, email text, full_name text, phone text, roles text[], relation text, is_manager boolean)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -120,6 +151,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.office_people() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.office_people() TO authenticated;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.office_invitations();
 CREATE OR REPLACE FUNCTION public.office_invitations()
 RETURNS TABLE(id uuid, email text, kind text, role text, is_manager boolean, created_at timestamptz)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -139,6 +172,8 @@ $$;
 REVOKE ALL ON FUNCTION public.is_office_manager() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.is_office_manager() TO authenticated;
 
+-- Replay-safe: an earlier hand-written version had parameter defaults.
+DROP FUNCTION IF EXISTS public.office_add_member(text, text, boolean);
 CREATE OR REPLACE FUNCTION public.office_add_member(_email text, _role text, _manager boolean)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE _org uuid := public.my_org();
@@ -201,6 +236,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.office_unlink_client(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.office_unlink_client(uuid) TO authenticated;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.my_invitations();
 CREATE OR REPLACE FUNCTION public.my_invitations()
 RETURNS TABLE(id uuid, org_id uuid, office_name text, kind text, role text, is_manager boolean)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -211,6 +248,8 @@ $$;
 REVOKE ALL ON FUNCTION public.my_invitations() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.my_invitations() TO authenticated;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.accept_invitation(uuid);
 CREATE OR REPLACE FUNCTION public.accept_invitation(_id uuid)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE inv public.invitations;
@@ -237,6 +276,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.decline_invitation(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.decline_invitation(uuid) TO authenticated;
 
+-- Replay-safe: 20260922110000 defined it with a different return type.
+DROP FUNCTION IF EXISTS public.admin_list_offices();
 CREATE OR REPLACE FUNCTION public.admin_list_offices()
 RETURNS TABLE(id uuid, company_name text, city text, district text, created_at timestamptz,
   verified boolean, whatsapp_locked boolean, fal_license_no text, office_phone text,

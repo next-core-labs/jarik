@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe("suggestRentAi", () => {
   it("uses the AI suggestion when the gateway returns a valid, positive rent", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -38,7 +38,7 @@ describe("suggestRentAi", () => {
   });
 
   it("falls back to the district average when there is no API key", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     const result = await suggestRentAi({
       ...baseInput,
       market: [
@@ -51,7 +51,7 @@ describe("suggestRentAi", () => {
   });
 
   it("falls back to the overall market average when the district has no data", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     const result = await suggestRentAi({
       ...baseInput,
       district: "حي غير موجود",
@@ -65,7 +65,7 @@ describe("suggestRentAi", () => {
   });
 
   it("reports 'unavailable' when there is neither an AI answer nor market data", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     const result = await suggestRentAi({ ...baseInput, market: [] });
     expect(result).toEqual({
       suggestedRent: null,
@@ -75,7 +75,7 @@ describe("suggestRentAi", () => {
   });
 
   it("falls back to market average when the AI response is not valid JSON", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ choices: [{ message: { content: "garbage" } }] })),
@@ -89,7 +89,7 @@ describe("suggestRentAi", () => {
   });
 
   it("falls back to market average when the gateway request fails", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, false)));
     const result = await suggestRentAi({
       ...baseInput,
@@ -99,7 +99,7 @@ describe("suggestRentAi", () => {
   });
 
   it("ignores a non-positive AI rent and falls back", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal(
       "fetch",
       vi
@@ -136,7 +136,7 @@ const adInput = {
 
 describe("generateAdAi", () => {
   it("uses the AI-generated text when available", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal(
       "fetch",
       vi
@@ -149,7 +149,7 @@ describe("generateAdAi", () => {
   });
 
   it("builds a template ad from the unit fields when there is no API key", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     const result = await generateAdAi(adInput);
     expect(result.source).toBe("template");
     expect(result.text).toContain("شقة");
@@ -160,7 +160,7 @@ describe("generateAdAi", () => {
   });
 
   it("omits blank optional fields from the template", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     const result = await generateAdAi({
       ...adInput,
       district: null,
@@ -179,7 +179,7 @@ describe("generateAdAi", () => {
   });
 
   it("falls back to the template when the AI text is empty", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal(
       "fetch",
       vi

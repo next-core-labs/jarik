@@ -4,7 +4,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.18";
   };
   public: {
     Tables: {
@@ -91,13 +91,6 @@ export type Database = {
             columns: ["agreement_id"];
             isOneToOne: false;
             referencedRelation: "management_agreements";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "agreement_units_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
             referencedColumns: ["id"];
           },
           {
@@ -212,71 +205,6 @@ export type Database = {
             columns: ["property_id"];
             isOneToOne: false;
             referencedRelation: "properties";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      condition_reports: {
-        Row: {
-          created_at: string;
-          created_by: string | null;
-          id: string;
-          kind: string;
-          lease_id: string | null;
-          notes: string | null;
-          photos: string[];
-          unit_id: string;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          kind?: string;
-          lease_id?: string | null;
-          notes?: string | null;
-          photos?: string[];
-          unit_id: string;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          kind?: string;
-          lease_id?: string | null;
-          notes?: string | null;
-          photos?: string[];
-          unit_id?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "condition_reports_lease_id_fkey";
-            columns: ["lease_id"];
-            isOneToOne: false;
-            referencedRelation: "leases";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "condition_reports_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "condition_reports_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "units";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "condition_reports_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "vacant_units_public";
             referencedColumns: ["id"];
           },
         ];
@@ -490,66 +418,6 @@ export type Database = {
           },
         ];
       };
-      employees: {
-        Row: {
-          created_at: string;
-          created_by: string | null;
-          email: string | null;
-          full_name: string;
-          hire_date: string;
-          id: string;
-          job_title: string;
-          notes: string | null;
-          permissions: string[];
-          phone: string | null;
-          salary: number;
-          status: string;
-          updated_at: string;
-          user_id: string | null;
-          work_days: string[];
-          work_end: string | null;
-          work_start: string | null;
-        };
-        Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          email?: string | null;
-          full_name: string;
-          hire_date?: string;
-          id?: string;
-          job_title?: string;
-          notes?: string | null;
-          permissions?: string[];
-          phone?: string | null;
-          salary?: number;
-          status?: string;
-          updated_at?: string;
-          user_id?: string | null;
-          work_days?: string[];
-          work_end?: string | null;
-          work_start?: string | null;
-        };
-        Update: {
-          created_at?: string;
-          created_by?: string | null;
-          email?: string | null;
-          full_name?: string;
-          hire_date?: string;
-          id?: string;
-          job_title?: string;
-          notes?: string | null;
-          permissions?: string[];
-          phone?: string | null;
-          salary?: number;
-          status?: string;
-          updated_at?: string;
-          user_id?: string | null;
-          work_days?: string[];
-          work_end?: string | null;
-          work_start?: string | null;
-        };
-        Relationships: [];
-      };
       expenses: {
         Row: {
           amount: number;
@@ -558,6 +426,7 @@ export type Database = {
           expense_date: string;
           id: string;
           notes: string | null;
+          org_id: string | null;
           property_id: string | null;
           title: string;
           unit_id: string | null;
@@ -570,6 +439,7 @@ export type Database = {
           expense_date?: string;
           id?: string;
           notes?: string | null;
+          org_id?: string | null;
           property_id?: string | null;
           title: string;
           unit_id?: string | null;
@@ -582,6 +452,7 @@ export type Database = {
           expense_date?: string;
           id?: string;
           notes?: string | null;
+          org_id?: string | null;
           property_id?: string | null;
           title?: string;
           unit_id?: string | null;
@@ -589,17 +460,38 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "expenses_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
             foreignKeyName: "expenses_property_id_fkey";
             columns: ["property_id"];
             isOneToOne: false;
             referencedRelation: "properties";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "expenses_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
             referencedColumns: ["id"];
           },
           {
@@ -759,6 +651,7 @@ export type Database = {
           invoice_number: string;
           issue_date: string;
           lease_id: string | null;
+          org_id: string | null;
           payment_id: string | null;
           qr_payload: string | null;
           seller_name: string | null;
@@ -779,6 +672,7 @@ export type Database = {
           invoice_number: string;
           issue_date?: string;
           lease_id?: string | null;
+          org_id?: string | null;
           payment_id?: string | null;
           qr_payload?: string | null;
           seller_name?: string | null;
@@ -799,6 +693,7 @@ export type Database = {
           invoice_number?: string;
           issue_date?: string;
           lease_id?: string | null;
+          org_id?: string | null;
           payment_id?: string | null;
           qr_payload?: string | null;
           seller_name?: string | null;
@@ -817,6 +712,34 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "leases";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "invoices_payment_id_fkey";
@@ -888,13 +811,6 @@ export type Database = {
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "leases_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
             referencedColumns: ["id"];
           },
           {
@@ -1048,13 +964,6 @@ export type Database = {
             foreignKeyName: "listing_events_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "listing_events_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -1089,6 +998,13 @@ export type Database = {
             columns: ["unit_id"];
             isOneToOne: false;
             referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_favorites_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
             referencedColumns: ["id"];
           },
         ];
@@ -1218,13 +1134,6 @@ export type Database = {
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "maintenance_requests_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
             referencedColumns: ["id"];
           },
           {
@@ -1413,13 +1322,6 @@ export type Database = {
             foreignKeyName: "meter_readings_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "meter_readings_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -1565,6 +1467,127 @@ export type Database = {
           },
         ];
       };
+      org_clients: {
+        Row: {
+          accepted_at: string | null;
+          created_at: string;
+          org_id: string;
+          user_id: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          created_at?: string;
+          org_id: string;
+          user_id: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          created_at?: string;
+          org_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_clients_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_clients_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_clients_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_clients_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+        ];
+      };
+      org_invitations: {
+        Row: {
+          answered_at: string | null;
+          answered_by: string | null;
+          created_at: string;
+          created_by: string | null;
+          email: string;
+          id: string;
+          is_manager: boolean;
+          kind: string;
+          org_id: string;
+          role: string;
+          status: string;
+        };
+        Insert: {
+          answered_at?: string | null;
+          answered_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email: string;
+          id?: string;
+          is_manager?: boolean;
+          kind: string;
+          org_id: string;
+          role: string;
+          status?: string;
+        };
+        Update: {
+          answered_at?: string | null;
+          answered_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string;
+          id?: string;
+          is_manager?: boolean;
+          kind?: string;
+          org_id?: string;
+          role?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+        ];
+      };
       org_members: {
         Row: {
           created_at: string;
@@ -1630,6 +1653,7 @@ export type Database = {
           company_name: string;
           cr_number: string | null;
           created_at: string;
+          created_by: string | null;
           default_commission_pct: number | null;
           district: string | null;
           ejar_broker_id: string | null;
@@ -1659,6 +1683,7 @@ export type Database = {
           company_name?: string;
           cr_number?: string | null;
           created_at?: string;
+          created_by?: string | null;
           default_commission_pct?: number | null;
           district?: string | null;
           ejar_broker_id?: string | null;
@@ -1688,6 +1713,7 @@ export type Database = {
           company_name?: string;
           cr_number?: string | null;
           created_at?: string;
+          created_by?: string | null;
           default_commission_pct?: number | null;
           district?: string | null;
           ejar_broker_id?: string | null;
@@ -1710,6 +1736,80 @@ export type Database = {
           whatsapp_number?: string | null;
         };
         Relationships: [];
+      };
+      owner_pages: {
+        Row: {
+          areas: string | null;
+          avatar_path: string | null;
+          bio: string | null;
+          created_at: string;
+          display_name: string;
+          org_id: string | null;
+          owner_id: string;
+          phone: string | null;
+          property_types: string | null;
+          published: boolean;
+          updated_at: string;
+          whatsapp: string | null;
+        };
+        Insert: {
+          areas?: string | null;
+          avatar_path?: string | null;
+          bio?: string | null;
+          created_at?: string;
+          display_name: string;
+          org_id?: string | null;
+          owner_id: string;
+          phone?: string | null;
+          property_types?: string | null;
+          published?: boolean;
+          updated_at?: string;
+          whatsapp?: string | null;
+        };
+        Update: {
+          areas?: string | null;
+          avatar_path?: string | null;
+          bio?: string | null;
+          created_at?: string;
+          display_name?: string;
+          org_id?: string | null;
+          owner_id?: string;
+          phone?: string | null;
+          property_types?: string | null;
+          published?: boolean;
+          updated_at?: string;
+          whatsapp?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "owner_pages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_pages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_pages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_pages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+        ];
       };
       owner_preferences: {
         Row: {
@@ -1772,48 +1872,6 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
-      };
-      owner_pages: {
-        Row: {
-          areas: string | null;
-          avatar_path: string | null;
-          bio: string | null;
-          created_at: string;
-          display_name: string;
-          owner_id: string;
-          phone: string | null;
-          property_types: string | null;
-          published: boolean;
-          updated_at: string;
-          whatsapp: string | null;
-        };
-        Insert: {
-          areas?: string | null;
-          avatar_path?: string | null;
-          bio?: string | null;
-          created_at?: string;
-          display_name: string;
-          owner_id: string;
-          phone?: string | null;
-          property_types?: string | null;
-          published?: boolean;
-          updated_at?: string;
-          whatsapp?: string | null;
-        };
-        Update: {
-          areas?: string | null;
-          avatar_path?: string | null;
-          bio?: string | null;
-          created_at?: string;
-          display_name?: string;
-          owner_id?: string;
-          phone?: string | null;
-          property_types?: string | null;
-          published?: boolean;
-          updated_at?: string;
-          whatsapp?: string | null;
-        };
-        Relationships: [];
       };
       payments: {
         Row: {
@@ -2028,7 +2086,7 @@ export type Database = {
           fal_license_no: string | null;
           full_name: string | null;
           id: string;
-          id_type: string;
+          id_type: string | null;
           national_id: string | null;
           phone: string | null;
           reference_code: string | null;
@@ -2044,7 +2102,7 @@ export type Database = {
           fal_license_no?: string | null;
           full_name?: string | null;
           id: string;
-          id_type?: string;
+          id_type?: string | null;
           national_id?: string | null;
           phone?: string | null;
           reference_code?: string | null;
@@ -2060,7 +2118,7 @@ export type Database = {
           fal_license_no?: string | null;
           full_name?: string | null;
           id?: string;
-          id_type?: string;
+          id_type?: string | null;
           national_id?: string | null;
           phone?: string | null;
           reference_code?: string | null;
@@ -2389,13 +2447,6 @@ export type Database = {
             foreignKeyName: "repair_invoices_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "repair_invoices_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -2492,60 +2543,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
-          },
-        ];
-      };
-      tenant_reviews: {
-        Row: {
-          cleanliness: number;
-          created_at: string;
-          created_by: string | null;
-          dealing: number;
-          id: string;
-          lease_id: string | null;
-          note: string | null;
-          payment_rating: number;
-          tenant_id: string;
-          updated_at: string;
-        };
-        Insert: {
-          cleanliness: number;
-          created_at?: string;
-          created_by?: string | null;
-          dealing: number;
-          id?: string;
-          lease_id?: string | null;
-          note?: string | null;
-          payment_rating: number;
-          tenant_id: string;
-          updated_at?: string;
-        };
-        Update: {
-          cleanliness?: number;
-          created_at?: string;
-          created_by?: string | null;
-          dealing?: number;
-          id?: string;
-          lease_id?: string | null;
-          note?: string | null;
-          payment_rating?: number;
-          tenant_id?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "tenant_reviews_lease_id_fkey";
-            columns: ["lease_id"];
-            isOneToOne: false;
-            referencedRelation: "leases";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "tenant_reviews_tenant_id_fkey";
-            columns: ["tenant_id"];
-            isOneToOne: false;
-            referencedRelation: "tenants";
-            referencedColumns: ["id"];
           },
         ];
       };
@@ -2647,13 +2644,6 @@ export type Database = {
             foreignKeyName: "unit_events_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "unit_events_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -2701,13 +2691,6 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
-          {
-            foreignKeyName: "unit_messages_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
           {
             foreignKeyName: "unit_messages_unit_id_fkey";
             columns: ["unit_id"];
@@ -2760,13 +2743,6 @@ export type Database = {
             foreignKeyName: "unit_photos_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "unit_photos_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -2791,7 +2767,7 @@ export type Database = {
           notes: string | null;
           org_id: string | null;
           phone: string;
-          purpose: string | null;
+          purpose: string;
           status: string;
           unit_id: string | null;
           unit_type: string | null;
@@ -2808,7 +2784,7 @@ export type Database = {
           notes?: string | null;
           org_id?: string | null;
           phone: string;
-          purpose?: string | null;
+          purpose?: string;
           status?: string;
           unit_id?: string | null;
           unit_type?: string | null;
@@ -2825,7 +2801,7 @@ export type Database = {
           notes?: string | null;
           org_id?: string | null;
           phone?: string;
-          purpose?: string | null;
+          purpose?: string;
           status?: string;
           unit_id?: string | null;
           unit_type?: string | null;
@@ -2864,13 +2840,6 @@ export type Database = {
             foreignKeyName: "unit_requests_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "unit_requests_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -2899,8 +2868,8 @@ export type Database = {
           furnished: boolean;
           halls: number;
           id: string;
-          listing_description: string | null;
           list_price: number | null;
+          listing_description: string | null;
           listing_purpose: string;
           market_listed: boolean;
           market_listed_at: string | null;
@@ -2911,7 +2880,7 @@ export type Database = {
           price_floor: number | null;
           property_id: string;
           rooms: number | null;
-          sale_price: number | null;
+          sale_price: number;
           status: string;
           street: string | null;
           tenant_id: string | null;
@@ -2937,8 +2906,8 @@ export type Database = {
           furnished?: boolean;
           halls?: number;
           id?: string;
-          listing_description?: string | null;
           list_price?: number | null;
+          listing_description?: string | null;
           listing_purpose?: string;
           market_listed?: boolean;
           market_listed_at?: string | null;
@@ -2949,7 +2918,7 @@ export type Database = {
           price_floor?: number | null;
           property_id: string;
           rooms?: number | null;
-          sale_price?: number | null;
+          sale_price?: number;
           status?: string;
           street?: string | null;
           tenant_id?: string | null;
@@ -2975,8 +2944,8 @@ export type Database = {
           furnished?: boolean;
           halls?: number;
           id?: string;
-          listing_description?: string | null;
           list_price?: number | null;
+          listing_description?: string | null;
           listing_purpose?: string;
           market_listed?: boolean;
           market_listed_at?: string | null;
@@ -2987,7 +2956,7 @@ export type Database = {
           price_floor?: number | null;
           property_id?: string;
           rooms?: number | null;
-          sale_price?: number | null;
+          sale_price?: number;
           status?: string;
           street?: string | null;
           tenant_id?: string | null;
@@ -3032,70 +3001,6 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
-      };
-      viewings: {
-        Row: {
-          created_at: string;
-          created_by: string | null;
-          id: string;
-          office_note: string | null;
-          phone: string;
-          preferred_at: string;
-          requester_name: string;
-          status: string;
-          suggested_at: string | null;
-          unit_id: string;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          office_note?: string | null;
-          phone: string;
-          preferred_at: string;
-          requester_name: string;
-          status?: string;
-          suggested_at?: string | null;
-          unit_id: string;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          office_note?: string | null;
-          phone?: string;
-          preferred_at?: string;
-          requester_name?: string;
-          status?: string;
-          suggested_at?: string | null;
-          unit_id?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "viewings_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "viewings_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "units";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "viewings_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
-            referencedRelation: "vacant_units_public";
-            referencedColumns: ["id"];
-          },
-        ];
       };
       whatsapp_channels: {
         Row: {
@@ -3258,37 +3163,6 @@ export type Database = {
       };
     };
     Views: {
-      market_listings: {
-        Row: {
-          advertiser_kind: string | null;
-          advertiser_name: string | null;
-          advertiser_phone: string | null;
-          annual_rent: number | null;
-          area: number | null;
-          bathrooms: number | null;
-          company_name: string | null;
-          district: string | null;
-          fal_license_no: string | null;
-          floor_no: string | null;
-          furnished: boolean | null;
-          halls: number | null;
-          id: string | null;
-          logo_url: string | null;
-          market_listed_at: string | null;
-          market_note: string | null;
-          office_city: string | null;
-          office_district: string | null;
-          office_phone: string | null;
-          rooms: number | null;
-          status: string | null;
-          street: string | null;
-          unit_name: string | null;
-          unit_number: string | null;
-          unit_type: string | null;
-          whatsapp_number: string | null;
-        };
-        Relationships: [];
-      };
       market_requests_public: {
         Row: {
           budget_max: number | null;
@@ -3431,13 +3305,6 @@ export type Database = {
             foreignKeyName: "unit_photos_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
-            referencedRelation: "market_listings";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "unit_photos_unit_id_fkey";
-            columns: ["unit_id"];
-            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -3515,10 +3382,19 @@ export type Database = {
           whatsapp_locked: boolean;
         }[];
       };
-      admin_set_office_flags: {
-        Args: { _org: string; _whatsapp_locked: boolean };
-        Returns: undefined;
-      };
+      admin_set_office_flags:
+        | {
+            Args: { _org: string; _whatsapp_locked: boolean };
+            Returns: undefined;
+          }
+        | {
+            Args: {
+              _listed_publicly?: boolean;
+              _org: string;
+              _whatsapp_locked?: boolean;
+            };
+            Returns: undefined;
+          };
       admin_set_office_verified: {
         Args: { _org: string; _verified: boolean };
         Returns: undefined;
@@ -3534,6 +3410,13 @@ export type Database = {
       effective_maintenance_cap: {
         Args: { _org_id: string; _unit_id: string };
         Returns: number;
+      };
+      effective_maintenance_caps: {
+        Args: { _org_id: string; _unit_ids: string[] };
+        Returns: {
+          cap: number;
+          unit_id: string;
+        }[];
       };
       has_role: {
         Args: {
@@ -3747,41 +3630,6 @@ export type Database = {
           user_id: string;
         }[];
       };
-      office_profile: {
-        Args: { _code: string };
-        Returns: {
-          address: string;
-          avg_rating: number;
-          city: string;
-          company_name: string;
-          district: string;
-          fal_license_no: string;
-          id: string;
-          listings_count: number;
-          logo_url: string;
-          office_code: string;
-          office_phone: string;
-          reviews_count: number;
-          whatsapp_number: string;
-        }[];
-      };
-      office_public_listings: {
-        Args: { _code: string };
-        Returns: {
-          annual_rent: number;
-          area: number;
-          bathrooms: number;
-          district: string;
-          furnished: boolean;
-          halls: number;
-          id: string;
-          market_note: string;
-          rooms: number;
-          unit_name: string;
-          unit_number: string;
-          unit_type: string;
-        }[];
-      };
       office_remove_member: { Args: { _user: string }; Returns: undefined };
       office_respond_agreement: {
         Args: {
@@ -3803,10 +3651,6 @@ export type Database = {
       org_of: { Args: { _id: string; _table: string }; Returns: string };
       org_user_ids: { Args: { _org: string }; Returns: string[] };
       orgs_of_user: { Args: { _uid: string }; Returns: string[] };
-      owner_decide_countered_agreement: {
-        Args: { _agreement_id: string; _decision: string };
-        Returns: undefined;
-      };
       owner_cashflow_forecast: {
         Args: never;
         Returns: {
@@ -3815,16 +3659,20 @@ export type Database = {
           paid: number;
         }[];
       };
+      owner_decide_countered_agreement: {
+        Args: { _agreement_id: string; _decision: string };
+        Returns: undefined;
+      };
       owner_expenses_12m: {
         Args: never;
         Returns: {
           amount: number;
-          category: string | null;
+          category: string;
           expense_date: string;
           id: string;
-          property_name: string | null;
+          property_name: string;
           title: string;
-          unit_number: string | null;
+          unit_number: string;
         }[];
       };
       owner_finance_summary: { Args: never; Returns: Json };
@@ -3892,13 +3740,13 @@ export type Database = {
         Args: never;
         Returns: {
           lease_id: string;
-          owner_decided_at: string | null;
-          owner_decision: string | null;
-          owner_note: string | null;
-          owner_proposed_rent: number | null;
-          owner_status: string | null;
-          tenant_decided_at: string | null;
-          tenant_decision: string | null;
+          owner_decided_at: string;
+          owner_decision: string;
+          owner_note: string;
+          owner_proposed_rent: number;
+          owner_status: string;
+          tenant_decided_at: string;
+          tenant_decision: string;
         }[];
       };
       owner_submit_renewal_decision: {
@@ -3931,12 +3779,12 @@ export type Database = {
         Args: never;
         Returns: {
           market_listed: boolean;
-          peer_avg_rent: number | null;
+          peer_avg_rent: number;
           peer_units: number;
           photos_count: number;
           publicly_listed: boolean;
           unit_id: string;
-          vacant_since: string | null;
+          vacant_since: string;
         }[];
       };
       register_office: {
@@ -3959,17 +3807,6 @@ export type Database = {
           _term_months?: number;
         };
         Returns: string;
-      };
-      rent_estimate: {
-        Args: { _district?: string; _unit_type?: string };
-        Returns: {
-          avg_rent: number;
-          district: string;
-          max_rent: number;
-          min_rent: number;
-          unit_type: string;
-          units_count: number;
-        }[];
       };
       request_agreement_termination: {
         Args: { _agreement_id: string };
@@ -4002,10 +3839,6 @@ export type Database = {
         Args: { _user_id: string; _vip: boolean };
         Returns: undefined;
       };
-      set_unit_market: {
-        Args: { _listed: boolean; _note?: string; _unit_id: string };
-        Returns: undefined;
-      };
       site_visit_stats: {
         Args: never;
         Returns: {
@@ -4022,17 +3855,6 @@ export type Database = {
         Returns: undefined;
       };
       tenant_overdue_count: { Args: { _tenant_id: string }; Returns: number };
-      unit_utility_usage: {
-        Args: { _unit_id: string };
-        Returns: {
-          consumption: number;
-          cost: number;
-          latest_reading: number;
-          meter_type: string;
-          previous_reading: number;
-          rate: number;
-        }[];
-      };
       update_agreement_permissions: {
         Args: { _agreement_id: string; _permissions: string[] };
         Returns: undefined;

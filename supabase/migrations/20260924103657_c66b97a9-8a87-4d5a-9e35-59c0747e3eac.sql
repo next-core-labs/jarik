@@ -1,3 +1,28 @@
+-- Replay-safe catch-up: the live database had these objects, created outside the migration files
+-- (shapes from src/integrations/supabase/types.ts). The policies below reference some of them.
+ALTER TABLE public.unit_requests ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.unit_requests ADD COLUMN IF NOT EXISTS unit_id uuid REFERENCES public.units(id) ON DELETE SET NULL;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS city text;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS district text;
+ALTER TABLE public.deals ADD COLUMN IF NOT EXISTS commission_rate numeric NOT NULL DEFAULT 0;
+ALTER TABLE public.meter_readings ADD COLUMN IF NOT EXISTS photo_path text;
+ALTER TABLE public.unit_photos ADD COLUMN IF NOT EXISTS caption text;
+ALTER TABLE public.unit_photos ADD COLUMN IF NOT EXISTS uploaded_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.unit_photos ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+CREATE TABLE IF NOT EXISTS public.office_reviews (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  office_id uuid NOT NULL REFERENCES public.org_settings(id) ON DELETE CASCADE,
+  reviewer_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  reviewer_name text,
+  rating integer NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.office_reviews ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.office_reviews TO anon, authenticated;
+GRANT ALL ON public.office_reviews TO service_role;
+
 -- unit_requests: public submissions stay open but cannot forge ownership or skip required fields
 DROP POLICY IF EXISTS unit_requests_anon_insert ON public.unit_requests;
 CREATE POLICY unit_requests_anon_insert ON public.unit_requests

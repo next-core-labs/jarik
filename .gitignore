@@ -16,8 +16,7 @@ dist-ssr
 .nitro
 *.local
 
-# Package manager: this project standardizes on bun.lock — don't commit npm's lockfile
-package-lock.json
+# Package manager: npm (package-lock.json is committed; Cloudflare installs from it).
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -36,3 +35,7 @@ supabase/.temp/
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI local state
+supabase/.branches
+supabase/.temp

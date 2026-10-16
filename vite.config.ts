@@ -1,32 +1,65 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - TanStack devtools (dev-only, first), tanstackStart, viteReact, tailwindcss, tsConfigPaths,
-//     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
-//     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
-import { resolve } from "node:path";
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
-import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
+// Plain TanStack Start + Vite build, deployed to Cloudflare Workers through nitro's
+// `cloudflare-module` preset (it writes .output/server/wrangler.json, merged with ./wrangler.jsonc).
+import { defineConfig, loadEnv } from "vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tsConfigPaths from "vite-tsconfig-paths";
+import { nitro } from "nitro/vite";
 
-// @lovable.dev/mcp-js compares Vite's `config.root` (always forward slashes) with `path.resolve()`
-// output (backslashes on Windows), so `vite dev` and `vite build` throw
-// "routesDir ... must resolve under ..." on Windows. Hand the plugin a native-separator root.
-// On Linux/macOS `resolve(root)` returns the same string, so this is a no-op there.
-const mcp = mcpPlugin();
-const originalConfigResolved = mcp.configResolved;
-if (typeof originalConfigResolved === "function") {
-  mcp.configResolved = function (config) {
-    return originalConfigResolved.call(this, { ...config, root: resolve(config.root) });
+export default defineConfig(({ command, mode }) => {
+  // Bake the public VITE_* values (Supabase URL + publishable key) into both the client and the
+  // SSR bundle, so the Worker never depends on them being set as runtime variables.
+  const publicEnv = loadEnv(mode, process.cwd(), "VITE_");
+  const define = Object.fromEntries(
+    Object.entries(publicEnv).map(([key, value]) => [
+      `import.meta.env.${key}`,
+      JSON.stringify(value),
+    ]),
+  );
+
+  return {
+    define,
+    css: { transformer: "lightningcss" },
+    resolve: {
+      alias: { "@": `${process.cwd()}/src` },
+      dedupe: [
+        "react",
+        "react-dom",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "@tanstack/react-query",
+        "@tanstack/query-core",
+      ],
+    },
+    optimizeDeps: {
+      include: [
+        "react",
+        "react-dom",
+        "react-dom/client",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+      ],
+    },
+    server: { host: "::", port: 8080 },
+    plugins: [
+      tailwindcss(),
+      tsConfigPaths({ projects: ["./tsconfig.json"] }),
+      tanstackStart({
+        // Server-only modules can never be pulled into the browser bundle.
+        importProtection: {
+          behavior: "error",
+          client: { files: ["**/server/**"], specifiers: ["server-only"] },
+        },
+        // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
+        server: { entry: "server" },
+      }),
+      command === "build" &&
+        nitro({
+          preset: "cloudflare-module",
+          cloudflare: { nodeCompat: true, deployConfig: true },
+        }),
+      viteReact(),
+    ],
   };
-}
-
-export default defineConfig({
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
-  },
-  vite: {
-    plugins: [mcp],
-  },
 });

@@ -8,7 +8,7 @@
 // applies that copy, and several hand-written files were committed twice. The live database is
 // fine (Lovable applies each file once), but replaying the folder from scratch — a new environment,
 // local dev, disaster recovery — fails on the second copy of every non-idempotent statement.
-// See supabase/BASELINE.md for the fix.
+// Keep it at zero: CI-safe with --strict. Test a full replay locally with `supabase db start`.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -59,7 +59,7 @@ if (lovableCopies.length) console.log(list(lovableCopies) + "\n");
 const problems = handDuplicates.length + versionClashes.length;
 console.log(
   problems
-    ? "Replay from scratch: BROKEN — see supabase/BASELINE.md."
+    ? "Replay from scratch: BROKEN — remove the duplicate or renumber the clashing file."
     : "No duplicate files or version clashes.",
 );
 if (process.argv.includes("--strict") && problems) process.exit(1);

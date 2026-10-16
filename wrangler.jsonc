@@ -1,0 +1,19 @@
+// Cloudflare Worker for the whole site (public marketplace + every dashboard).
+// `npm run build` writes .output/server/wrangler.json = this file + nitro's build settings;
+// `npm run deploy` deploys that. Secrets (Supabase service key, AI key, …) are NOT kept here —
+// add them in the dashboard as *Secrets* or with `npx wrangler secret put NAME` (see DEPLOY.md).
+{
+  "name": "jarak",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Keep any plain variables set in the dashboard when deploying from this config.
+  "keep_vars": true,
+  "observability": { "enabled": true },
+  // The site's domain (it must be a zone in the same Cloudflare account). Cloudflare creates the
+  // DNS records itself — delete any old A/CNAME records for these names first (e.g. ones pointing
+  // at the previous host), or the deploy refuses to claim them.
+  "routes": [
+    { "pattern": "jarak-ksa.com", "custom_domain": true },
+    { "pattern": "www.jarak-ksa.com", "custom_domain": true }
+  ]
+}

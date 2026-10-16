@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { requireStaff, type ServerCtx } from "@/lib/server-context";
+import { aiChatUrl, aiKey, aiModel } from "@/lib/ai.server";
 
 const chatInput = z.object({
   messages: z
@@ -30,17 +31,17 @@ export const askAssistant = createServerFn({ method: "POST" })
     await requireStaff(ctx);
     await enforceRateLimit(ctx, "assistant", 30, 600);
 
-    const apiKey = process.env["LOVABLE_API_KEY"];
+    const apiKey = aiKey();
     if (!apiKey) throw new Error("AI غير مهيأ");
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(aiChatUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: aiModel(),
         messages: [
           { role: "system", content: systemPrompts[data.mode] ?? systemPrompts["assistant"] },
           ...data.messages,

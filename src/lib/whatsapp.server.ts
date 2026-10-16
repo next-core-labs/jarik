@@ -1,3 +1,5 @@
+import { aiChatUrl, aiKey, aiModel } from "@/lib/ai.server";
+
 // منطق تحويل رسالة واتساب إلى إجراء وإشعارات داخل المنصة — يُستخدم من السيرفر فقط
 
 type Classification = {
@@ -21,7 +23,7 @@ const CLASSIFY_PROMPT = `أنت الطبقة الذكية لمساعد واتس�
 "create_maintenance":true أو false (صحيح فقط إذا كان إبلاغًا عن عطل يحتاج أمر صيانة)}`;
 
 async function classify(body: string): Promise<Classification> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const apiKey = aiKey();
   const fallback: Classification = {
     intent: "استفسار عام",
     sender_role: "unknown",
@@ -33,11 +35,11 @@ async function classify(body: string): Promise<Classification> {
   };
   if (!apiKey) return fallback;
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch(aiChatUrl(), {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: aiModel(),
       messages: [
         { role: "system", content: CLASSIFY_PROMPT },
         { role: "user", content: body },

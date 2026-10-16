@@ -7,8 +7,8 @@ describe("safeNext", () => {
     expect(safeNext("/dashboard")).toBe("/dashboard");
     expect(safeNext("/unit/123?tab=chat#top")).toBe("/unit/123?tab=chat#top");
     expect(safeNext("/")).toBe("/");
-    expect(safeNext("/.lovable/oauth/consent?authorization_id=abc")).toBe(
-      "/.lovable/oauth/consent?authorization_id=abc",
+    expect(safeNext("/.well-known/consent?authorization_id=abc")).toBe(
+      "/.well-known/consent?authorization_id=abc",
     );
   });
 

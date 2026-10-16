@@ -51,18 +51,21 @@ export const Route = createFileRoute("/office/$officeId")({
   staticData: { sitemap: false },
   loader: ({ params }) => loadOfficePage(params.officeId),
   head: ({ loaderData, params }) => {
-    if (loaderData?.status !== "ok") return { meta: [
-      { title: "مكتب عقاري — جارك" },
-      { name: "description", content: "تصفح المكاتب العقارية على جارك." },
-      { property: "og:title", content: "مكتب عقاري — جارك" },
-      { property: "og:description", content: "تصفح المكاتب العقارية على جارك." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ] };
+    if (loaderData?.status !== "ok")
+      return {
+        meta: [
+          { title: "مكتب عقاري — جارك" },
+          { name: "description", content: "تصفح المكاتب العقارية على جارك." },
+          { property: "og:title", content: "مكتب عقاري — جارك" },
+          { property: "og:description", content: "تصفح المكاتب العقارية على جارك." },
+          { property: "og:type", content: "website" },
+          { name: "twitter:card", content: "summary" },
+        ],
+      };
     const { page } = loaderData;
     const title = `${page.name} — عروض عقارية على جارك`;
     const description = page.bio?.slice(0, 160) ?? `عروض ${page.name} على جارك`;
-    const url = `https://yourneighbor.app/office/${encodeURIComponent(params.officeId)}`;
+    const url = `https://jarak-ksa.com/office/${encodeURIComponent(params.officeId)}`;
     return {
       meta: [
         { title },
@@ -71,29 +74,55 @@ export const Route = createFileRoute("/office/$officeId")({
         { property: "og:description", content: description },
         { property: "og:type", content: "website" },
         { property: "og:url", content: url },
-        ...(page.imageUrl?.startsWith("https://") ? [{ property: "og:image", content: page.imageUrl }, { name: "twitter:image", content: page.imageUrl }] : []),
-        { name: "twitter:card", content: page.imageUrl?.startsWith("https://") ? "summary_large_image" : "summary" },
+        ...(page.imageUrl?.startsWith("https://")
+          ? [
+              { property: "og:image", content: page.imageUrl },
+              { name: "twitter:image", content: page.imageUrl },
+            ]
+          : []),
+        {
+          name: "twitter:card",
+          content: page.imageUrl?.startsWith("https://") ? "summary_large_image" : "summary",
+        },
       ],
       links: [{ rel: "canonical", href: url }],
-      scripts: [{
-        type: "application/ld+json",
-        children: JSON.stringify([
-          {
-            "@context": "https://schema.org", "@type": "RealEstateAgent",
-            name: page.name, url,
-            ...(page.phone ? { telephone: page.phone } : {}),
-            ...(page.location ? { address: { "@type": "PostalAddress", addressLocality: page.location, addressCountry: "SA" } } : {}),
-            ...(page.imageUrl?.startsWith("https://") ? { image: page.imageUrl } : {}),
-          },
-          {
-            "@context": "https://schema.org", "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "دليل المكاتب العقارية", item: "https://yourneighbor.app/offices" },
-              { "@type": "ListItem", position: 2, name: page.name, item: url },
-            ],
-          },
-        ]),
-      }],
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "RealEstateAgent",
+              name: page.name,
+              url,
+              ...(page.phone ? { telephone: page.phone } : {}),
+              ...(page.location
+                ? {
+                    address: {
+                      "@type": "PostalAddress",
+                      addressLocality: page.location,
+                      addressCountry: "SA",
+                    },
+                  }
+                : {}),
+              ...(page.imageUrl?.startsWith("https://") ? { image: page.imageUrl } : {}),
+            },
+            {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "دليل المكاتب العقارية",
+                  item: "https://jarak-ksa.com/offices",
+                },
+                { "@type": "ListItem", position: 2, name: page.name, item: url },
+              ],
+            },
+          ]),
+        },
+      ],
     };
   },
   component: OfficePage,

@@ -14,7 +14,7 @@ Start by creating a **design system**. Then design the key screens listed at the
 
 ## 1. What Jark is
 
-"Jark" (جارك) means **"your neighbor"** in Arabic (domain: yourneighbor.app). The idea: one trusted neighbor who connects everyone in a property's life.
+"Jark" (جارك) means **"your neighbor"** in Arabic (domain: jarak-ksa.com). The idea: one trusted neighbor who connects everyone in a property's life.
 
 Jark does two jobs on one platform:
 

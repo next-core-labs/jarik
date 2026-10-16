@@ -33,7 +33,7 @@ function officeStaff(ids: string[]) {
 
 describe("processIncomingWhatsapp", () => {
   it("falls back to a generic classification when no AI key is configured, and only notifies staff", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     fakeSupabase = createFakeSupabase({
       tenants: { data: [], error: null },
       "rpc:org_user_ids": { data: [], error: null },
@@ -70,7 +70,7 @@ describe("processIncomingWhatsapp", () => {
   });
 
   it("matches a tenant by phone tail, files a maintenance request, and notifies both staff and the tenant", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "key");
+    vi.stubEnv("AI_API_KEY", "key");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -139,7 +139,7 @@ describe("processIncomingWhatsapp", () => {
   });
 
   it("matches by profile when no tenant record shares the phone number", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     fakeSupabase = createFakeSupabase({
       tenants: { data: [], error: null },
       "rpc:org_user_ids": { data: ["p1"], error: null },
@@ -166,7 +166,7 @@ describe("processIncomingWhatsapp", () => {
   });
 
   it("only looks at the channel's own office: tenants, accounts and staff are all scoped to it", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     fakeSupabase = createFakeSupabase({
       tenants: { data: [], error: null },
       "rpc:org_user_ids": { data: ["p1"], error: null },
@@ -197,7 +197,7 @@ describe("processIncomingWhatsapp", () => {
   });
 
   it("does not query every profile on the platform when the office has no connected accounts", async () => {
-    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("AI_API_KEY", "");
     fakeSupabase = createFakeSupabase({
       tenants: { data: [], error: null },
       "rpc:org_user_ids": { data: [], error: null },

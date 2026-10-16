@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://yourneighbor.app/sitemap.xml
+Sitemap: https://jarak-ksa.com/sitemap.xml

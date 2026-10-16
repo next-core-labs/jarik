@@ -18,6 +18,8 @@ $$;
 REVOKE ALL ON FUNCTION public.my_org_id() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.my_org_id() TO authenticated;
 
+-- Replay-safe: an earlier hand-written version had parameter defaults.
+DROP FUNCTION IF EXISTS public.register_office(text, text, text, text, text);
 CREATE OR REPLACE FUNCTION public.register_office(_name text, _city text, _district text, _fal text, _phone text)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE _org uuid; _code text;
@@ -42,6 +44,13 @@ END $$;
 REVOKE ALL ON FUNCTION public.register_office(text, text, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.register_office(text, text, text, text, text) TO authenticated;
 
+-- Replay-safe: 20260922090000 created a per-office invoice_counters(org_id, …); the live database
+-- (and next_invoice_number below) use the per-year shape. Swap it while it can only hold counters.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'invoice_counters' AND column_name = 'org_id') THEN
+    DROP TABLE public.invoice_counters;
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS public.invoice_counters (
   year integer PRIMARY KEY,
   last_number integer NOT NULL DEFAULT 0
@@ -52,6 +61,8 @@ ALTER TABLE public.invoice_counters ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "staff read counters" ON public.invoice_counters FOR SELECT TO authenticated
   USING (public.is_staff(auth.uid()));
 
+-- Replay-safe: an earlier hand-written version had parameter defaults.
+DROP FUNCTION IF EXISTS public.next_invoice_number(integer);
 CREATE OR REPLACE FUNCTION public.next_invoice_number(_year integer)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE n integer;

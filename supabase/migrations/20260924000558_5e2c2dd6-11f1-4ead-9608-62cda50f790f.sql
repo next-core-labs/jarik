@@ -5,6 +5,13 @@ ALTER TABLE public.maintenance_requests ADD COLUMN IF NOT EXISTS org_id uuid REF
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS org_id uuid REFERENCES public.org_settings(id) ON DELETE CASCADE;
 ALTER TABLE public.whatsapp_messages ADD COLUMN IF NOT EXISTS org_id uuid REFERENCES public.org_settings(id) ON DELETE CASCADE;
 
+-- Replay-safe: 20260921100000 created rate_limits with a "hits" column; the live database and
+-- check_rate_limit() below use "count".
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'rate_limits' AND column_name = 'hits') THEN
+    ALTER TABLE public.rate_limits RENAME COLUMN hits TO count;
+  END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS public.rate_limits (
   user_id uuid NOT NULL,
   action text NOT NULL,

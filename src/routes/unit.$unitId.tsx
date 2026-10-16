@@ -156,7 +156,7 @@ export const Route = createFileRoute("/unit/$unitId")({
       l.area ? ` · ${l.area} م²` : ""
     }${listingLocation(l) ? ` · ${listingLocation(l)}` : ""}. ${l.office.name}.`;
     const image = photos[0] ?? l.coverPath;
-    const url = `https://yourneighbor.app/unit/${encodeURIComponent(params.unitId)}`;
+    const url = `https://jarak-ksa.com/unit/${encodeURIComponent(params.unitId)}`;
     return {
       meta: [
         { title },
@@ -213,7 +213,7 @@ export const Route = createFileRoute("/unit/$unitId")({
                   "@type": "ListItem",
                   position: 1,
                   name: "سوق العروض",
-                  item: "https://yourneighbor.app/",
+                  item: "https://jarak-ksa.com/",
                 },
                 { "@type": "ListItem", position: 2, name: listingTitle(l), item: url },
               ],

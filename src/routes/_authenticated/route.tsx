@@ -59,7 +59,15 @@ export const Route = createFileRoute("/_authenticated")({
         .eq("user_id", user.id)
         .maybeSingle();
       if (error || !delegation?.permissions?.length) {
-        throw redirect({ to: roles.includes("owner") ? "/owner-dashboard" : roles.includes("tenant") ? "/tenant-dashboard" : staff ? "/dashboard" : "/portal" });
+        throw redirect({
+          to: roles.includes("owner")
+            ? "/owner-dashboard"
+            : roles.includes("tenant")
+              ? "/tenant-dashboard"
+              : staff
+                ? "/dashboard"
+                : "/portal",
+        });
       }
     }
 

@@ -1,3 +1,10 @@
+CREATE OR REPLACE FUNCTION private.my_email() RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT lower(email) FROM auth.users WHERE id = auth.uid()
+$$;
+REVOKE ALL ON FUNCTION private.my_email() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.my_email() TO authenticated;
+
 -- المرحلة 2 من لوحة "المدير العام": مالك الموقع (super_admin) يدعو أشخاصًا آخرين للوصول إلى /hq
 -- بصلاحيات محددة القسم — دون منحهم دور super_admin الكامل نفسه. إدارة المدراء أنفسهم (دعوة/إزالة/
 -- رؤية القائمة) تبقى حصرًا لمالك الموقع؛ مدير مفوَّض لا يقدر يدعو أو يزيل مديرًا آخر.

@@ -38,7 +38,7 @@ CREATE TRIGGER zz_track_unit_list_price
   BEFORE UPDATE OF annual_rent, sale_price, listing_purpose, price_decayed_at, status ON public.units
   FOR EACH ROW EXECUTE FUNCTION private.track_unit_list_price();
 
--- Same view as 20260927212822 plus list_price at the end (CREATE OR REPLACE VIEW may only append
+-- Same view as 20260927205832 (hq_offices_and_featured_listings) plus list_price at the end (CREATE OR REPLACE VIEW may only append
 -- columns). It is non-null only while the current price is really below it.
 CREATE OR REPLACE VIEW public.vacant_units_public AS
 SELECT u.id, u.unit_number, u.unit_name, u.unit_type, u.district, u.street, u.floor_no,

@@ -96,9 +96,9 @@ export const Route = createFileRoute("/offices")({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { property: "og:url", content: "https://yourneighbor.app/offices" },
+      { property: "og:url", content: "https://jarak-ksa.com/offices" },
     ],
-    links: [{ rel: "canonical", href: "https://yourneighbor.app/offices" }],
+    links: [{ rel: "canonical", href: "https://jarak-ksa.com/offices" }],
     scripts: loaderData?.length
       ? [
           {
@@ -110,7 +110,7 @@ export const Route = createFileRoute("/offices")({
                 name: o.company_name,
                 // Only offices with a public page (office_pages_public) have a live /office URL.
                 ...(o.hasPage
-                  ? { url: `https://yourneighbor.app/office/${encodeURIComponent(o.id)}` }
+                  ? { url: `https://jarak-ksa.com/office/${encodeURIComponent(o.id)}` }
                   : {}),
                 ...(o.office_phone ? { telephone: o.office_phone } : {}),
                 ...(o.city || o.district

@@ -13,11 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChooseRoleRouteImport } from './routes/choose-role'
-import { Route as McpRouteImport } from './routes/mcp'
 import { Route as OfficesRouteImport } from './routes/offices'
 import { Route as RequestsMarketRouteImport } from './routes/requests-market'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authenticated/agreements'
 import { Route as AuthenticatedAssistantRouteImport } from './routes/_authenticated/assistant'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
@@ -54,14 +52,12 @@ import { Route as OwnerLoginRouteImport } from './routes/owner.login'
 import { Route as TenantActivateRouteImport } from './routes/tenant.activate'
 import { Route as TenantLoginRouteImport } from './routes/tenant.login'
 import { Route as UnitUnitIdRouteImport } from './routes/unit.$unitId'
-import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as AuthenticatedInvoicesNewRouteImport } from './routes/_authenticated/invoices.new'
 import { Route as AuthenticatedOwnerAgreementsRouteImport } from './routes/_authenticated/owner.agreements'
 import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authenticated/owner.settings'
 import { Route as AuthenticatedTenantSettingsRouteImport } from './routes/_authenticated/tenant.settings'
+import { Route as ApiAuthSendEmailRouteImport } from './routes/api/auth/send-email'
 import { Route as ApiPublicWhatsappChannelIdRouteImport } from './routes/api/public/whatsapp.$channelId'
-import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
-import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,11 +78,6 @@ const ChooseRoleRoute = ChooseRoleRouteImport.update({
   path: '/choose-role',
   getParentRoute: () => rootRouteImport,
 } as any)
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const OfficesRoute = OfficesRouteImport.update({
   id: '/offices',
   path: '/offices',
@@ -102,12 +93,6 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AuthenticatedAgreementsRoute = AuthenticatedAgreementsRouteImport.update({
   id: '/agreements',
   path: '/agreements',
@@ -295,11 +280,6 @@ const UnitUnitIdRoute = UnitUnitIdRouteImport.update({
   path: '/unit/$unitId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedInvoicesNewRoute =
   AuthenticatedInvoicesNewRouteImport.update({
     id: '/new',
@@ -324,32 +304,25 @@ const AuthenticatedTenantSettingsRoute =
     path: '/tenant/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiAuthSendEmailRoute = ApiAuthSendEmailRouteImport.update({
+  id: '/api/auth/send-email',
+  path: '/api/auth/send-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWhatsappChannelIdRoute =
   ApiPublicWhatsappChannelIdRouteImport.update({
     id: '/api/public/whatsapp/$channelId',
     path: '/api/public/whatsapp/$channelId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
-  id: '/lovable/email/auth/preview',
-  path: '/lovable/email/auth/preview',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
-  id: '/lovable/email/auth/webhook',
-  path: '/lovable/email/auth/webhook',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/choose-role': typeof ChooseRoleRoute
-  '/mcp': typeof McpRoute
   '/offices': typeof OfficesRoute
   '/requests-market': typeof RequestsMarketRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/agreements': typeof AuthenticatedAgreementsRoute
   '/assistant': typeof AuthenticatedAssistantRoute
   '/audit': typeof AuthenticatedAuditRoute
@@ -386,24 +359,20 @@ export interface FileRoutesByFullPath {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
+  '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
-  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
-  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/choose-role': typeof ChooseRoleRoute
-  '/mcp': typeof McpRoute
   '/offices': typeof OfficesRoute
   '/requests-market': typeof RequestsMarketRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/agreements': typeof AuthenticatedAgreementsRoute
   '/assistant': typeof AuthenticatedAssistantRoute
   '/audit': typeof AuthenticatedAuditRoute
@@ -440,14 +409,12 @@ export interface FileRoutesByTo {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
+  '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
-  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
-  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -455,11 +422,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/choose-role': typeof ChooseRoleRoute
-  '/mcp': typeof McpRoute
   '/offices': typeof OfficesRoute
   '/requests-market': typeof RequestsMarketRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/agreements': typeof AuthenticatedAgreementsRoute
   '/_authenticated/assistant': typeof AuthenticatedAssistantRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
@@ -496,14 +461,12 @@ export interface FileRoutesById {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/_authenticated/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/_authenticated/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
   '/_authenticated/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/_authenticated/tenant/settings': typeof AuthenticatedTenantSettingsRoute
+  '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
-  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
-  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -511,11 +474,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/choose-role'
-    | '/mcp'
     | '/offices'
     | '/requests-market'
     | '/sitemap.xml'
-    | '/.well-known/oauth-protected-resource'
     | '/agreements'
     | '/assistant'
     | '/audit'
@@ -552,24 +513,20 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
-    | '/.lovable/oauth/consent'
     | '/invoices/new'
     | '/owner/agreements'
     | '/owner/settings'
     | '/tenant/settings'
+    | '/api/auth/send-email'
     | '/api/public/whatsapp/$channelId'
-    | '/lovable/email/auth/preview'
-    | '/lovable/email/auth/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/choose-role'
-    | '/mcp'
     | '/offices'
     | '/requests-market'
     | '/sitemap.xml'
-    | '/.well-known/oauth-protected-resource'
     | '/agreements'
     | '/assistant'
     | '/audit'
@@ -606,25 +563,21 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
-    | '/.lovable/oauth/consent'
     | '/invoices/new'
     | '/owner/agreements'
     | '/owner/settings'
     | '/tenant/settings'
+    | '/api/auth/send-email'
     | '/api/public/whatsapp/$channelId'
-    | '/lovable/email/auth/preview'
-    | '/lovable/email/auth/webhook'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/choose-role'
-    | '/mcp'
     | '/offices'
     | '/requests-market'
     | '/sitemap.xml'
-    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/agreements'
     | '/_authenticated/assistant'
     | '/_authenticated/audit'
@@ -661,14 +614,12 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
-    | '/.lovable/oauth/consent'
     | '/_authenticated/invoices/new'
     | '/_authenticated/owner/agreements'
     | '/_authenticated/owner/settings'
     | '/_authenticated/tenant/settings'
+    | '/api/auth/send-email'
     | '/api/public/whatsapp/$channelId'
-    | '/lovable/email/auth/preview'
-    | '/lovable/email/auth/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -676,11 +627,9 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ChooseRoleRoute: typeof ChooseRoleRoute
-  McpRoute: typeof McpRoute
   OfficesRoute: typeof OfficesRoute
   RequestsMarketRoute: typeof RequestsMarketRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   LegalSlugRoute: typeof LegalSlugRoute
   OfficeOfficeIdRoute: typeof OfficeOfficeIdRoute
   OwnerOwnerIdRoute: typeof OwnerOwnerIdRoute
@@ -688,10 +637,8 @@ export interface RootRouteChildren {
   TenantActivateRoute: typeof TenantActivateRoute
   TenantLoginRoute: typeof TenantLoginRoute
   UnitUnitIdRoute: typeof UnitUnitIdRoute
-  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
+  ApiAuthSendEmailRoute: typeof ApiAuthSendEmailRoute
   ApiPublicWhatsappChannelIdRoute: typeof ApiPublicWhatsappChannelIdRoute
-  LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
-  LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -724,13 +671,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChooseRoleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/offices': {
       id: '/offices'
       path: '/offices'
@@ -750,13 +690,6 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/agreements': {
@@ -1011,13 +944,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnitUnitIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.lovable/oauth/consent': {
-      id: '/.lovable/oauth/consent'
-      path: '/.lovable/oauth/consent'
-      fullPath: '/.lovable/oauth/consent'
-      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/invoices/new': {
       id: '/_authenticated/invoices/new'
       path: '/new'
@@ -1046,25 +972,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTenantSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/auth/send-email': {
+      id: '/api/auth/send-email'
+      path: '/api/auth/send-email'
+      fullPath: '/api/auth/send-email'
+      preLoaderRoute: typeof ApiAuthSendEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/whatsapp/$channelId': {
       id: '/api/public/whatsapp/$channelId'
       path: '/api/public/whatsapp/$channelId'
       fullPath: '/api/public/whatsapp/$channelId'
       preLoaderRoute: typeof ApiPublicWhatsappChannelIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lovable/email/auth/preview': {
-      id: '/lovable/email/auth/preview'
-      path: '/lovable/email/auth/preview'
-      fullPath: '/lovable/email/auth/preview'
-      preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lovable/email/auth/webhook': {
-      id: '/lovable/email/auth/webhook'
-      path: '/lovable/email/auth/webhook'
-      fullPath: '/lovable/email/auth/webhook'
-      preLoaderRoute: typeof LovableEmailAuthWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -1161,12 +1080,9 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ChooseRoleRoute: ChooseRoleRoute,
-  McpRoute: McpRoute,
   OfficesRoute: OfficesRoute,
   RequestsMarketRoute: RequestsMarketRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  Char91DotwellKnownChar93OauthProtectedResourceRoute:
-    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   LegalSlugRoute: LegalSlugRoute,
   OfficeOfficeIdRoute: OfficeOfficeIdRoute,
   OwnerOwnerIdRoute: OwnerOwnerIdRoute,
@@ -1174,10 +1090,8 @@ const rootRouteChildren: RootRouteChildren = {
   TenantActivateRoute: TenantActivateRoute,
   TenantLoginRoute: TenantLoginRoute,
   UnitUnitIdRoute: UnitUnitIdRoute,
-  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
+  ApiAuthSendEmailRoute: ApiAuthSendEmailRoute,
   ApiPublicWhatsappChannelIdRoute: ApiPublicWhatsappChannelIdRoute,
-  LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
-  LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

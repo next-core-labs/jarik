@@ -6,6 +6,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { classifyMaintenancePriority } from "@/lib/maintenance-triage";
 import { getMyOrgId, requireStaff, type ServerCtx } from "@/lib/server-context";
+import { aiChatUrl, aiKey, aiModel } from "@/lib/ai.server";
 
 /** تشغيل التذكير الذكي الآن (يعمل تلقائيًا كل صباح 11 بتوقيت السعودية أيضًا). */
 export const runSmartReminders = createServerFn({ method: "POST" })
@@ -481,7 +482,7 @@ async function transcribeInto(
   audioPath: string,
   apply: (text: string) => void,
 ): Promise<boolean> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const apiKey = aiKey();
   if (!apiKey) return false;
   try {
     // Download with the caller's own client so storage RLS applies (the admin client would
@@ -492,11 +493,11 @@ async function transcribeInto(
     if (error || !blob || blob.size > MAX_AUDIO_BYTES) return false;
     const base64 = Buffer.from(await blob.arrayBuffer()).toString("base64");
     const format = audioPath.endsWith(".ogg") ? "ogg" : audioPath.endsWith(".mp3") ? "mp3" : "webm";
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(aiChatUrl(), {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: aiModel(),
         messages: [
           {
             role: "user",

@@ -8,7 +8,7 @@ import { getMyOrgId, requireStaff, type ServerCtx } from "@/lib/server-context";
 // is used anywhere for redirect links, which a server function has no access to). Set APP_URL in
 // the environment for this to be correct across environments; this falls back to the known
 // production domain otherwise.
-const APP_URL = process.env["APP_URL"] ?? "https://yourneighbor.app";
+const APP_URL = process.env["APP_URL"] ?? "https://jarak-ksa.com";
 
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MINUTES = 15;
