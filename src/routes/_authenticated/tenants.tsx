@@ -124,6 +124,50 @@ function Tenants() {
     toast.success("نزل ملف الإكسل — جاهز للمحاسب");
   };
 
+  type Lease = NonNullable<typeof data>["leases"][number];
+  // "default" (red) is reserved for price/primary action/available — an "إيجار" sync status is
+  // none of those.
+  const ejarBadge = (l: Lease) => (
+    <Badge variant={l.ejar_status === "synced" ? "secondary" : "outline"}>
+      {l.ejar_status === "synced" ? (l.ejar_contract_no ?? "موثّق") : "بانتظار"}
+    </Badge>
+  );
+  // An active lease means the unit is occupied — same "not available" reasoning as the
+  // unit-status badges: this is not the vacant/available mark either.
+  const leaseBadge = (l: Lease) => (
+    <Badge variant={l.status === "active" ? "secondary" : "outline"}>
+      {leaseStatusLabel[l.status] ?? l.status}
+    </Badge>
+  );
+  const tenantAccount = (l: Lease, full: boolean) =>
+    l.tenants?.user_id ? (
+      <Badge variant="outline" className="self-start">
+        مرتبط بحساب
+      </Badge>
+    ) : (
+      <Button
+        size="sm"
+        variant="outline"
+        className={full ? "w-full" : undefined}
+        onClick={() =>
+          setInvitingLease({
+            id: l.id,
+            tenantName: l.tenants?.full_name ?? "المستأجر",
+            tenantEmail: l.tenants?.email ?? null,
+          })
+        }
+      >
+        <UserPlus className="size-4" />
+        دعوة مستأجر
+      </Button>
+    );
+  const termBadge = (l: Lease) =>
+    l.term_months && l.term_months !== 12 ? (
+      <Badge variant="outline" className="ms-2">
+        عقد {l.term_months} أشهر
+      </Badge>
+    ) : null;
+
   return (
     <>
       <PageHeader
@@ -141,75 +185,71 @@ function Tenants() {
         <CardHeader>
           <CardTitle className="text-base">العقود</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>المستأجر</TableHead>
-                <TableHead>الوحدة</TableHead>
-                <TableHead>المدة</TableHead>
-                <TableHead>الإيجار السنوي</TableHead>
-                <TableHead>الدفعات</TableHead>
-                <TableHead>إيجار</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead>حساب المستأجر</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.leases.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-medium">{l.tenants?.full_name ?? "—"}</TableCell>
-                  <TableCell>
-                    {l.units?.properties?.name} · {l.units?.unit_number}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {shortDate(l.start_date)} — {shortDate(l.end_date)}
-                    {l.term_months && l.term_months !== 12 ? (
-                      <Badge variant="outline" className="ms-2">
-                        عقد {l.term_months} أشهر
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{sar(l.annual_rent)}</TableCell>
-                  <TableCell>{l.installments} دفعات</TableCell>
-                  <TableCell>
-                    {/* "default" (red) is reserved for price/primary action/available — an "إيجار"
-                        sync status is none of those. */}
-                    <Badge variant={l.ejar_status === "synced" ? "secondary" : "outline"}>
-                      {l.ejar_status === "synced" ? (l.ejar_contract_no ?? "موثّق") : "بانتظار"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {/* An active lease means the unit is occupied — same "not available" reasoning
-                        as the unit-status badges: this is not the vacant/available mark either. */}
-                    <Badge variant={l.status === "active" ? "secondary" : "outline"}>
-                      {leaseStatusLabel[l.status] ?? l.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {l.tenants?.user_id ? (
-                      <Badge variant="outline">مرتبط بحساب</Badge>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setInvitingLease({
-                            id: l.id,
-                            tenantName: l.tenants?.full_name ?? "المستأجر",
-                            tenantEmail: l.tenants?.email ?? null,
-                          })
-                        }
-                      >
-                        <UserPlus className="size-4" />
-                        دعوة مستأجر
-                      </Button>
-                    )}
-                  </TableCell>
+        <CardContent>
+          {/* Phones: one card per contract — eight columns don't fit a 390px screen. */}
+          <ul className="divide-y divide-border md:hidden">
+            {data.leases.map((l) => (
+              <li key={l.id} className="flex flex-col gap-2 py-4 first:pt-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{l.tenants?.full_name ?? "—"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {l.units?.properties?.name} · {l.units?.unit_number}
+                    </p>
+                  </div>
+                  {leaseBadge(l)}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {shortDate(l.start_date)} — {shortDate(l.end_date)}
+                  {termBadge(l)}
+                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-semibold tabular-nums">
+                    {sar(l.annual_rent)} · {l.installments} دفعات
+                  </span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    إيجار {ejarBadge(l)}
+                  </span>
+                </div>
+                {tenantAccount(l, true)}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>المستأجر</TableHead>
+                  <TableHead>الوحدة</TableHead>
+                  <TableHead>المدة</TableHead>
+                  <TableHead>الإيجار السنوي</TableHead>
+                  <TableHead>الدفعات</TableHead>
+                  <TableHead>إيجار</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead>حساب المستأجر</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {data.leases.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">{l.tenants?.full_name ?? "—"}</TableCell>
+                    <TableCell>
+                      {l.units?.properties?.name} · {l.units?.unit_number}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {shortDate(l.start_date)} — {shortDate(l.end_date)}
+                      {termBadge(l)}
+                    </TableCell>
+                    <TableCell>{sar(l.annual_rent)}</TableCell>
+                    <TableCell>{l.installments} دفعات</TableCell>
+                    <TableCell>{ejarBadge(l)}</TableCell>
+                    <TableCell>{leaseBadge(l)}</TableCell>
+                    <TableCell>{tenantAccount(l, false)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           {data.leases.length === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">لا توجد عقود.</p>
           ) : null}

@@ -2,7 +2,8 @@ import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
-/** بطاقة مؤشر رقمي بأيقونة — الوحدة المشتركة بين لوحات المؤشرات (الموظف/المالك/المستأجر/المدير العام). */
+/** بطاقة مؤشر رقمي بأيقونة — الوحدة المشتركة بين لوحات المؤشرات (الموظف/المالك/المستأجر/المدير العام).
+ *  على الجوال تُعرض بطاقتان في الصف: حشوة أصغر وبدون الأيقونة الزخرفية حتى يتسع الرقم. */
 export function StatCard({
   icon: Icon,
   label,
@@ -19,11 +20,11 @@ export function StatCard({
 }) {
   return (
     <Card className={tone === "warn" ? "border-destructive/50 shadow-deed" : "shadow-deed"}>
-      <CardContent className="pt-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="mt-2 truncate font-display text-3xl leading-none font-bold tabular-nums">
+            <p className="text-xs text-muted-foreground sm:text-sm">{label}</p>
+            <p className="mt-2 truncate font-display text-2xl leading-none font-bold tabular-nums sm:text-3xl">
               {value}
             </p>
             {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
@@ -31,8 +32,8 @@ export function StatCard({
           <span
             className={
               tone === "warn"
-                ? "grid size-10 shrink-0 place-items-center rounded-md bg-destructive-tint text-destructive-tint-foreground"
-                : "grid size-10 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground"
+                ? "hidden size-10 shrink-0 place-items-center rounded-md bg-destructive-tint text-destructive-tint-foreground sm:grid"
+                : "hidden size-10 shrink-0 place-items-center rounded-md bg-accent text-accent-foreground sm:grid"
             }
           >
             <Icon className="size-5" />

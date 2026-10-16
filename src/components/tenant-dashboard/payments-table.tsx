@@ -86,93 +86,113 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
   const paidTotal = data.reduce((s, p) => (p.status === "paid" ? s + Number(p.amount) : s), 0);
   const totalAll = data.reduce((s, p) => s + Number(p.amount), 0);
 
+  type Row = (typeof data)[number];
+  const isOverdue = (p: Row) => p.status !== "paid" && daysUntil(p.due_date) < 0;
+  const statusBadge = (p: Row) => {
+    const remaining = daysUntil(p.due_date);
+    // "default" (الأحمر) محجوز للسعر/الإجراء الرئيسي/التوفر — لا يُستخدم لحالة كهذه.
+    if (p.status === "paid") return <Badge variant="secondary">مدفوعة</Badge>;
+    if (isOverdue(p)) return <Badge variant="destructive">متأخرة {Math.abs(remaining)} يوم</Badge>;
+    return <Badge variant="outline">بعد {remaining} يوم</Badge>;
+  };
+  /** The row's action, or null when there is none. `full` stretches it across a phone card. */
+  const paymentAction = (p: Row, full: boolean) => {
+    if (p.status === "paid") {
+      return (
+        <Button
+          size="sm"
+          variant="outline"
+          className={full ? "w-full" : undefined}
+          disabled={downloading}
+          onClick={() => downloadReceipt(p)}
+        >
+          <Download className="size-4" />
+          إيصال PDF
+        </Button>
+      );
+    }
+    if (!isOverdue(p)) return null;
+    if (p.transfer_reference) {
+      return <p className="text-xs text-muted-foreground">أبلغت — بانتظار التأكيد</p>;
+    }
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Input
+          className={full ? "h-9 min-w-0 flex-1" : "h-9 max-w-40"}
+          dir="ltr"
+          placeholder="رقم مرجع التحويل"
+          value={refs[p.id] ?? ""}
+          onChange={(e) => setRefs((v) => ({ ...v, [p.id]: e.target.value }))}
+        />
+        <Button
+          size="sm"
+          disabled={(refs[p.id] ?? "").trim().length < 3 || notifyTransfer.isPending}
+          onClick={() =>
+            notifyTransfer.mutate({
+              data: { paymentId: p.id, reference: (refs[p.id] ?? "").trim() },
+            })
+          }
+        >
+          سدّدت — أبلغ المكتب
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <Card className="shadow-deed">
       <CardHeader>
         <CardTitle className="text-base">جدول الدفعات</CardTitle>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>رقم الدفعة</TableHead>
-              <TableHead>تاريخ الاستحقاق</TableHead>
-              <TableHead>المبلغ</TableHead>
-              <TableHead>الحالة</TableHead>
-              <TableHead>إجراء</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((p, index) => {
-              const remaining = daysUntil(p.due_date);
-              const overdue = p.status !== "paid" && remaining < 0;
-              return (
+      <CardContent>
+        {/* Phones: one card per payment — five columns don't fit a 390px screen. */}
+        <ul className="divide-y divide-border md:hidden">
+          {data.map((p, index) => (
+            <li key={p.id} className="flex flex-col gap-3 py-4 first:pt-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">
+                    الدفعة {index + 1} من {data.length}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    تستحق {shortDate(p.due_date)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <p className="font-bold tabular-nums">{sar(p.amount)}</p>
+                  {statusBadge(p)}
+                </div>
+              </div>
+              {paymentAction(p, true)}
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>رقم الدفعة</TableHead>
+                <TableHead>تاريخ الاستحقاق</TableHead>
+                <TableHead>المبلغ</TableHead>
+                <TableHead>الحالة</TableHead>
+                <TableHead>إجراء</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((p, index) => (
                 <TableRow key={p.id}>
                   <TableCell>
                     {index + 1} من {data.length}
                   </TableCell>
                   <TableCell>{shortDate(p.due_date)}</TableCell>
                   <TableCell>{sar(p.amount)}</TableCell>
-                  <TableCell>
-                    {p.status === "paid" ? (
-                      // "default" (الأحمر) محجوز للسعر/الإجراء الرئيسي/التوفر — لا يُستخدم لحالة كهذه.
-                      <Badge variant="secondary">مدفوعة</Badge>
-                    ) : overdue ? (
-                      <Badge variant="destructive">متأخرة {Math.abs(remaining)} يوم</Badge>
-                    ) : (
-                      <Badge variant="outline">بعد {remaining} يوم</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {p.status === "paid" ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={downloading}
-                        onClick={() => downloadReceipt(p)}
-                      >
-                        <Download className="size-4" />
-                        إيصال PDF
-                      </Button>
-                    ) : overdue ? (
-                      p.transfer_reference ? (
-                        <p className="text-xs text-muted-foreground">أبلغت — بانتظار التأكيد</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          <Input
-                            className="h-9 max-w-40"
-                            dir="ltr"
-                            placeholder="رقم مرجع التحويل"
-                            value={refs[p.id] ?? ""}
-                            onChange={(e) => setRefs((v) => ({ ...v, [p.id]: e.target.value }))}
-                          />
-                          <Button
-                            size="sm"
-                            disabled={
-                              (refs[p.id] ?? "").trim().length < 3 || notifyTransfer.isPending
-                            }
-                            onClick={() =>
-                              notifyTransfer.mutate({
-                                data: {
-                                  paymentId: p.id,
-                                  reference: (refs[p.id] ?? "").trim(),
-                                },
-                              })
-                            }
-                          >
-                            سدّدت — أبلغ المكتب
-                          </Button>
-                        </div>
-                      )
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
+                  <TableCell>{statusBadge(p)}</TableCell>
+                  <TableCell>{paymentAction(p, false) ?? "—"}</TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
         {data.length === 0 ? (
           <p className="py-6 text-sm text-muted-foreground">لا توجد دفعات.</p>
         ) : null}

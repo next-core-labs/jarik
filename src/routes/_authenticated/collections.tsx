@@ -175,6 +175,42 @@ function Collections() {
   );
   const reminderTargets = [...overdueList, ...dueSoonList].map((p) => p.id);
 
+  type Payment = (typeof data.payments)[number];
+  const paymentBadge = (p: Payment) => (
+    <Badge
+      variant={
+        p.status === "paid"
+          ? "default"
+          : effectiveStatus(p) === "overdue"
+            ? "destructive"
+            : "outline"
+      }
+    >
+      {paymentStatusLabel[effectiveStatus(p)] ?? p.status}
+    </Badge>
+  );
+  const transferNote = (p: Payment) =>
+    p.transfer_reference && p.status !== "paid" ? (
+      <span className="mt-1 block text-xs text-brass">
+        المستأجر أبلغ عن تحويل: {p.transfer_reference}
+      </span>
+    ) : null;
+  /** `full` stretches the button across a phone card. */
+  const paymentAction = (p: Payment, full: boolean) =>
+    p.status !== "paid" ? (
+      <Button
+        size="sm"
+        variant="outline"
+        className={full ? "w-full" : undefined}
+        disabled={markPaid.isPending}
+        onClick={() => markPaid.mutate(p.id)}
+      >
+        تسجيل السداد
+      </Button>
+    ) : (
+      <span className="text-xs text-muted-foreground">سُددت {shortDate(p.paid_date)}</span>
+    );
+
   return (
     <>
       <PageHeader
@@ -275,69 +311,62 @@ function Collections() {
         <CardHeader>
           <CardTitle className="text-base">الدفعات</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>المستأجر</TableHead>
-                <TableHead>الوحدة</TableHead>
-                <TableHead>الاستحقاق</TableHead>
-                <TableHead>المبلغ</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.payments.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">
-                    {p.leases?.tenants?.full_name ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    {p.leases?.units?.properties?.name} · {p.leases?.units?.unit_number}
-                  </TableCell>
-                  <TableCell>{shortDate(p.due_date)}</TableCell>
-                  <TableCell>
-                    {sar(p.amount)}
-                    {p.transfer_reference && p.status !== "paid" ? (
-                      <span className="mt-1 block text-xs text-brass">
-                        المستأجر أبلغ عن تحويل: {p.transfer_reference}
-                      </span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        p.status === "paid"
-                          ? "default"
-                          : effectiveStatus(p) === "overdue"
-                            ? "destructive"
-                            : "outline"
-                      }
-                    >
-                      {paymentStatusLabel[effectiveStatus(p)] ?? p.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {p.status !== "paid" ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={markPaid.isPending}
-                        onClick={() => markPaid.mutate(p.id)}
-                      >
-                        تسجيل السداد
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        سُددت {shortDate(p.paid_date)}
-                      </span>
-                    )}
-                  </TableCell>
+        <CardContent>
+          {/* Phones: one card per payment instead of a six-column table. */}
+          <ul className="divide-y divide-border md:hidden">
+            {data.payments.map((p) => (
+              <li key={p.id} className="flex flex-col gap-2 py-4 first:pt-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{p.leases?.tenants?.full_name ?? "—"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {p.leases?.units?.properties?.name} · {p.leases?.units?.unit_number} · تستحق{" "}
+                      {shortDate(p.due_date)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <p className="font-bold tabular-nums">{sar(p.amount)}</p>
+                    {paymentBadge(p)}
+                  </div>
+                </div>
+                {transferNote(p)}
+                {paymentAction(p, true)}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>المستأجر</TableHead>
+                  <TableHead>الوحدة</TableHead>
+                  <TableHead>الاستحقاق</TableHead>
+                  <TableHead>المبلغ</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {data.payments.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">
+                      {p.leases?.tenants?.full_name ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {p.leases?.units?.properties?.name} · {p.leases?.units?.unit_number}
+                    </TableCell>
+                    <TableCell>{shortDate(p.due_date)}</TableCell>
+                    <TableCell>
+                      {sar(p.amount)}
+                      {transferNote(p)}
+                    </TableCell>
+                    <TableCell>{paymentBadge(p)}</TableCell>
+                    <TableCell>{paymentAction(p, false)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -345,29 +374,46 @@ function Collections() {
         <CardHeader>
           <CardTitle className="text-base">المصروفات</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>البيان</TableHead>
-                <TableHead>التصنيف</TableHead>
-                <TableHead>العقار</TableHead>
-                <TableHead>التاريخ</TableHead>
-                <TableHead>المبلغ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.expenses.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="font-medium">{e.title}</TableCell>
-                  <TableCell>{e.category}</TableCell>
-                  <TableCell>{e.properties?.name ?? "—"}</TableCell>
-                  <TableCell>{shortDate(e.expense_date)}</TableCell>
-                  <TableCell>{sar(e.amount)}</TableCell>
+        <CardContent>
+          <ul className="divide-y divide-border md:hidden">
+            {data.expenses.map((e) => (
+              <li key={e.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
+                <div className="min-w-0">
+                  <p className="font-medium">{e.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {[e.category, e.properties?.name, shortDate(e.expense_date)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                <p className="shrink-0 font-bold tabular-nums">{sar(e.amount)}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>البيان</TableHead>
+                  <TableHead>التصنيف</TableHead>
+                  <TableHead>العقار</TableHead>
+                  <TableHead>التاريخ</TableHead>
+                  <TableHead>المبلغ</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {data.expenses.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="font-medium">{e.title}</TableCell>
+                    <TableCell>{e.category}</TableCell>
+                    <TableCell>{e.properties?.name ?? "—"}</TableCell>
+                    <TableCell>{shortDate(e.expense_date)}</TableCell>
+                    <TableCell>{sar(e.amount)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </>

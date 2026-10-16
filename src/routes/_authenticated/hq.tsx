@@ -392,7 +392,7 @@ function HqPage() {
               <p className="text-sm text-destructive">تعذّر تحميل بيانات المحاسبة.</p>
             ) : accounting.data ? (
               <div className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                   <StatCard
                     icon={Wallet}
                     label="إجمالي المحصّل"
@@ -516,7 +516,7 @@ function HqPage() {
                   </Card>
                 ) : null}
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                   <StatCard
                     icon={Building2}
                     label="مكاتب مسجَّلة"
@@ -1381,7 +1381,7 @@ function CommissionsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <StatCard
           icon={Banknote}
           label="عمولة معلّقة"
@@ -1872,7 +1872,7 @@ function ReviewsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <StatCard
           icon={Star}
           label="متوسط تقييم الموقع"

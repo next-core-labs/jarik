@@ -280,6 +280,23 @@ function Market() {
       <h1 className="sr-only">{t("hero_title")}</h1>
 
       <div className="flex h-[calc(100dvh-4rem)] min-h-[520px] flex-col">
+        {/* Phones: search gets its own full-width row — inside the swipeable filter row below it
+            would start off-screen. */}
+        <div className="relative z-10 shrink-0 bg-card px-4 pt-2.5 sm:hidden">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              className="h-10 ps-9 text-base"
+              placeholder={t("search_placeholder")}
+              value={filters.text}
+              onChange={(e) => set("text", e.target.value)}
+              aria-label={t("search_aria")}
+            />
+          </div>
+        </div>
         {/* Filter bar */}
         <div
           role="search"
@@ -368,9 +385,9 @@ function Market() {
             </div>
           ) : null}
 
-          <span className="h-7 w-px shrink-0 bg-border" aria-hidden />
+          <span className="hidden h-7 w-px shrink-0 bg-border sm:block" aria-hidden />
 
-          <div className="relative w-52 shrink-0">
+          <div className="relative hidden w-52 shrink-0 sm:block">
             <Search
               className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden
