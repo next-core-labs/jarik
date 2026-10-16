@@ -239,7 +239,12 @@ function PropertyCard({
             <dd className="mt-0.5 font-display text-sm font-bold">{sar(r.net_12m)}</dd>
           </div>
           <div className="px-2">
-            <dt className="text-[11px] text-muted-foreground">من الإيجار السنوي</dt>
+            <dt
+              className="text-[11px] text-muted-foreground"
+              title="صافي ١٢ شهرًا مقسومًا على الإيجار السنوي في العقود السارية — الوحدات الشاغرة لا تدخل فيه"
+            >
+              من الإيجار المتعاقد
+            </dt>
             <dd className="mt-0.5 font-display text-sm font-bold">{arPct(Number(r.net_pct))}</dd>
           </div>
           <div className="px-2">

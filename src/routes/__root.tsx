@@ -7,12 +7,13 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { initNativeApp } from "@/lib/native";
+import { markRouterMounted } from "@/lib/router-mount";
 
 function NotFoundComponent() {
   return (
@@ -121,6 +122,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
+  // Commits together with the router's <Transitioner>: from here on router updates may use its
+  // state-tracking startTransition (see src/lib/router-mount.ts).
+  useLayoutEffect(() => markRouterMounted(router), [router]);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "@/lib/utils";
+import { scrollToSection } from "@/components/owner-dashboard/scroll-to-section";
 
 export type SectionLink = { id: string; label: string; count?: number };
 
@@ -10,6 +12,7 @@ export type SectionLink = { id: string; label: string; count?: number };
  * sidebar's /owner-dashboard#… links and these tabs land on the same place.
  */
 export function SectionNav({ links }: { links: SectionLink[] }) {
+  const navigate = useNavigate();
   const [active, setActive] = useState(links[0]?.id ?? "");
 
   useEffect(() => {
@@ -54,8 +57,18 @@ export function SectionNav({ links }: { links: SectionLink[] }) {
                   const el = document.getElementById(l.id);
                   if (!el) return;
                   e.preventDefault();
-                  el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  history.replaceState(null, "", `#${l.id}`);
+                  // Update the hash through the router, not history.replaceState: the router patches
+                  // replaceState, and its scroll restoration then jumped the window back to where
+                  // the smooth scroll had got to (and dropped the router's history state).
+                  void navigate({
+                    to: ".",
+                    search: true,
+                    hash: l.id,
+                    replace: true,
+                    resetScroll: false,
+                    hashScrollIntoView: false,
+                  });
+                  scrollToSection(el);
                   setActive(l.id);
                 }}
                 className={cn(

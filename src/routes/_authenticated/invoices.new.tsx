@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Calculator, Download, FilePlus2 } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -19,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { todayRiyadh } from "@/lib/dates";
-import { sar2, shortDate } from "@/lib/format";
+import { arPct, sar2, shortDate } from "@/lib/format";
+import { parseAmount } from "@/lib/public-form";
 import { addVat, buildZatcaQrPayload, splitVat, validateZatcaInvoice } from "@/lib/zatca";
 import { downloadElementAsPdf } from "@/lib/pdf";
 import { useOrgBranding } from "@/lib/use-org-branding";
@@ -171,7 +173,7 @@ function NewInvoice() {
       toast.success("تم حفظ بيانات المنشأة");
       void org.refetch();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   const uploadLogo = useMutation({
@@ -186,7 +188,7 @@ function NewInvoice() {
       if (error) throw error;
       await saveBranding.mutateAsync({ logo_url: path });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر رفع الشعار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الشعار")),
   });
 
   const check = issued
@@ -206,17 +208,22 @@ function NewInvoice() {
       })
     : null;
 
+  // Live breakdown while typing; the issue mutation uses the same numbers.
+  const vatRate = Number(org.data?.vat_rate ?? 15);
+  const parsedAmount = parseAmount(amount);
+  const amountValid = parsedAmount != null && parsedAmount > 0;
+  const totals = amountValid
+    ? amountIncludesVat === "yes"
+      ? splitVat(parsedAmount, vatRate)
+      : addVat(parsedAmount, vatRate)
+    : null;
+
   const issue = useMutation({
     mutationFn: async () => {
-      const vatRate = Number(org.data?.vat_rate ?? 15);
+      if (!totals) throw new Error("أدخل مبلغًا صحيحًا");
       const sellerName = org.data?.company_name ?? "";
       const sellerVat = org.data?.vat_number ?? "";
       if (!sellerVat) throw new Error("أضف الرقم الضريبي للمنشأة أولاً من إعدادات المنشأة");
-
-      const raw = Number(amount);
-      if (!Number.isFinite(raw) || raw <= 0) throw new Error("أدخل مبلغًا صحيحًا");
-
-      const totals = amountIncludesVat === "yes" ? splitVat(raw, vatRate) : addVat(raw, vatRate);
 
       const issueTimestamp = new Date(
         `${issueDate}T${new Date().toTimeString().slice(0, 8)}`,
@@ -277,7 +284,7 @@ function NewInvoice() {
       setIssued(result);
       toast.success(`صُدرت الفاتورة ${result.invoiceNumber}`);
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إصدار الفاتورة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إصدار الفاتورة")),
   });
 
   async function downloadPdf() {
@@ -288,7 +295,8 @@ function NewInvoice() {
     }
     try {
       await downloadElementAsPdf(printRef.current, issued.invoiceNumber);
-    } catch {
+    } catch (e) {
+      console.error("Invoice PDF failed", e);
       toast.error("تعذّر إنشاء ملف PDF");
     }
   }
@@ -388,6 +396,30 @@ function NewInvoice() {
                   </SelectContent>
                 </Select>
               </div>
+              {amount.trim() ? (
+                <div className="text-sm sm:col-span-2" aria-live="polite">
+                  {totals ? (
+                    <dl className="grid grid-cols-3 gap-2 rounded-md bg-muted/50 p-3">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">قبل الضريبة</dt>
+                        <dd>{sar2(totals.subtotal)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">
+                          الضريبة ({arPct(vatRate)})
+                        </dt>
+                        <dd>{sar2(totals.vatAmount)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">الإجمالي</dt>
+                        <dd className="font-bold">{sar2(totals.total)}</dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <p className="text-destructive">أدخل مبلغًا صحيحًا</p>
+                  )}
+                </div>
+              ) : null}
               <div>
                 <Label>تاريخ الإصدار</Label>
                 <Input
@@ -537,7 +569,7 @@ function NewInvoice() {
                       <th className="border border-black/20 p-2 text-start">البند</th>
                       <th className="border border-black/20 p-2 text-start">قبل الضريبة</th>
                       <th className="border border-black/20 p-2 text-start">
-                        الضريبة {issued.vatRate}%
+                        الضريبة {arPct(issued.vatRate)}
                       </th>
                       <th className="border border-black/20 p-2 text-start">الإجمالي</th>
                     </tr>

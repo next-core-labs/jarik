@@ -52,7 +52,9 @@ export const Route = createFileRoute("/")({
         content: "وحدات شاغرة للإيجار من مكاتب ومُلّاك موثوقين — صور حقيقية وأسعار واضحة.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://jarak-ksa.com/" },
     ],
+    links: [{ rel: "canonical", href: "https://jarak-ksa.com/" }],
   }),
   component: Market,
 });

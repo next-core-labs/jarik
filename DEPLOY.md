@@ -47,7 +47,9 @@ and run `npm run db:push` again (it continues from where it stopped).
 
 **Google sign-in** (optional): **Authentication → Providers → Google** → paste the Client ID and
 Secret from Google Cloud Console. In Google Cloud, the authorised redirect URI is
-`https://xjbhpdzjboexcynqtrsp.supabase.co/auth/v1/callback`.
+`https://xjbhpdzjboexcynqtrsp.supabase.co/auth/v1/callback`. The "المتابعة عبر Google" button
+stays hidden until the build sets `VITE_GOOGLE_AUTH_ENABLED=true`. Set it only after the provider
+is enabled, because a disabled provider sends people to a raw error page.
 
 ### A4. Emails in Arabic, from your domain (after B is live)
 

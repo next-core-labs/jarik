@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Check, Handshake, X } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -123,7 +124,7 @@ function OfficeAgreements() {
       toast.success(v.decision === "accept" ? "قُبل الطلب — الاتفاقية سارية الآن" : "رُفض الطلب");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تنفيذ القرار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ القرار")),
   });
 
   const terminate = useMutation({
@@ -137,7 +138,7 @@ function OfficeAgreements() {
       toast.success("سُجّل طلب إنهاء الاتفاقية — تُطبَّق فعليًا بعد فترة الإشعار");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل طلب الإنهاء"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل طلب الإنهاء")),
   });
 
   const decideChange = useMutation({
@@ -153,7 +154,7 @@ function OfficeAgreements() {
       toast.success(v.decision === "approve" ? "وُسِّعت الصلاحية" : "رُفض التوسيع");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل القرار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل القرار")),
   });
 
   if (me && !staff) {
@@ -181,7 +182,9 @@ function OfficeAgreements() {
       {requests.isLoading ? (
         <Skeleton className="h-64" />
       ) : requests.error ? (
-        <p className="text-destructive">تعذّر التحميل: {(requests.error as Error).message}</p>
+        <p className="text-destructive">
+          {userErrorMessage(requests.error, "تعذّر تحميل الطلبات — حاول مرة أخرى")}
+        </p>
       ) : (
         <div className="space-y-6">
           <Card className="shadow-deed">
@@ -456,7 +459,7 @@ function CounterDialog({
       toast.success("أُرسل التعديل للمالك للبتّ فيه");
       onDone();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال التعديل"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال التعديل")),
   });
 
   return (

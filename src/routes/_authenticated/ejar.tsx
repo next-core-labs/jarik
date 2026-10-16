@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { FileSpreadsheet, Link2, RefreshCw, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -25,6 +26,21 @@ import { todayRiyadh } from "@/lib/dates";
 import { shortDate, leaseStatusLabel } from "@/lib/format";
 import { myOrgId } from "@/lib/use-org-branding";
 import { getEjarConnectionStatus, syncEjar } from "@/lib/ejar.functions";
+import { toLatinDigits } from "@/lib/saudi-id";
+
+/**
+ * «إيجار» contract numbers are digits only (about 11). Spaces and dashes typed for readability are
+ * dropped and Arabic-Indic digits are accepted; anything else is refused before it is marked synced.
+ */
+function normalizeEjarContractNo(raw: string): { value: string; error: string | null } {
+  const value = toLatinDigits(raw).replace(/[\s-]/g, "");
+  if (!value) return { value, error: null };
+  if (!/^\d+$/.test(value)) return { value, error: "رقم عقد «إيجار» أرقام فقط" };
+  if (value.length < 8 || value.length > 15) {
+    return { value, error: "رقم عقد «إيجار» غير صحيح — تحقق منه في منصة إيجار" };
+  }
+  return { value, error: null };
+}
 
 export const Route = createFileRoute("/_authenticated/ejar")({
   staticData: { sitemap: false },
@@ -117,7 +133,7 @@ function EjarSection() {
       toast.success("تم حفظ إعدادات الربط");
       queryClient.invalidateQueries({ queryKey: ["org-ejar"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   const status = useQuery({
@@ -130,7 +146,7 @@ function EjarSection() {
     onSuccess: (result) => {
       if (!result.configured) {
         toast.error(
-          "لم تُسجَّل بيانات الربط مع «إيجار» بعد — أرسل لي رابط البيئة ومعرّف العميل والمفتاح السري.",
+          "الربط الرسمي مع «إيجار» غير مفعّل على المنصة بعد — تواصل مع إدارة المنصة لتفعيله.",
         );
         return;
       }
@@ -145,14 +161,17 @@ function EjarSection() {
       queryClient.invalidateQueries({ queryKey: ["meter-readings"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّرت المزامنة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت المزامنة")),
   });
 
   const saveContract = useMutation({
     mutationFn: async ({ leaseId, current }: { leaseId: string; current: string | null }) => {
       // The input is uncontrolled: `contracts` only has an entry once the user typed. Falling back
       // to "" used to wipe an existing contract number when "ربط" was clicked without editing.
-      const value = (contracts[leaseId] ?? current ?? "").trim();
+      const { value, error: invalid } = normalizeEjarContractNo(
+        contracts[leaseId] ?? current ?? "",
+      );
+      if (invalid) throw new Error(invalid);
       const { error } = await supabase
         .from("leases")
         .update({
@@ -167,7 +186,7 @@ function EjarSection() {
       queryClient.invalidateQueries({ queryKey: ["ejar-leases"] });
       queryClient.invalidateQueries({ queryKey: ["leases"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   return (
@@ -230,10 +249,10 @@ function EjarSection() {
                 <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">لتشغيل الربط الرسمي مع «إيجار»</p>
                   <p className="mt-1">
-                    الربط جاهز بالكامل وينتظر بيانات مكتبك من «إيجار»: رابط البيئة، ومعرّف العميل،
-                    والمفتاح السري (تُطلب بعد اعتماد المكتب كمزوّد خدمة). أرسلها لي وتعمل المزامنة
-                    فورًا. حتى ذلك الحين اربط أرقام العقود من الجدول أدناه وتعمل باقي الشاشات
-                    والتذكيرات عليها بشكل طبيعي.
+                    المزامنة التلقائية تحتاج تفعيل الربط مع «إيجار» من إدارة المنصة (رابط البيئة،
+                    ومعرّف العميل، والمفتاح السري)، وبعدها تعمل المزامنة فورًا. تواصل مع إدارة
+                    المنصة لتفعيله. حتى ذلك الحين اربط أرقام العقود من الجدول أدناه، وتعمل باقي
+                    الشاشات والتذكيرات عليها بشكل طبيعي.
                   </p>
                 </div>
               )}
@@ -250,44 +269,55 @@ function EjarSection() {
           {leases.isLoading ? (
             <Skeleton className="h-40" />
           ) : (
-            (leases.data ?? []).map((l) => (
-              <div
-                key={l.id}
-                className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-border p-4"
-              >
-                <div>
-                  <p className="font-medium">{l.tenants?.full_name ?? "—"}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {l.units?.properties?.name} · وحدة {l.units?.unit_number} ·{" "}
-                    {shortDate(l.start_date)} — {shortDate(l.end_date)}
-                  </p>
-                  <Badge variant="outline" className="mt-2">
-                    {leaseStatusLabel[l.status] ?? l.status}
-                  </Badge>
-                </div>
-                <div className="flex items-end gap-2">
+            (leases.data ?? []).map((l) => {
+              const typed = contracts[l.id];
+              const contractError =
+                typed === undefined ? null : normalizeEjarContractNo(typed).error;
+              return (
+                <div
+                  key={l.id}
+                  className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-border p-4"
+                >
                   <div>
-                    <Label className="text-xs">رقم عقد إيجار</Label>
-                    <Input
-                      dir="ltr"
-                      className="w-48"
-                      defaultValue={l.ejar_contract_no ?? ""}
-                      onChange={(e) => setContracts((c) => ({ ...c, [l.id]: e.target.value }))}
-                      placeholder="EJ-2026-000000"
-                    />
+                    <p className="font-medium">{l.tenants?.full_name ?? "—"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {l.units?.properties?.name} · وحدة {l.units?.unit_number} ·{" "}
+                      {shortDate(l.start_date)} — {shortDate(l.end_date)}
+                    </p>
+                    <Badge variant="outline" className="mt-2">
+                      {leaseStatusLabel[l.status] ?? l.status}
+                    </Badge>
                   </div>
-                  <Button
-                    variant="outline"
-                    disabled={saveContract.isPending}
-                    onClick={() =>
-                      saveContract.mutate({ leaseId: l.id, current: l.ejar_contract_no ?? null })
-                    }
-                  >
-                    ربط
-                  </Button>
+                  <div className="flex items-start gap-2">
+                    <div>
+                      <Label className="text-xs">رقم عقد إيجار</Label>
+                      <Input
+                        dir="ltr"
+                        inputMode="numeric"
+                        className="w-48"
+                        defaultValue={l.ejar_contract_no ?? ""}
+                        onChange={(e) => setContracts((c) => ({ ...c, [l.id]: e.target.value }))}
+                        placeholder="10xxxxxxxxx"
+                        aria-invalid={Boolean(contractError)}
+                      />
+                      {contractError ? (
+                        <p className="mt-1 w-48 text-xs text-destructive">{contractError}</p>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="mt-[1.375rem]"
+                      disabled={saveContract.isPending || Boolean(contractError)}
+                      onClick={() =>
+                        saveContract.mutate({ leaseId: l.id, current: l.ejar_contract_no ?? null })
+                      }
+                    >
+                      ربط
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>
@@ -344,7 +374,7 @@ function MetersSection() {
       queryClient.invalidateQueries({ queryKey: ["meter-readings"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل القراءة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل القراءة")),
   });
 
   const importFile = useMutation({
@@ -411,7 +441,7 @@ function MetersSection() {
       queryClient.invalidateQueries({ queryKey: ["meter-readings"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر استيراد الملف"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر استيراد الملف")),
   });
 
   return (

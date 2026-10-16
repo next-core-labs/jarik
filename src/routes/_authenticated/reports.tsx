@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { monthRange } from "@/lib/dates";
-import { sar, shortDate } from "@/lib/format";
+import { arNum, arPct, sar, shortDate } from "@/lib/format";
 import { exportWorkbook } from "@/lib/export-excel";
 import { downloadElementAsPdf } from "@/lib/pdf";
 import { useOrgBranding } from "@/lib/use-org-branding";
@@ -41,6 +41,18 @@ export const Route = createFileRoute("/_authenticated/reports")({
   }),
   component: Reports,
 });
+
+/** "2026-10" → "أكتوبر ٢٠٢٦" (Gregorian month name, Arabic-Indic digits). */
+function monthLabel(key: string) {
+  const date = new Date(`${key}-01T12:00:00Z`);
+  // A cleared date input gives "", and an invalid Date would throw here.
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("ar-SA-u-ca-gregory", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
 
 function Reports() {
   const { org, logoDataUrl } = useOrgBranding();
@@ -96,12 +108,13 @@ function Reports() {
   });
 
   const download = async () => {
-    if (!reportRef.current) return;
+    if (!reportRef.current || org.isPending) return;
     setDownloading(true);
     try {
       await downloadElementAsPdf(reportRef.current, `تقرير-${from.slice(0, 7)}.pdf`);
       toast.success("نزل تقرير الشهر PDF");
-    } catch {
+    } catch (e) {
+      console.error("Monthly report PDF failed", e);
       toast.error("تعذّر إنشاء الملف");
     } finally {
       setDownloading(false);
@@ -276,7 +289,7 @@ function Reports() {
     { label: "صافي الشهر", value: sar(collected - monthExpenses) },
     { label: "مستحقات غير محصّلة", value: sar(outstanding) },
     { label: "عمولات الصفقات المكتملة", value: sar(commissions) },
-    { label: "نسبة الإشغال", value: `${occupancy}%` },
+    { label: "نسبة الإشغال", value: arPct(occupancy) },
   ];
 
   return (
@@ -318,7 +331,8 @@ function Reports() {
               <BellRing className="size-4" />
               تنبيه العقود المنتهية
             </Button>
-            <Button disabled={downloading} onClick={download}>
+            {/* The PDF prints the office name and code, so wait for them instead of printing the fallback. */}
+            <Button disabled={downloading || org.isPending} onClick={download}>
               <Download className="size-4" />
               {downloading ? "جارٍ إنشاء الملف…" : "تنزيل تقرير الشهر PDF"}
             </Button>
@@ -349,9 +363,9 @@ function Reports() {
             >
               <p className="font-medium">{p.name}</p>
               <p className="text-muted-foreground">
-                صفقات {p.deals} · مغلقة <Badge variant="outline">{p.won}</Badge> · عمولات{" "}
-                <span className="font-bold text-foreground">{sar(p.commission)}</span> · تحصيلات{" "}
-                {p.collections} بمبلغ{" "}
+                صفقات {arNum(p.deals)} · مغلقة <Badge variant="outline">{arNum(p.won)}</Badge> ·
+                عمولات <span className="font-bold text-foreground">{sar(p.commission)}</span> ·
+                تحصيلات {arNum(p.collections)} بمبلغ{" "}
                 <span className="font-bold text-foreground">{sar(p.collected)}</span>
               </p>
             </div>
@@ -421,7 +435,7 @@ function Reports() {
               key={r.month}
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm"
             >
-              <span className="text-muted-foreground">{r.month}</span>
+              <span className="text-muted-foreground">{monthLabel(r.month)}</span>
               <span>مخرجات {sar(r.output)}</span>
               <span>مدخلات (تقديري) {sar(r.input)}</span>
               <span className="font-bold">صافي {sar(r.net)}</span>
@@ -459,7 +473,7 @@ function Reports() {
               ) : null}
             </div>
           </div>
-          <p className="text-sm text-gray-500">تقرير شهر {from.slice(0, 7)}</p>
+          <p className="text-sm text-gray-500">تقرير شهر {monthLabel(from.slice(0, 7))}</p>
         </div>
         <table className="mt-6 w-full text-sm">
           <tbody>
@@ -488,7 +502,7 @@ function Reports() {
             {performance.map((p) => (
               <tr key={p.id} className="border-b">
                 <td className="py-2">{p.name}</td>
-                <td className="py-2 text-gray-600">صفقات مغلقة {p.won}</td>
+                <td className="py-2 text-gray-600">صفقات مغلقة {arNum(p.won)}</td>
                 <td className="py-2 text-left font-bold">{sar(p.collected)}</td>
               </tr>
             ))}

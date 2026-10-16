@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { avatarUrl, uploadAvatar } from "@/lib/avatar";
@@ -43,13 +44,17 @@ export function AccountProfileCard() {
     if (profile.data && !dirty) setName(profile.data.fullName);
   }, [profile.data, dirty]);
 
+  const trimmedName = name.trim();
+  const nameError = dirty && trimmedName.length < 2 ? "اكتب اسمك (حرفان على الأقل)" : null;
+
   const saveName = useMutation({
     mutationFn: async () => {
       const userId = profile.data?.userId;
       if (!userId) throw new Error("انتهت الجلسة، أعد الدخول");
+      if (trimmedName.length < 2) throw new Error("اكتب اسمك (حرفان على الأقل)");
       const { error } = await supabase
         .from("profiles")
-        .update({ full_name: name.trim() })
+        .update({ full_name: trimmedName })
         .eq("id", userId);
       if (error) throw error;
     },
@@ -58,7 +63,7 @@ export function AccountProfileCard() {
       setDirty(false);
       queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   const uploadPhoto = useMutation({
@@ -79,7 +84,7 @@ export function AccountProfileCard() {
       toast.success("تم تحديث الصورة");
       queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر رفع الصورة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الصورة")),
   });
 
   function copyCode() {
@@ -130,6 +135,8 @@ export function AccountProfileCard() {
               <Input
                 id="account-name"
                 value={name}
+                aria-invalid={nameError ? true : undefined}
+                aria-describedby={nameError ? "account-name-error" : undefined}
                 onChange={(e) => {
                   setName(e.target.value);
                   setDirty(true);
@@ -137,12 +144,17 @@ export function AccountProfileCard() {
               />
               <Button
                 size="sm"
-                disabled={!dirty || saveName.isPending}
+                disabled={!dirty || !!nameError || saveName.isPending}
                 onClick={() => saveName.mutate()}
               >
                 حفظ
               </Button>
             </div>
+            {nameError ? (
+              <p id="account-name-error" className="text-xs text-destructive">
+                {nameError}
+              </p>
+            ) : null}
           </div>
         </div>
 

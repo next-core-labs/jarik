@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { HelpCircle, Star } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,7 @@ export function FeedbackWidget() {
       setRating(0);
       setCategory("suggestion");
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الإرسال"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الإرسال")),
   });
 
   const canSubmit =

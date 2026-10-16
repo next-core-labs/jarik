@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { MessageCircle, Phone, Presentation } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export function HqDemoRequests() {
   const update = useMutation({
     mutationFn: (v: { id: string; status: DemoStatus }) => setStatus({ data: v }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hq-demo-requests"] }),
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث الحالة")),
   });
   const open = (q.data ?? []).filter((r) => r.status === "new").length;
 
@@ -57,7 +58,9 @@ export function HqDemoRequests() {
         {q.isLoading ? (
           <p className="text-sm text-muted-foreground">جارٍ التحميل…</p>
         ) : q.isError ? (
-          <p className="text-sm text-destructive">{(q.error as Error).message}</p>
+          <p className="text-sm text-destructive">
+            {userErrorMessage(q.error, "تعذّر تحميل طلبات العرض — حاول مرة أخرى")}
+          </p>
         ) : (q.data ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">لا طلبات بعد.</p>
         ) : (

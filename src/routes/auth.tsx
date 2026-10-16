@@ -6,7 +6,9 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PasswordField } from "@/components/password-field";
+import { authErrorMessage, emailProblem } from "@/lib/auth-errors";
 import { isNativeApp, nativeOAuthSignIn } from "@/lib/native";
+import { resolvePostLoginPath } from "@/lib/portal-routing";
 import { safeNext } from "@/lib/safe-redirect";
 import {
   ACCOUNT_TYPE_LABEL,
@@ -21,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import type { AppRole } from "@/lib/use-role";
 
 export const Route = createFileRoute("/auth")({
   staticData: { sitemap: false },
@@ -35,11 +38,25 @@ export const Route = createFileRoute("/auth")({
       { property: "og:title", content: "تسجيل الدخول — جارك" },
       { property: "og:description", content: "الدخول إلى منصة جارك لإدارة الأملاك." },
     ],
+    links: [{ rel: "canonical", href: "https://jarak-ksa.com/auth" }],
   }),
   component: AuthPage,
 });
 
 const SAVED_EMAIL_KEY = "jarak-saved-email";
+
+// The Google button shows only when the build sets VITE_GOOGLE_AUTH_ENABLED=true. Turn it on after
+// enabling the Google provider in Supabase (Authentication → Providers) and listing this site's
+// origin under Redirect URLs; with the provider off, Supabase answers the redirect with a raw JSON
+// 400 page. A build flag (not a runtime check of /auth/v1/settings) keeps the server and client
+// render identical and costs no request on every visit.
+const GOOGLE_AUTH_ENABLED = import.meta.env["VITE_GOOGLE_AUTH_ENABLED"] === "true";
+
+function passwordProblem(password: string): string | null {
+  if (!password) return "أدخل كلمة المرور";
+  if (password.length < 6) return "كلمة المرور 6 أحرف على الأقل";
+  return null;
+}
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -79,19 +96,22 @@ function AuthPage() {
     }
   }
 
-  /** Super-admin accounts land on their own dashboard instead of the regular one — everyone else
-   * goes to /dashboard as before. */
-  async function roleBasedDestination(): Promise<"/hq" | "/dashboard"> {
+  /** Each account goes straight to its own home: super-admins to /hq, a new office signup with no
+   * role yet to /register-office, everyone else by role (office, owner, tenant, technician, or the
+   * choice screen when the account has more than one), so nobody detours through /dashboard. */
+  async function roleBasedDestination(): Promise<string> {
     const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-    if (userId) {
-      const { data: roleRows } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      if ((roleRows ?? []).some((r) => r.role === "super_admin")) return "/hq";
-    }
-    return "/dashboard";
+    const user = userData.user;
+    if (!user) return "/dashboard";
+    const { data: roleRows } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+    const roles = (roleRows ?? []).map((r) => r.role as AppRole);
+    if (roles.includes("super_admin")) return "/hq";
+    const accountType = (user.user_metadata as { account_type?: string } | null)?.account_type;
+    if (roles.length === 0 && accountType === "office") return "/register-office";
+    return resolvePostLoginPath(roles);
   }
 
   async function goNext() {
@@ -113,8 +133,16 @@ function AuthPage() {
     });
   }, [navigate, next]);
 
+  /** Shows the first problem as a toast; the forms use noValidate, so these replace the browser's
+   * English bubbles. */
+  function blocked(problem: string | null): boolean {
+    if (problem) toast.error(problem);
+    return !!problem;
+  }
+
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
+    if (blocked(emailProblem(email) ?? (password ? null : "أدخل كلمة المرور"))) return;
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
@@ -125,7 +153,7 @@ function AuthPage() {
         await resendCode();
         return;
       }
-      toast.error("تعذّر الدخول: تحقّق من البريد وكلمة المرور");
+      toast.error(authErrorMessage(error, "تعذّر الدخول: تحقّق من البريد وكلمة المرور"));
       return;
     }
     rememberOrForget();
@@ -134,6 +162,7 @@ function AuthPage() {
 
   async function signUp(e: React.FormEvent) {
     e.preventDefault();
+    if (blocked(fullName.trim() ? null : "اكتب الاسم")) return;
     const idProblem = validateSaudiId(nationalId, accountType);
     if (idProblem) {
       toast.error(idProblem);
@@ -146,6 +175,7 @@ function AuthPage() {
         return;
       }
     }
+    if (blocked(emailProblem(email) ?? passwordProblem(password))) return;
 
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
@@ -165,7 +195,14 @@ function AuthPage() {
     });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(
+        authErrorMessage(
+          error,
+          /already registered/i.test(error.message)
+            ? "هذا البريد مسجَّل من قبل — سجّل الدخول أو استعد كلمة المرور"
+            : "تعذّر إنشاء الحساب — حاول مرة أخرى",
+        ),
+      );
       return;
     }
     rememberOrForget();
@@ -183,7 +220,7 @@ function AuthPage() {
   async function resendCode() {
     const { error } = await supabase.auth.resend({ type: "signup", email });
     if (error) {
-      toast.error(error.message);
+      toast.error(authErrorMessage(error, "تعذّر إرسال الرمز — حاول بعد قليل"));
       return;
     }
     setStep("verify");
@@ -192,6 +229,7 @@ function AuthPage() {
 
   async function verifyEmail(e: React.FormEvent) {
     e.preventDefault();
+    if (blocked(digitsOnly(code) ? null : "أدخل رمز التفعيل")) return;
     setLoading(true);
     const { error } = await supabase.auth.verifyOtp({
       email,
@@ -200,7 +238,7 @@ function AuthPage() {
     });
     setLoading(false);
     if (error) {
-      toast.error("الرمز غير صحيح أو انتهت صلاحيته");
+      toast.error(authErrorMessage(error, "الرمز غير صحيح أو انتهت صلاحيته"));
       return;
     }
     toast.success("فُعِّل حسابك");
@@ -209,11 +247,12 @@ function AuthPage() {
 
   async function sendReset(e: React.FormEvent) {
     e.preventDefault();
+    if (blocked(emailProblem(email))) return;
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(authErrorMessage(error, "تعذّر إرسال الرمز — حاول بعد قليل"));
       return;
     }
     setStep("reset");
@@ -223,6 +262,8 @@ function AuthPage() {
 
   async function resetPassword(e: React.FormEvent) {
     e.preventDefault();
+    if (blocked(digitsOnly(code) ? null : "أدخل رمز إعادة التعيين")) return;
+    if (blocked(passwordProblem(newPassword))) return;
     setLoading(true);
     const { error: otpError } = await supabase.auth.verifyOtp({
       email,
@@ -231,13 +272,13 @@ function AuthPage() {
     });
     if (otpError) {
       setLoading(false);
-      toast.error("الرمز غير صحيح أو انتهت صلاحيته");
+      toast.error(authErrorMessage(otpError, "الرمز غير صحيح أو انتهت صلاحيته"));
       return;
     }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(authErrorMessage(error, "تعذّر تغيير كلمة المرور — حاول مرة أخرى"));
       return;
     }
     rememberOrForget();
@@ -293,6 +334,15 @@ function AuthPage() {
 
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
+          {/* The side panel with the home link is hidden on phones, so they get their own. */}
+          <div className="mb-8 flex items-center justify-between gap-4 lg:hidden">
+            <Link to="/" aria-label="جارك — الصفحة الرئيسية">
+              <JarakLogo size="sm" />
+            </Link>
+            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+              رجوع للصفحة الرئيسية
+            </Link>
+          </div>
           {step === "verify" ? (
             <>
               <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
@@ -302,7 +352,7 @@ function AuthPage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 أرسلنا رمزًا من 6 أرقام إلى <span dir="ltr">{email}</span>.
               </p>
-              <form onSubmit={verifyEmail} className="mt-6 space-y-4">
+              <form onSubmit={verifyEmail} noValidate className="mt-6 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="code">رمز التفعيل</Label>
                   <Input
@@ -344,7 +394,7 @@ function AuthPage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 اكتب بريدك ونرسل لك رمزًا لإعادة التعيين.
               </p>
-              <form onSubmit={sendReset} className="mt-6 space-y-4">
+              <form onSubmit={sendReset} noValidate className="mt-6 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="forgot-email">البريد الإلكتروني</Label>
                   <Input
@@ -374,7 +424,7 @@ function AuthPage() {
               <p className="mt-1 text-sm text-muted-foreground">
                 اكتب الرمز الذي وصل إلى <span dir="ltr">{email}</span> وكلمة المرور الجديدة.
               </p>
-              <form onSubmit={resetPassword} className="mt-6 space-y-4">
+              <form onSubmit={resetPassword} noValidate className="mt-6 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="reset-code">رمز إعادة التعيين</Label>
                   <Input
@@ -427,7 +477,7 @@ function AuthPage() {
                 </TabsList>
 
                 <TabsContent value="signin">
-                  <form onSubmit={signIn} className="space-y-4">
+                  <form onSubmit={signIn} noValidate className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="email">البريد الإلكتروني</Label>
                       <Input
@@ -464,7 +514,7 @@ function AuthPage() {
                 </TabsContent>
 
                 <TabsContent value="signup">
-                  <form onSubmit={signUp} className="space-y-4">
+                  <form onSubmit={signUp} noValidate className="space-y-4">
                     <div className="space-y-2">
                       <Label>نوع الحساب</Label>
                       {/* المستأجر لم يعد يسجّل نفسه من هنا — يُدعى من المكتب على عقده ويفعّل حسابه
@@ -580,13 +630,17 @@ function AuthPage() {
                 </TabsContent>
               </Tabs>
 
-              <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="h-px flex-1 bg-border" /> أو{" "}
-                <span className="h-px flex-1 bg-border" />
-              </div>
-              <Button variant="outline" className="w-full" onClick={google}>
-                المتابعة عبر Google
-              </Button>
+              {GOOGLE_AUTH_ENABLED ? (
+                <>
+                  <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="h-px flex-1 bg-border" /> أو{" "}
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={google}>
+                    المتابعة عبر Google
+                  </Button>
+                </>
+              ) : null}
             </>
           )}
         </div>

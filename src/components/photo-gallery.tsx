@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { JarakSymbol } from "@/components/jarak-logo";
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Listing gallery: a large hero photo with two stacked thumbnails beside it on wide screens, and a
- * full-screen viewer with previous/next buttons and the arrow keys. On phones the hero takes the
+ * full-screen viewer with previous/next buttons, the arrow keys and a sideways swipe. On phones the hero takes the
  * arch top (the brand's "your home" shape); on wide screens it stays square beside its thumbnails.
  */
 export function PhotoGallery({
@@ -36,6 +36,25 @@ export function PhotoGallery({
   };
   const next = useCallback(() => setIndex((i) => (i + 1) % count), [count]);
   const prev = useCallback(() => setIndex((i) => (i - 1 + count) % count), [count]);
+
+  // A sideways swipe of at least 40px that is more horizontal than vertical. Right-to-left the next
+  // photo lies to the left, so dragging the finger rightwards moves forward (like the arrow keys).
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = e.touches.length === 1 && t ? { x: t.clientX, y: t.clientY } : null;
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const start = touchStart.current;
+    const t = e.changedTouches[0];
+    touchStart.current = null;
+    if (!start || !t || count < 2) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx > 0 === rtl) next();
+    else prev();
+  };
 
   useEffect(() => {
     if (!open || count < 2) return;
@@ -129,7 +148,14 @@ export function PhotoGallery({
           <DialogDescription className="sr-only">
             {tf(locale, "ld_gallery_of", { n: index + 1, total: count })}
           </DialogDescription>
-          <div className="relative">
+          <div
+            className="relative touch-pan-y"
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={() => {
+              touchStart.current = null;
+            }}
+          >
             <img
               src={mediaUrl(paths[index]!)}
               alt={`${alt} — ${tf(locale, "ld_gallery_photo", { n: index + 1 })}`}

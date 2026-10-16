@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Send, Wallet } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { CheckCircle2, MessageCircle, Send, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { submitTransferNotice } from "@/lib/portal-actions.functions";
@@ -50,7 +52,7 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
       setReference("");
       queryClient.invalidateQueries({ queryKey: ["tenant-next-payment", leaseId] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الإبلاغ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الإبلاغ")),
   });
 
   const requestGrace = useMutation({
@@ -64,7 +66,7 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
       if (error) throw error;
     },
     onSuccess: () => toast.success("وصل طلبك للمكتب"),
-    onError: () => toast.error("تعذّر إرسال الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
   });
 
   if (isLoading || !data) return <Skeleton className="h-48" />;
@@ -139,23 +141,48 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
               </Button>
             </div>
             {showPayForm ? (
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  className="h-9 max-w-52"
-                  placeholder="رقم مرجع التحويل"
-                  dir="ltr"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                />
-                <Button
-                  size="sm"
-                  disabled={reference.trim().length < 3 || notifyTransfer.isPending}
-                  onClick={() =>
-                    notifyTransfer.mutate({ paymentId: nextDue.id, reference: reference.trim() })
-                  }
-                >
-                  سدّدت — أبلغ المكتب
-                </Button>
+              <div className="space-y-3 rounded-md border border-border bg-background p-3">
+                {/* The office's bank account isn't stored in Jarak yet, so the tenant gets it from
+                    the office; the amount is the one thing we can state with certainty. */}
+                <div className="space-y-1 text-sm">
+                  <p>
+                    المبلغ المطلوب تحويله: <span className="font-bold">{sar(nextDue.amount)}</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    حوّل المبلغ إلى حساب المكتب البنكي. إن لم تكن لديك بيانات الحساب فاطلبها من
+                    المكتب في المحادثات، ثم اكتب رقم مرجع التحويل هنا.
+                  </p>
+                  <Button size="sm" variant="link" className="h-auto px-0" asChild>
+                    <Link to="/messages">
+                      <MessageCircle className="size-4" />
+                      راسل المكتب
+                    </Link>
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    className="h-9 max-w-52"
+                    placeholder="رقم مرجع التحويل"
+                    aria-describedby="transfer-ref-hint"
+                    dir="ltr"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={reference.trim().length < 3 || notifyTransfer.isPending}
+                    onClick={() =>
+                      notifyTransfer.mutate({ paymentId: nextDue.id, reference: reference.trim() })
+                    }
+                  >
+                    سدّدت — أبلغ المكتب
+                  </Button>
+                </div>
+                {reference.trim().length < 3 ? (
+                  <p id="transfer-ref-hint" className="text-xs text-muted-foreground">
+                    اكتب رقم مرجع التحويل من إيصال البنك (٣ خانات على الأقل) لتفعيل زر الإبلاغ.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>

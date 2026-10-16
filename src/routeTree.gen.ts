@@ -25,7 +25,6 @@ import { Route as AuthenticatedDealsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedEjarRouteImport } from './routes/_authenticated/ejar'
 import { Route as AuthenticatedHqRouteImport } from './routes/_authenticated/hq'
-import { Route as AuthenticatedInvoicesRouteImport } from './routes/_authenticated/invoices'
 import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
@@ -52,6 +51,7 @@ import { Route as OwnerLoginRouteImport } from './routes/owner.login'
 import { Route as TenantActivateRouteImport } from './routes/tenant.activate'
 import { Route as TenantLoginRouteImport } from './routes/tenant.login'
 import { Route as UnitUnitIdRouteImport } from './routes/unit.$unitId'
+import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices.index'
 import { Route as AuthenticatedInvoicesNewRouteImport } from './routes/_authenticated/invoices.new'
 import { Route as AuthenticatedOwnerAgreementsRouteImport } from './routes/_authenticated/owner.agreements'
 import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authenticated/owner.settings'
@@ -137,11 +137,6 @@ const AuthenticatedEjarRoute = AuthenticatedEjarRouteImport.update({
 const AuthenticatedHqRoute = AuthenticatedHqRouteImport.update({
   id: '/hq',
   path: '/hq',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedInvoicesRoute = AuthenticatedInvoicesRouteImport.update({
-  id: '/invoices',
-  path: '/invoices',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMaintenanceRoute =
@@ -280,11 +275,17 @@ const UnitUnitIdRoute = UnitUnitIdRouteImport.update({
   path: '/unit/$unitId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedInvoicesIndexRoute =
+  AuthenticatedInvoicesIndexRouteImport.update({
+    id: '/invoices/',
+    path: '/invoices/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedInvoicesNewRoute =
   AuthenticatedInvoicesNewRouteImport.update({
-    id: '/new',
-    path: '/new',
-    getParentRoute: () => AuthenticatedInvoicesRoute,
+    id: '/invoices/new',
+    path: '/invoices/new',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOwnerAgreementsRoute =
   AuthenticatedOwnerAgreementsRouteImport.update({
@@ -332,7 +333,6 @@ export interface FileRoutesByFullPath {
   '/documents': typeof AuthenticatedDocumentsRoute
   '/ejar': typeof AuthenticatedEjarRoute
   '/hq': typeof AuthenticatedHqRoute
-  '/invoices': typeof AuthenticatedInvoicesRouteWithChildren
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/map': typeof AuthenticatedMapRoute
   '/messages': typeof AuthenticatedMessagesRoute
@@ -364,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
+  '/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
 export interface FileRoutesByTo {
@@ -382,7 +383,6 @@ export interface FileRoutesByTo {
   '/documents': typeof AuthenticatedDocumentsRoute
   '/ejar': typeof AuthenticatedEjarRoute
   '/hq': typeof AuthenticatedHqRoute
-  '/invoices': typeof AuthenticatedInvoicesRouteWithChildren
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/map': typeof AuthenticatedMapRoute
   '/messages': typeof AuthenticatedMessagesRoute
@@ -414,6 +414,7 @@ export interface FileRoutesByTo {
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
+  '/invoices': typeof AuthenticatedInvoicesIndexRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
 export interface FileRoutesById {
@@ -434,7 +435,6 @@ export interface FileRoutesById {
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/ejar': typeof AuthenticatedEjarRoute
   '/_authenticated/hq': typeof AuthenticatedHqRoute
-  '/_authenticated/invoices': typeof AuthenticatedInvoicesRouteWithChildren
   '/_authenticated/maintenance': typeof AuthenticatedMaintenanceRoute
   '/_authenticated/map': typeof AuthenticatedMapRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
@@ -466,6 +466,7 @@ export interface FileRoutesById {
   '/_authenticated/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/_authenticated/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
+  '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
 export interface FileRouteTypes {
@@ -486,7 +487,6 @@ export interface FileRouteTypes {
     | '/documents'
     | '/ejar'
     | '/hq'
-    | '/invoices'
     | '/maintenance'
     | '/map'
     | '/messages'
@@ -518,6 +518,7 @@ export interface FileRouteTypes {
     | '/owner/settings'
     | '/tenant/settings'
     | '/api/auth/send-email'
+    | '/invoices/'
     | '/api/public/whatsapp/$channelId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -536,7 +537,6 @@ export interface FileRouteTypes {
     | '/documents'
     | '/ejar'
     | '/hq'
-    | '/invoices'
     | '/maintenance'
     | '/map'
     | '/messages'
@@ -568,6 +568,7 @@ export interface FileRouteTypes {
     | '/owner/settings'
     | '/tenant/settings'
     | '/api/auth/send-email'
+    | '/invoices'
     | '/api/public/whatsapp/$channelId'
   id:
     | '__root__'
@@ -587,7 +588,6 @@ export interface FileRouteTypes {
     | '/_authenticated/documents'
     | '/_authenticated/ejar'
     | '/_authenticated/hq'
-    | '/_authenticated/invoices'
     | '/_authenticated/maintenance'
     | '/_authenticated/map'
     | '/_authenticated/messages'
@@ -619,6 +619,7 @@ export interface FileRouteTypes {
     | '/_authenticated/owner/settings'
     | '/_authenticated/tenant/settings'
     | '/api/auth/send-email'
+    | '/_authenticated/invoices/'
     | '/api/public/whatsapp/$channelId'
   fileRoutesById: FileRoutesById
 }
@@ -753,13 +754,6 @@ declare module '@tanstack/react-router' {
       path: '/hq'
       fullPath: '/hq'
       preLoaderRoute: typeof AuthenticatedHqRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/invoices': {
-      id: '/_authenticated/invoices'
-      path: '/invoices'
-      fullPath: '/invoices'
-      preLoaderRoute: typeof AuthenticatedInvoicesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/maintenance': {
@@ -944,12 +938,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnitUnitIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/invoices/': {
+      id: '/_authenticated/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof AuthenticatedInvoicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/invoices/new': {
       id: '/_authenticated/invoices/new'
-      path: '/new'
+      path: '/invoices/new'
       fullPath: '/invoices/new'
       preLoaderRoute: typeof AuthenticatedInvoicesNewRouteImport
-      parentRoute: typeof AuthenticatedInvoicesRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/owner/agreements': {
       id: '/_authenticated/owner/agreements'
@@ -989,19 +990,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AuthenticatedInvoicesRouteChildren {
-  AuthenticatedInvoicesNewRoute: typeof AuthenticatedInvoicesNewRoute
-}
-
-const AuthenticatedInvoicesRouteChildren: AuthenticatedInvoicesRouteChildren = {
-  AuthenticatedInvoicesNewRoute: AuthenticatedInvoicesNewRoute,
-}
-
-const AuthenticatedInvoicesRouteWithChildren =
-  AuthenticatedInvoicesRoute._addFileChildren(
-    AuthenticatedInvoicesRouteChildren,
-  )
-
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAgreementsRoute: typeof AuthenticatedAgreementsRoute
   AuthenticatedAssistantRoute: typeof AuthenticatedAssistantRoute
@@ -1012,7 +1000,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedEjarRoute: typeof AuthenticatedEjarRoute
   AuthenticatedHqRoute: typeof AuthenticatedHqRoute
-  AuthenticatedInvoicesRoute: typeof AuthenticatedInvoicesRouteWithChildren
   AuthenticatedMaintenanceRoute: typeof AuthenticatedMaintenanceRoute
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
@@ -1032,9 +1019,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedTenantsRoute: typeof AuthenticatedTenantsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWhatsappRoute: typeof AuthenticatedWhatsappRoute
+  AuthenticatedInvoicesNewRoute: typeof AuthenticatedInvoicesNewRoute
   AuthenticatedOwnerAgreementsRoute: typeof AuthenticatedOwnerAgreementsRoute
   AuthenticatedOwnerSettingsRoute: typeof AuthenticatedOwnerSettingsRoute
   AuthenticatedTenantSettingsRoute: typeof AuthenticatedTenantSettingsRoute
+  AuthenticatedInvoicesIndexRoute: typeof AuthenticatedInvoicesIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1047,7 +1036,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedEjarRoute: AuthenticatedEjarRoute,
   AuthenticatedHqRoute: AuthenticatedHqRoute,
-  AuthenticatedInvoicesRoute: AuthenticatedInvoicesRouteWithChildren,
   AuthenticatedMaintenanceRoute: AuthenticatedMaintenanceRoute,
   AuthenticatedMapRoute: AuthenticatedMapRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
@@ -1067,9 +1055,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedTenantsRoute: AuthenticatedTenantsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWhatsappRoute: AuthenticatedWhatsappRoute,
+  AuthenticatedInvoicesNewRoute: AuthenticatedInvoicesNewRoute,
   AuthenticatedOwnerAgreementsRoute: AuthenticatedOwnerAgreementsRoute,
   AuthenticatedOwnerSettingsRoute: AuthenticatedOwnerSettingsRoute,
   AuthenticatedTenantSettingsRoute: AuthenticatedTenantSettingsRoute,
+  AuthenticatedInvoicesIndexRoute: AuthenticatedInvoicesIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

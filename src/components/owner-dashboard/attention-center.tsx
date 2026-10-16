@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { arCount, arNum, daysLabel, priorityLabel, sar, shortDate } from "@/lib/format";
+import { arCount, arNum, daysLabel, priorityText, sar, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Meter, Panel, Section, SeverityTag } from "@/components/owner-dashboard/parts";
 import type {
@@ -306,7 +306,7 @@ function AttentionRow({
           icon={Wrench}
           item={item}
           title={a.title}
-          meta={`صيانة تنتظر موافقتك · ${a.property_name} · وحدة ${a.unit_number} · ${priorityLabel[a.priority] ?? a.priority} · طُلب ${shortDate(a.created_at)}`}
+          meta={`صيانة تنتظر موافقتك · ${a.property_name} · وحدة ${a.unit_number} · ${priorityText(a.priority)} · طُلب ${shortDate(a.created_at)}`}
           action={
             <>
               <Button size="sm" disabled={busy} onClick={() => onAsk(a, true)}>

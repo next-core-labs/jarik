@@ -13,7 +13,11 @@ type OwnerPageResult =
   | { status: "missing" }
   | { status: "error" };
 
+/** Public ids are uuids — anything else can't be a record (and PostgREST would fail with 22P02). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function loadOwnerPage(ownerId: string): Promise<OwnerPageResult> {
+  if (!UUID_RE.test(ownerId)) return { status: "missing" };
   try {
     const [pageRes, listingsRes] = await Promise.all([
       supabase.from("owner_pages_public").select("*").eq("owner_id", ownerId).maybeSingle(),
@@ -49,17 +53,21 @@ async function loadOwnerPage(ownerId: string): Promise<OwnerPageResult> {
 export const Route = createFileRoute("/owner/$ownerId")({
   staticData: { sitemap: false },
   loader: ({ params }) => loadOwnerPage(params.ownerId),
-  head: ({ loaderData }) => {
-    if (loaderData?.status !== "ok") return { meta: [{ title: "صفحة مالك — جارك" }] };
+  head: ({ loaderData, params }) => {
+    if (loaderData?.status !== "ok")
+      return { meta: [{ title: "صفحة مالك — جارك" }, { name: "robots", content: "noindex" }] };
     const { page } = loaderData;
     const title = `${page.name} — عروض عقارية على جارك`;
+    const url = `https://jarak-ksa.com/owner/${encodeURIComponent(params.ownerId)}`;
     return {
       meta: [
         { title },
         { name: "description", content: page.bio?.slice(0, 160) ?? `عروض ${page.name} على جارك` },
         { property: "og:title", content: title },
+        { property: "og:url", content: url },
         ...(page.imageUrl ? [{ property: "og:image", content: page.imageUrl }] : []),
       ],
+      links: [{ rel: "canonical", href: url }],
     };
   },
   component: OwnerPage,

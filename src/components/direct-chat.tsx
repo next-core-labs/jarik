@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -56,7 +57,7 @@ export function DirectChat({ conversationId, myName }: { conversationId: string;
       queryClient.invalidateQueries({ queryKey: ["direct-messages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["direct-conversations"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الرسالة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الرسالة")),
   });
 
   return (

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { FileText, Upload } from "lucide-react";
@@ -53,7 +53,28 @@ const kindLabel: Record<string, string> = Object.fromEntries(kinds.map((k) => [k
 function Documents() {
   const queryClient = useQueryClient();
   const { data: me } = useMyRoles();
-  const staff = isStaffRole(me?.roles ?? []);
+  const roles = me?.roles ?? [];
+  const staff = isStaffRole(roles);
+  const isTenant = roles.includes("tenant");
+  // Office staff manage every property's deeds and licences; an owner sees their own properties'
+  // documents; a tenant or technician only sees what the office shares with them.
+  const header = staff
+    ? {
+        title: "وثائق العقارات",
+        subtitle: "صكوك وتراخيص كل عقار في مكان واحد — والنظام ينبّهك قبل الانتهاء بـ 60 يومًا.",
+      }
+    : roles.includes("owner")
+      ? {
+          title: "وثائق عقاراتي",
+          subtitle:
+            "صكوك وتراخيص عقاراتك التي يحفظها المكتب — مع تنبيه قبل انتهاء أي وثيقة بـ 60 يومًا.",
+        }
+      : {
+          title: "الوثائق",
+          subtitle: isTenant
+            ? "هنا تظهر الوثائق التي يشاركها معك المكتب. عقدك وإيصالات دفعاتك تجدها في لوحتك."
+            : "هنا تظهر الوثائق التي يشاركها معك المكتب.",
+        };
 
   const [propertyId, setPropertyId] = useState("");
   const [kind, setKind] = useState<string>("deed");
@@ -129,7 +150,7 @@ function Documents() {
   if (isLoading || !data) {
     return (
       <>
-        <PageHeader title="وثائق العقارات" />
+        <PageHeader title={header.title} />
         <Skeleton className="h-64" />
       </>
     );
@@ -145,8 +166,15 @@ function Documents() {
   return (
     <>
       <PageHeader
-        title="وثائق العقارات"
-        subtitle="صكوك وتراخيص كل عقار في مكان واحد — والنظام ينبّهك قبل الانتهاء بـ 60 يومًا."
+        title={header.title}
+        subtitle={header.subtitle}
+        action={
+          isTenant && !staff ? (
+            <Button variant="outline" asChild>
+              <Link to="/tenant-dashboard">عقدي ودفعاتي</Link>
+            </Button>
+          ) : undefined
+        }
       />
 
       {expired.length + expiring.length > 0 ? (

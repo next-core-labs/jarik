@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Handshake, Search } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -34,6 +35,7 @@ import {
   UNENFORCED_PERMISSIONS,
 } from "@/lib/agreement-permissions";
 import { sar, shortDate } from "@/lib/format";
+import { toLatinDigits } from "@/lib/saudi-id";
 
 export const Route = createFileRoute("/_authenticated/owner/agreements")({
   staticData: { sitemap: false },
@@ -191,7 +193,7 @@ function OwnerAgreements() {
       toast.success("سُجّل طلب إنهاء الاتفاقية — تُطبَّق فعليًا بعد فترة الإشعار");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل طلب الإنهاء"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل طلب الإنهاء")),
   });
 
   const decideCounter = useMutation({
@@ -206,7 +208,7 @@ function OwnerAgreements() {
       toast.success(v.accept ? "قُبلت الشروط — الاتفاقية سارية الآن" : "رُفض التعديل");
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل القرار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل القرار")),
   });
 
   const list = agreements.data ?? [];
@@ -228,7 +230,7 @@ function OwnerAgreements() {
         <Skeleton className="h-64" />
       ) : agreements.error || properties.error ? (
         <p className="text-destructive">
-          تعذّر التحميل: {((agreements.error ?? properties.error) as Error).message}
+          {userErrorMessage(agreements.error ?? properties.error, "تعذّر التحميل — حاول مرة أخرى")}
         </p>
       ) : (
         <div className="space-y-4">
@@ -378,6 +380,13 @@ function OwnerAgreements() {
   );
 }
 
+/** A number typed on either keyboard: Arabic-Indic digits, "٫" as the decimal point, and "٬" or ","
+ * as thousands separators. Anything else gives NaN, so "abc" is rejected instead of becoming null. */
+function parseAmount(raw: string): number {
+  const s = toLatinDigits(raw.trim()).replace(/٫/g, ".").replace(/[٬,]/g, "");
+  return s === "" ? NaN : Number(s);
+}
+
 type PropertyWithUnits = {
   id: string;
   name: string;
@@ -446,12 +455,19 @@ function RequestAgreementDialog({
     mutationFn: async () => {
       if (!selectedOffice) throw new Error("اختر مكتبًا أولًا");
       if (selectedUnits.size === 0) throw new Error("اختر وحدة واحدة على الأقل");
-      const value = Number(commissionValue || 0);
+      const value = parseAmount(commissionValue || "0");
       if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل قيمة عمولة صحيحة");
-      const days = Number(noticeDays || 30);
+      if (commissionType === "percent" && value > 100)
+        throw new Error("نسبة العمولة لا تتجاوز ١٠٠٪");
+      if (!startDate) throw new Error("اختر تاريخ البدء");
+      if (endDate && endDate <= startDate)
+        throw new Error("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء");
+      const days = parseAmount(noticeDays || "30");
       if (!Number.isInteger(days) || days < 0)
         throw new Error("فترة الإشعار يجب أن تكون رقمًا صحيحًا");
-      const cap = maintenanceCap.trim() ? Number(maintenanceCap) : null;
+      const cap = maintenanceCap.trim() ? parseAmount(maintenanceCap) : null;
+      if (cap !== null && (!Number.isFinite(cap) || cap < 0))
+        throw new Error("سقف الصيانة يجب أن يكون مبلغًا بالأرقام، أو اتركه فارغًا");
       const { error } = await supabase.rpc("request_management_agreement", {
         _org_id: selectedOffice.id,
         _unit_ids: Array.from(selectedUnits),
@@ -469,7 +485,7 @@ function RequestAgreementDialog({
       toast.success("أُرسل طلب الاتفاقية للمكتب — يصلك إشعار عند رده");
       onDone();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
   });
 
   return (
@@ -500,7 +516,7 @@ function RequestAgreementDialog({
                 <Skeleton className="h-16" />
               ) : offices.error ? (
                 <p className="text-destructive">
-                  تعذّر تحميل المكاتب: {(offices.error as Error).message}
+                  {userErrorMessage(offices.error, "تعذّر تحميل المكاتب — حاول مرة أخرى")}
                 </p>
               ) : officeList.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted-foreground">
@@ -698,7 +714,7 @@ function EditPermissionsDialog({
       toast.success("حُفظت الصلاحيات — أي توسيع يحتاج موافقة المكتب أولًا");
       onDone();
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر الحفظ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   return (

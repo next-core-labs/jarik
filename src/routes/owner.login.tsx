@@ -8,6 +8,8 @@ export const Route = createFileRoute("/owner/login")({
     meta: [
       { title: "دخول المالك — جارك" },
       { name: "description", content: "دخول ملّاك العقارات إلى بوابتهم في منصة جارك." },
+      // Portal entry point, not search content.
+      { name: "robots", content: "noindex" },
     ],
   }),
   component: () => (

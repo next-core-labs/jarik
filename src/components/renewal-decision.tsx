@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarCheck, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { submitRenewalDecision } from "@/lib/office-tools.functions";
@@ -26,16 +27,26 @@ export function RenewalDecision() {
   const { data, isLoading } = useQuery({
     queryKey: ["renewal-decision"],
     queryFn: async () => {
-      const [leases, requests] = await Promise.all([
-        supabase
-          .from("leases")
-          .select(
-            "id, end_date, annual_rent, deposit, deposit_status, deposit_note, units(unit_number, properties(name))",
-          )
-          .eq("status", "active")
-          .order("end_date"),
-        supabase.from("renewal_requests").select("id, lease_id, decision, status"),
-      ]);
+      // Only the caller's own leases as a tenant: RLS also returns leases the account sees as an
+      // owner or office member, and those must never be offered for renewal here.
+      const { data: session } = await supabase.auth.getSession();
+      const uid = session.session?.user.id;
+      if (!uid) return { leases: [], requests: [] };
+      const leases = await supabase
+        .from("leases")
+        .select(
+          "id, end_date, annual_rent, deposit, deposit_status, deposit_note, units(unit_number, properties(name)), tenants!inner(user_id)",
+        )
+        .eq("status", "active")
+        .eq("tenants.user_id", uid)
+        .order("end_date");
+      const leaseIds = (leases.data ?? []).map((l) => l.id);
+      const requests = leaseIds.length
+        ? await supabase
+            .from("renewal_requests")
+            .select("id, lease_id, decision, status")
+            .in("lease_id", leaseIds)
+        : { data: [] };
       return {
         leases: (leases.data ?? []) as unknown as {
           id: string;
@@ -67,7 +78,7 @@ export function RenewalDecision() {
       );
       queryClient.invalidateQueries({ queryKey: ["renewal-decision"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال قرارك"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال قرارك")),
   });
 
   if (isLoading || !data) return <Skeleton className="mb-6 h-40" />;

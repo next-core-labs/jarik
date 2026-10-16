@@ -10,6 +10,7 @@ import {
   travelTime,
   walkMinutes,
 } from "@/components/listing-detail/format";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Locale, TranslationKey } from "@/lib/i18n";
 import { distanceMeters, NEARBY_KIND_GLYPH } from "@/lib/map-markers";
@@ -60,8 +61,15 @@ export function NearbyPlacesSection({
   const fetchPlaces = useServerFn(nearbyPlaces);
   const query = useQuery({
     queryKey: ["nearby-places", lat, lng],
-    queryFn: () => fetchPlaces({ data: { lat, lng } }),
+    queryFn: async () => {
+      const result = await fetchPlaces({ data: { lat, lng } });
+      // A failed lookup is an error, not "nothing nearby" — and errors aren't cached for an hour.
+      if (result.failed) throw new Error("nearby-places-failed");
+      return result;
+    },
     staleTime: 60 * 60 * 1000,
+    // The lookup already waits up to 10 s; the visitor can retry from the message instead.
+    retry: false,
   });
 
   // Every place with its distance from the listing (km), nearest first.
@@ -125,6 +133,21 @@ export function NearbyPlacesSection({
         <>
           <Skeleton className="h-[76px] w-full" />
           {mapSkeleton}
+        </>
+      ) : query.isError ? (
+        <>
+          <div className="border border-border bg-card">{map}</div>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <p>{tf(locale, "ld_nearby_failed")}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={query.isFetching}
+              onClick={() => void query.refetch()}
+            >
+              {tf(locale, "results_retry")}
+            </Button>
+          </div>
         </>
       ) : places.length === 0 ? (
         <>

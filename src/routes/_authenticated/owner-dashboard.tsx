@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import type { Decision } from "@/components/owner-dashboard/attention-center";
 import { loadOwnerDashboard } from "@/components/owner-dashboard/model";
@@ -63,7 +64,7 @@ function OwnerDashboard() {
       queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["owner-nav-approvals"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل القرار"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل القرار")),
   });
 
   const renewalDecision = useMutation({
@@ -78,14 +79,14 @@ function OwnerDashboard() {
       );
       queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال قرارك"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال قرارك")),
   });
 
   const rentRequest = useMutation({
     mutationFn: (payload: RentRequest) => requestVacantRentChange({ data: payload }),
     onSuccess: (_res, vars) =>
       toast.success(`أرسلنا للمكتب طلب تعديل الإيجار إلى ${sar(vars.newRent)}`),
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الطلب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
   });
 
   const exportExcel = async (
@@ -106,7 +107,8 @@ function OwnerDashboard() {
     try {
       await downloadElementAsPdf(node, "كشف-حساب-المالك.pdf");
       toast.success("نزل كشف الحساب PDF");
-    } catch {
+    } catch (e) {
+      console.error("Owner statement PDF failed", e);
       toast.error("تعذّر إنشاء الملف");
     } finally {
       setDownloading(false);

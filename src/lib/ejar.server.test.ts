@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { todayRiyadh } from "@/lib/dates";
+
 import {
   fetchEjarContracts,
   fetchEjarMeterReadings,
@@ -155,7 +157,8 @@ describe("fetchEjarMeterReadings", () => {
         ),
     );
     const [reading] = await fetchEjarMeterReadings(cfg, "tok", null);
-    expect(reading?.readingDate).toBe(new Date().toISOString().slice(0, 10));
+    // Saudi "today", like the code: the UTC slice is still yesterday between 00:00-03:00 Riyadh.
+    expect(reading?.readingDate).toBe(todayRiyadh());
   });
 
   it("treats a non-ok response as 'not enabled' rather than an error", async () => {

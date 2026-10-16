@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,7 @@ export function OwnerAutoApproveCard() {
       queryClient.invalidateQueries({ queryKey: ["owner-preferences"] });
       queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر حفظ الإعداد"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ الإعداد")),
   });
 
   const dirty =
@@ -107,7 +108,9 @@ export function OwnerAutoApproveCard() {
                 <p className="text-xs text-muted-foreground">
                   {valid && value > 0
                     ? `أي صيانة بتكلفة ${sar(Math.round(value))} أو أقل تُعتمد فورًا.`
-                    : "أدخل مبلغًا أكبر من صفر."}
+                    : value > MAX_LIMIT
+                      ? `المبلغ أعلى من الحد الأقصى (${sar(MAX_LIMIT)}).`
+                      : "أدخل مبلغًا أكبر من صفر."}
                 </p>
               </div>
             ) : null}

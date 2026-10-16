@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { submitTransferNotice } from "@/lib/portal-actions.functions";
@@ -62,19 +64,20 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
       toast.success("أبلغنا المكتب بالتحويل — سيُراجع ويُسجّل السداد");
       queryClient.invalidateQueries({ queryKey });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الإبلاغ"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الإبلاغ")),
   });
 
   const downloadReceipt = async (p: Payment) => {
     if (downloading) return;
     setDownloading(true);
-    setReceipt(p);
     try {
-      await new Promise((r) => setTimeout(r, 120));
+      // Commit the receipt node now, so the ref holds this payment's receipt before the capture.
+      flushSync(() => setReceipt(p));
       if (!receiptRef.current) return;
       await downloadElementAsPdf(receiptRef.current, `إيصال-${p.due_date}.pdf`);
       toast.success("نزل الإيصال PDF");
-    } catch {
+    } catch (e) {
+      console.error("Receipt PDF failed", e);
       toast.error("تعذّر إنشاء الإيصال");
     } finally {
       setDownloading(false);

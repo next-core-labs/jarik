@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ export function UnitChat({
       setBody("");
       queryClient.invalidateQueries({ queryKey: ["unit-messages", unitId] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال الرسالة"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الرسالة")),
   });
 
   return (

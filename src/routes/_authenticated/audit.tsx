@@ -102,7 +102,7 @@ function Audit() {
               <div>
                 <p className="font-medium">
                   {actionLabel[r.action] ?? r.action} — {tableLabel[r.table_name] ?? r.table_name}
-                  {r.summary ? ` · ${summarize(r.summary)}` : ""}
+                  {r.summary ? ` · ${summarize(r.summary, r.table_name)}` : ""}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   بواسطة {(r.actor_id && data.names.get(r.actor_id)) || "النظام"} ·{" "}

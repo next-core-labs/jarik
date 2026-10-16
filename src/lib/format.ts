@@ -50,7 +50,16 @@ export const priorityLabel: Record<string, string> = {
   medium: "متوسطة",
   high: "عالية",
   urgent: "عاجلة",
+  // Legacy/imported spellings, so a `priorityLabel[x] ?? x` caller never shows raw English.
+  normal: "متوسطة",
+  emergency: "عاجلة",
+  critical: "عاجلة",
 };
+
+/** Arabic label for a maintenance priority; an unknown value reads as the default (medium). */
+export function priorityText(priority: string | null | undefined) {
+  return priorityLabel[(priority ?? "").trim().toLowerCase()] ?? "متوسطة";
+}
 
 export const dealStageLabel: Record<string, string> = {
   lead: "عميل محتمل",

@@ -1,3 +1,4 @@
+import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 export type Locale = "ar" | "en";
@@ -159,6 +160,7 @@ const DICT = {
     price_drop_auto: "تخفيض تلقائي للوحدات الشاغرة",
     ld_nearby_none_on: "فعّل تصنيفاً لعرض الأماكن القريبة",
     ld_nearby_empty: "ما لقينا خدمات قريبة مسجّلة بخرائط OpenStreetMap لهذا الموقع.",
+    ld_nearby_failed: "تعذّر تحميل الخدمات القريبة.",
     ld_mortgage_down: "الدفعة الأولى",
     ld_mortgage_rate: "نسبة الربح السنوية",
     ld_mortgage_term: "مدة التمويل",
@@ -194,6 +196,9 @@ const DICT = {
     ld_req_sent_body: "سيتواصل معك المكتب خلال ساعات العمل. يمكنك المتابعة الآن عبر واتساب.",
     ld_req_send_another: "إرسال طلب آخر",
     ld_req_error: "تعذّر إرسال الطلب",
+    ld_req_phone_invalid: "أدخل رقم جوال سعودي صحيح، مثل 0501234567",
+    ld_req_budget_invalid: "اكتب الميزانية بالأرقام فقط",
+    ld_req_budget_max: "الميزانية أكبر من الحد المسموح",
   },
   en: {
     nav_market: "Market",
@@ -345,6 +350,7 @@ const DICT = {
     price_drop_auto: "automatic cut for vacant listings",
     ld_nearby_none_on: "Turn on a category to see nearby places",
     ld_nearby_empty: "No nearby places are mapped on OpenStreetMap for this location.",
+    ld_nearby_failed: "Couldn't load nearby places right now.",
     ld_mortgage_down: "Down payment",
     ld_mortgage_rate: "Annual profit rate",
     ld_mortgage_term: "Financing term",
@@ -383,38 +389,44 @@ const DICT = {
       "The office will contact you during working hours. You can follow up on WhatsApp now.",
     ld_req_send_another: "Send another request",
     ld_req_error: "Couldn't send the request",
+    ld_req_phone_invalid: "Enter a valid Saudi mobile number, e.g. 0501234567",
+    ld_req_budget_invalid: "Enter the budget in digits only",
+    ld_req_budget_max: "The budget is above the allowed limit",
   },
 } as const;
 
 export type TranslationKey = keyof (typeof DICT)["ar"];
 
-function readInitialLocale(): Locale {
-  if (typeof window === "undefined") return "ar";
-  const fromUrl = new URLSearchParams(window.location.search).get("lang");
-  if (fromUrl === "en" || fromUrl === "ar") return fromUrl;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "en" || stored === "ar") return stored;
-  } catch {
-    // localStorage معطّل (متصفح خاص) — العربية افتراضيًا
-  }
-  return "ar";
+function asLocale(v: unknown): Locale | null {
+  return v === "en" || v === "ar" ? v : null;
 }
 
 /**
  * لغة صفحات السوق العام فقط — لا تلمس dir/lang على <html> إطلاقًا (تبقى لوحة التحكم الداخلية
  * RTL بالكامل بلا أي أثر)، الصفحة نفسها تضبط dir محليًا على عنصرها الجذر.
+ *
+ * أول رسم يعتمد على ?lang= فقط، ويقرؤه الخادم والمتصفح من حالة الراوتر نفسها — فيطابق HTML الخادم
+ * أول رسم بالمتصفح (لا hydration error)، ورابط ?lang=en يصل للزاحف والمعاينة بالإنجليزي. اختيار
+ * الزائر المحفوظ في localStorage يُطبَّق بعد التركيب فقط، ولا يطغى على ?lang الصريح.
  */
 export function useLocale(): [Locale, (l: Locale) => void] {
-  const [locale, setLocaleState] = useState<Locale>(readInitialLocale);
+  const fromUrl = useRouterState({
+    select: (s) => asLocale((s.location.search as Record<string, unknown>)["lang"]),
+  });
+  const [chosen, setChosen] = useState<Locale | null>(null);
 
   useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get("lang");
-    if (fromUrl === "en" || fromUrl === "ar") setLocaleState(fromUrl);
-  }, []);
+    if (fromUrl) return;
+    try {
+      const stored = asLocale(localStorage.getItem(STORAGE_KEY));
+      if (stored) setChosen(stored);
+    } catch {
+      // localStorage معطّل (متصفح خاص) — العربية افتراضيًا
+    }
+  }, [fromUrl]);
 
   const setLocale = (l: Locale) => {
-    setLocaleState(l);
+    setChosen(l);
     try {
       localStorage.setItem(STORAGE_KEY, l);
     } catch {
@@ -423,10 +435,10 @@ export function useLocale(): [Locale, (l: Locale) => void] {
     const url = new URL(window.location.href);
     if (l === "en") url.searchParams.set("lang", "en");
     else url.searchParams.delete("lang");
-    window.history.replaceState(null, "", url.toString());
+    window.history.replaceState(window.history.state, "", url.toString());
   };
 
-  return [locale, setLocale];
+  return [chosen ?? fromUrl ?? "ar", setLocale];
 }
 
 export function translate(locale: Locale, key: TranslationKey): string {

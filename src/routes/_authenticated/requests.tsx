@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Handshake, Inbox, Phone } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { createDealFromRequest } from "@/lib/office-tools.functions";
@@ -65,7 +66,7 @@ function Requests() {
       queryClient.invalidateQueries({ queryKey: ["unit-requests"] });
       queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر التحويل"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر التحويل")),
   });
 
   if (isLoading || !data) {

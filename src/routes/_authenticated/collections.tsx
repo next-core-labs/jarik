@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 import { BellRing, CalendarClock, Download } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +54,7 @@ function Collections() {
       );
       queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تشغيل التذكير الذكي"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تشغيل التذكير الذكي")),
   });
 
   const exportExcel = () => {
@@ -122,7 +123,7 @@ function Collections() {
       );
       queryClient.invalidateQueries({ queryKey: ["collections"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر إرسال التذكير"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال التذكير")),
   });
 
   const markPaid = useMutation({

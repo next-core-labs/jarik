@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { tf } from "@/components/listing-detail/format";
 import { submitUnitRequest } from "@/lib/office-tools.functions";
@@ -10,9 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import type { Locale } from "@/lib/i18n";
+import { parseAmount, parseSaudiMobile } from "@/lib/public-form";
 import { cn } from "@/lib/utils";
 
 import { PROPERTY_TYPE_GROUPS, type ListingPurpose } from "@/lib/property-types";
+
+/** submitUnitRequest's own ceiling — checked here so the visitor gets a readable message. */
+const MAX_BUDGET = 10_000_000;
 
 /** نموذج عام للزوار: طلب وحدة بمواصفات معينة — يصل المكتب كإشعار ويتحول لصفقة محتملة. */
 export function UnitRequestForm({
@@ -43,20 +48,33 @@ export function UnitRequestForm({
   const [want, setWant] = useState<ListingPurpose>(purpose);
   const [referralCode, setReferralCode] = useState("");
   const [sent, setSent] = useState(false);
+  const [touched, setTouched] = useState({ phone: false, budget: false });
   const id = useId();
   const t = (key: Parameters<typeof tf>[1], vars?: Record<string, string | number>) =>
     tf(locale, key, vars);
+
+  const mobile = parseSaudiMobile(phone);
+  const budgetValue = parseAmount(budget);
+  const phoneError = mobile ? null : t("ld_req_phone_invalid");
+  const budgetError =
+    budgetValue === null
+      ? t("ld_req_budget_invalid")
+      : budgetValue !== undefined && budgetValue > MAX_BUDGET
+        ? t("ld_req_budget_max")
+        : null;
+  const showPhoneError = touched.phone && phone.trim() !== "" && phoneError;
+  const showBudgetError = touched.budget && budgetError;
 
   const submit = useMutation({
     mutationFn: () =>
       submitUnitRequest({
         data: {
           fullName,
-          phone: phone.trim(),
+          phone: mobile ?? phone.trim(),
           city: city ?? undefined,
           district: district ?? undefined,
           unitType: reqType || undefined,
-          budget: budget ? Number(budget) : undefined,
+          budget: budgetValue ?? undefined,
           notes: notes || undefined,
           officeId: officeId ?? undefined,
           purpose: want,
@@ -70,8 +88,9 @@ export function UnitRequestForm({
       setBudget("");
       setNotes("");
       setReferralCode("");
+      setTouched({ phone: false, budget: false });
     },
-    onError: (e: Error) => toast.error(e.message || t("ld_req_error")),
+    onError: (e: Error) => toast.error(userErrorMessage(e, t("ld_req_error"))),
   });
 
   if (sent) {
@@ -100,6 +119,8 @@ export function UnitRequestForm({
       className="flex flex-col gap-3.5"
       onSubmit={(e) => {
         e.preventDefault();
+        setTouched({ phone: true, budget: true });
+        if (phoneError || budgetError) return;
         submit.mutate();
       }}
     >
@@ -153,7 +174,15 @@ export function UnitRequestForm({
           className="text-end"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, phone: true }))}
+          aria-invalid={showPhoneError ? true : undefined}
+          aria-describedby={showPhoneError ? field("phone-error") : undefined}
         />
+        {showPhoneError ? (
+          <p id={field("phone-error")} className="text-xs text-destructive">
+            {phoneError}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={field("type")}>{t("ld_req_type")}</Label>
@@ -186,7 +215,15 @@ export function UnitRequestForm({
           className="text-end tabular-nums"
           value={budget}
           onChange={(e) => setBudget(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, budget: true }))}
+          aria-invalid={showBudgetError ? true : undefined}
+          aria-describedby={showBudgetError ? field("budget-error") : undefined}
         />
+        {showBudgetError ? (
+          <p id={field("budget-error")} className="text-xs text-destructive">
+            {budgetError}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={field("notes")}>{t("ld_req_notes")}</Label>
@@ -215,7 +252,7 @@ export function UnitRequestForm({
         type="submit"
         size="lg"
         className="w-full justify-center"
-        disabled={submit.isPending || fullName.trim().length < 2 || phone.trim().length < 9}
+        disabled={submit.isPending || fullName.trim().length < 2 || !phone.trim()}
       >
         {submit.isPending ? t("ld_req_sending") : t("ld_req_submit")}
       </Button>

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellOff, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -74,7 +75,7 @@ function Notifications() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديث الإشعارات"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث الإشعارات")),
   });
 
   const unread = (data ?? []).filter((n) => !n.read_at);

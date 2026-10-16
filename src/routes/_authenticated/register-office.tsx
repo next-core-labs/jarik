@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Building2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,7 @@ function RegisterOffice() {
       await queryClient.invalidateQueries();
       navigate({ to: "/dashboard", replace: true });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تسجيل المكتب"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تسجيل المكتب")),
   });
 
   if (myOffice.isLoading) {

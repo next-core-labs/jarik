@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { MapPin, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { geocodeProperties } from "@/lib/office-tools.functions";
@@ -70,7 +71,7 @@ function MapPage() {
       );
       queryClient.invalidateQueries({ queryKey: ["map-properties"] });
     },
-    onError: (e: Error) => toast.error(e.message || "تعذّر تحديد المواقع"),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديد المواقع")),
   });
 
   if (isLoading || !data) {
