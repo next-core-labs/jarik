@@ -39,3 +39,6 @@ supabase/.temp/
 # Supabase CLI local state
 supabase/.branches
 supabase/.temp
+
+# QA run output (scripts/qa)
+qa-out/
