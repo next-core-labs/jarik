@@ -22,6 +22,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { unitSpecsLine } from "@/components/unit-specs-summary";
+import { FURNISHING_LABEL, furnitureSummary, isFurnishing, parseFurniture } from "@/lib/furniture";
 import {
   PERMISSION_LABEL,
   PERMISSION_OPTIONS,
@@ -55,9 +58,35 @@ type AgreementRequest = {
   termination_requested_at: string | null;
   termination_requested_by: string | null;
   units_count: number;
-  units: { unit_number: string; property_name: string | null }[];
+  units: RequestUnit[];
   permissions: string[];
   created_at: string;
+  owner_note: string | null;
+  office_note: string | null;
+};
+
+/** One unit the owner asks the office to manage, as office_agreement_requests() describes it. */
+type RequestUnit = {
+  unit_id: string;
+  unit_number: string;
+  unit_name: string | null;
+  unit_type: string;
+  property_name: string | null;
+  property_structure: string | null;
+  city: string | null;
+  district: string | null;
+  floor_no: string | null;
+  area: number | null;
+  rooms: number | null;
+  halls: number | null;
+  bathrooms: number | null;
+  furnishing: string | null;
+  furniture: unknown;
+  annual_rent: number | null;
+  listing_purpose: string | null;
+  sale_price: number | null;
+  status: string | null;
+  deed_number: string | null;
 };
 
 type ChangeRequest = {
@@ -79,6 +108,10 @@ function OfficeAgreements() {
   const { data: me } = useMyRoles();
   const staff = isStaffRole(me?.roles ?? []);
   const [countering, setCountering] = useState<AgreementRequest | null>(null);
+  const [deciding, setDeciding] = useState<{
+    agreement: AgreementRequest;
+    decision: "accept" | "reject";
+  } | null>(null);
 
   const requests = useQuery({
     queryKey: ["office-agreement-requests"],
@@ -109,19 +142,27 @@ function OfficeAgreements() {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["office-agreement-requests"] });
     queryClient.invalidateQueries({ queryKey: ["office-agreement-change-requests"] });
+    queryClient.invalidateQueries({ queryKey: ["office-nav-pending-agreements"] });
+    queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
   };
 
   const respond = useMutation({
-    mutationFn: async (v: { id: string; decision: "accept" | "reject" }) => {
+    mutationFn: async (v: { id: string; decision: "accept" | "reject"; note: string }) => {
       const { error } = await supabase.rpc("office_respond_agreement", {
         _agreement_id: v.id,
         _decision: v.decision,
+        ...(v.note.trim() ? { _note: v.note.trim() } : {}),
       });
       if (error) throw error;
       return v;
     },
     onSuccess: (v) => {
-      toast.success(v.decision === "accept" ? "قُبل الطلب — الاتفاقية سارية الآن" : "رُفض الطلب");
+      toast.success(
+        v.decision === "accept"
+          ? "قُبل الطلب — الاتفاقية سارية ووحدات المالك ظاهرة في «الأملاك والوحدات»"
+          : "رُفض الطلب — وصل المالكَ إشعار بالرد",
+      );
+      setDeciding(null);
       refresh();
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ القرار")),
@@ -223,6 +264,13 @@ function OfficeAgreements() {
                       {a.end_date ? shortDate(a.end_date) : "بلا انتهاء"}
                       {" · "}فترة إشعار {a.notice_period_days} يوم
                     </p>
+                    {a.owner_note ? (
+                      <p className="mt-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
+                        <span className="text-muted-foreground">رسالة المالك: </span>
+                        {a.owner_note}
+                      </p>
+                    ) : null}
+                    <RequestUnits units={a.units} />
                     <div className="mt-2 flex flex-wrap gap-1">
                       {a.permissions.length === 0 ? (
                         <Badge variant="outline">عرض فقط</Badge>
@@ -239,7 +287,7 @@ function OfficeAgreements() {
                         <Button
                           size="sm"
                           disabled={respond.isPending}
-                          onClick={() => respond.mutate({ id: a.id, decision: "accept" })}
+                          onClick={() => setDeciding({ agreement: a, decision: "accept" })}
                         >
                           <Check className="size-4" />
                           قبول
@@ -252,7 +300,7 @@ function OfficeAgreements() {
                           variant="outline"
                           className="text-destructive"
                           disabled={respond.isPending}
-                          onClick={() => respond.mutate({ id: a.id, decision: "reject" })}
+                          onClick={() => setDeciding({ agreement: a, decision: "reject" })}
                         >
                           <X className="size-4" />
                           رفض
@@ -388,7 +436,13 @@ function OfficeAgreements() {
                     key={a.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background p-4"
                   >
-                    <p className="font-medium">{a.owner_name || a.owner_email}</p>
+                    <div>
+                      <p className="font-medium">{a.owner_name || a.owner_email}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {a.units_count} وحدة
+                        {a.office_note ? ` · السبب: ${a.office_note}` : ""}
+                      </p>
+                    </div>
                     <Badge variant="destructive">مرفوضة</Badge>
                   </div>
                 ))}
@@ -397,6 +451,18 @@ function OfficeAgreements() {
           ) : null}
         </div>
       )}
+
+      {deciding ? (
+        <DecisionDialog
+          agreement={deciding.agreement}
+          decision={deciding.decision}
+          pending={respond.isPending}
+          onClose={() => setDeciding(null)}
+          onConfirm={(note) =>
+            respond.mutate({ id: deciding.agreement.id, decision: deciding.decision, note })
+          }
+        />
+      ) : null}
 
       {countering ? (
         <CounterDialog
@@ -427,6 +493,7 @@ function CounterDialog({
     agreement.maintenance_cap != null ? String(agreement.maintenance_cap) : "",
   );
   const [permissions, setPermissions] = useState<Set<string>>(new Set(agreement.permissions));
+  const [note, setNote] = useState("");
   const togglePermission = (p: string) =>
     setPermissions((s) => {
       const next = new Set(s);
@@ -452,6 +519,7 @@ function CounterDialog({
         _notice_period_days: days,
         _permissions: Array.from(permissions),
         ...(cap !== undefined ? { _maintenance_cap: cap } : {}),
+        ...(note.trim() ? { _note: note.trim() } : {}),
       });
       if (error) throw error;
     },
@@ -517,12 +585,160 @@ function CounterDialog({
             ))}
           </div>
         </div>
+        <div className="space-y-1.5">
+          <Label>توضيح للمالك (اختياري)</Label>
+          <Textarea
+            rows={2}
+            maxLength={1000}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="مثال: نسبتنا المعتادة للعمائر 7% وتشمل التحصيل والصيانة الدورية."
+          />
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             إلغاء
           </Button>
           <Button disabled={send.isPending} onClick={() => send.mutate()}>
             {send.isPending ? "جارٍ الإرسال..." : "إرسال التعديل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const VISIBLE_UNITS = 4;
+
+/** The units of a request with what the office needs to decide: specs, furniture, expected price. */
+function RequestUnits({ units }: { units: RequestUnit[] }) {
+  const [all, setAll] = useState(false);
+  if (units.length === 0) return null;
+  const shown = all ? units : units.slice(0, VISIBLE_UNITS);
+  return (
+    <div className="mt-3 space-y-2">
+      {shown.map((u) => {
+        const level = isFurnishing(u.furnishing) ? u.furnishing : "none";
+        const items = parseFurniture(u.furniture);
+        const specs = unitSpecsLine(u);
+        const price =
+          u.listing_purpose === "sale"
+            ? u.sale_price
+              ? `${sar(u.sale_price)} للبيع`
+              : null
+            : u.annual_rent
+              ? `${sar(u.annual_rent)} سنويًا (متوقع)`
+              : null;
+        return (
+          <div key={u.unit_id} className="rounded-md border border-border px-3 py-2 text-sm">
+            <p className="font-medium">
+              {u.property_structure === "single"
+                ? `${u.property_name ?? ""} · ${u.unit_type}`
+                : `${u.property_name ?? ""} · وحدة ${u.unit_number} · ${u.unit_type}`}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {[[u.city, u.district].filter(Boolean).join(" · "), specs, price]
+                .filter(Boolean)
+                .join(" — ")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {FURNISHING_LABEL[level]}
+              {level !== "none" && items.length > 0 ? `: ${furnitureSummary(items)}` : ""}
+              {u.deed_number ? ` · صك ${u.deed_number}` : ""}
+            </p>
+          </div>
+        );
+      })}
+      {units.length > VISIBLE_UNITS ? (
+        <Button variant="ghost" size="sm" onClick={() => setAll((v) => !v)}>
+          {all ? "عرض أقل" : `عرض كل الوحدات (${units.length})`}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+const REJECT_REASONS = [
+  "العقار خارج نطاق تغطيتنا",
+  "لا نستقبل عقارات جديدة حاليًا",
+  "نوع العقار خارج تخصصنا",
+  "الشروط المقترحة غير مناسبة",
+];
+
+/** قبول أو رفض طلب الإدارة، مع رسالة اختيارية تصل للمالك في إشعاره. */
+function DecisionDialog({
+  agreement,
+  decision,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  agreement: AgreementRequest;
+  decision: "accept" | "reject";
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (note: string) => void;
+}) {
+  const [note, setNote] = useState("");
+  const accept = decision === "accept";
+  const owner = agreement.owner_name || agreement.owner_email;
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">
+            {accept ? "قبول طلب الإدارة" : "الاعتذار عن طلب الإدارة"}
+          </DialogTitle>
+          <DialogDescription>
+            {accept
+              ? `تصبح الاتفاقية مع ${owner} سارية فورًا على ${agreement.units_count} وحدة، وتظهر وحداته في «الأملاك والوحدات».`
+              : `يصل ${owner} إشعار بالاعتذار، ويستطيع إرسال طلبه لمكتب آخر.`}
+          </DialogDescription>
+        </DialogHeader>
+        {accept ? null : (
+          <div className="flex flex-wrap gap-2">
+            {REJECT_REASONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={note === r}
+                onClick={() => setNote(r)}
+                className={`border px-3 py-1 text-xs transition-colors ${
+                  note === r
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-input hover:bg-muted"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="space-y-1.5">
+          <Label>{accept ? "رسالة ترحيب (اختياري)" : "سبب الاعتذار (اختياري)"}</Label>
+          <Textarea
+            rows={3}
+            maxLength={1000}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={
+              accept
+                ? "مثال: أهلًا بك، سيتواصل معك مدير العقارات خلال يوم عمل."
+                : "يظهر للمالك في إشعار الرد"
+            }
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            إلغاء
+          </Button>
+          <Button
+            variant={accept ? "default" : "outline"}
+            className={accept ? undefined : "text-destructive"}
+            disabled={pending}
+            onClick={() => onConfirm(note)}
+          >
+            {pending ? "جارٍ الإرسال..." : accept ? "قبول الطلب" : "تأكيد الاعتذار"}
           </Button>
         </DialogFooter>
       </DialogContent>

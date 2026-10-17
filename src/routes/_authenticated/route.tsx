@@ -10,7 +10,12 @@ import { JarakSymbol } from "@/components/jarak-logo";
 // not get the owner portal (or the reverse), and office staff only get either one when the same
 // account also holds that role (an account can hold several — see portal-routing.ts).
 // Extend these sets, don't special-case more paths below.
-const OWNER_PATHS = new Set(["/owner-dashboard", "/owner/settings", "/owner/agreements"]);
+const OWNER_PATHS = new Set([
+  "/owner-dashboard",
+  "/owner/properties",
+  "/owner/settings",
+  "/owner/agreements",
+]);
 const TENANT_PATHS = new Set(["/tenant-dashboard", "/tenant/settings"]);
 // Open to every signed-in role that uses them (staff, owner, tenant, technician).
 const SHARED_PATHS = new Set(["/portal", "/messages", "/documents", "/notifications"]);

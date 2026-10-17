@@ -36,7 +36,9 @@ import { suggestRent } from "@/lib/pricing.functions";
 import { AMENITIES } from "@/lib/amenities";
 import { PROPERTY_TYPE_GROUPS, PROPERTY_TYPES, type ListingPurpose } from "@/lib/property-types";
 import { mediaUrl, syncUnitPhotos, type ExistingPhoto, type PhotoItem } from "@/lib/unit-photos";
+import { isFurnishing, parseFurniture, type Furnishing, type FurnitureItem } from "@/lib/furniture";
 import { UnitPhotosEditor } from "@/components/unit-photos-editor";
+import { FurnitureEditor } from "@/components/furniture-editor";
 
 export type UnitFormValues = {
   id?: string;
@@ -61,7 +63,11 @@ export type UnitFormValues = {
   status: string;
   electricity_meter_no: string;
   water_meter_no: string;
-  furnished: boolean;
+  /** صك الوحدة — a building's apartments often each carry their own (صك مفرز). */
+  deed_number: string;
+  furnishing: Furnishing;
+  furniture: FurnitureItem[];
+  furniture_notes: string;
   owner_id: string;
   notes: string;
   /** Public description shown on the listing in the offers market. */
@@ -90,13 +96,96 @@ export const emptyUnit: UnitFormValues = {
   status: "vacant",
   electricity_meter_no: "",
   water_meter_no: "",
-  furnished: false,
+  deed_number: "",
+  furnishing: "none",
+  furniture: [],
+  furniture_notes: "",
   owner_id: "none",
   notes: "",
   listing_description: "",
   amenities: [],
   market_listed: true,
 };
+
+/** The saved unit as the columns the properties screens load it. */
+export type UnitRowForForm = {
+  id: string;
+  unit_number: string | null;
+  unit_name: string | null;
+  unit_type: string | null;
+  district: string | null;
+  street: string | null;
+  floor_no: string | null;
+  rooms: number | null;
+  halls: number | null;
+  bathrooms: number | null;
+  area: number | null;
+  annual_rent: number | null;
+  sale_price: number | null;
+  listing_purpose: string | null;
+  auto_price_decay: boolean | null;
+  price_floor: number | null;
+  status: string | null;
+  electricity_meter_no: string | null;
+  water_meter_no: string | null;
+  deed_number: string | null;
+  furnishing: string | null;
+  furniture: unknown;
+  furniture_notes: string | null;
+  owner_id: string | null;
+  notes: string | null;
+};
+
+/**
+ * The form for a saved unit. `copy` starts a new unit from it instead (same specs and furniture,
+ * no number, deed or meters) — the quick way through a building of identical apartments.
+ */
+export function unitFormFromRow(u: UnitRowForForm, copy = false): UnitFormValues {
+  const values: UnitFormValues = {
+    id: u.id,
+    unit_number: u.unit_number ?? "",
+    unit_name: u.unit_name ?? "",
+    unit_type: u.unit_type ?? "شقة",
+    district: u.district ?? "",
+    street: u.street ?? "",
+    floor_no: u.floor_no ?? "",
+    rooms: u.rooms == null ? "" : String(u.rooms),
+    halls: String(u.halls ?? 0),
+    bathrooms: String(u.bathrooms ?? 0),
+    area: u.area == null ? "" : String(u.area),
+    annual_rent: String(u.annual_rent ?? 0),
+    sale_price: String(u.sale_price ?? 0),
+    listing_purpose: u.listing_purpose === "sale" ? "sale" : "rent",
+    auto_price_decay: Boolean(u.auto_price_decay),
+    price_floor: u.price_floor == null ? "" : String(u.price_floor),
+    status: u.status ?? "vacant",
+    electricity_meter_no: u.electricity_meter_no ?? "",
+    water_meter_no: u.water_meter_no ?? "",
+    deed_number: u.deed_number ?? "",
+    furnishing: isFurnishing(u.furnishing) ? u.furnishing : "none",
+    furniture: parseFurniture(u.furniture),
+    furniture_notes: u.furniture_notes ?? "",
+    owner_id: u.owner_id ?? "none",
+    notes: u.notes ?? "",
+    // Loaded by the dialog itself (see UnitDialog), so the screens do not depend on these columns.
+    listing_description: "",
+    amenities: [],
+    market_listed: false,
+  };
+  if (!copy) return values;
+  const { id: _id, ...rest } = values;
+  return {
+    ...rest,
+    unit_number: "",
+    unit_name: "",
+    status: "vacant",
+    electricity_meter_no: "",
+    water_meter_no: "",
+    deed_number: "",
+    notes: "",
+    market_listed: emptyUnit.market_listed,
+  };
+}
 
 /**
  * A typed quantity: undefined when left empty, null when it is not a number ≥ 0 (or not a whole
@@ -116,6 +205,7 @@ export function UnitDialog({
   initial,
   canManage,
   leaseTenant = null,
+  mode = "office",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -125,7 +215,14 @@ export function UnitDialog({
   canManage: boolean;
   /** The tenant on the unit's active lease — the only source of who lives in the unit. */
   leaseTenant?: string | null;
+  /**
+   * "owner": an owner editing a unit of their own property. Only its description and specs —
+   * occupancy, market publication, pricing automation and repair invoices belong to the office
+   * that manages it (the database enforces the same: guard_owner_unit_write).
+   */
+  mode?: "office" | "owner";
 }) {
+  const isOwner = mode === "owner";
   const queryClient = useQueryClient();
   const [form, setForm] = useState<UnitFormValues>(initial);
   const isEdit = Boolean(initial.id);
@@ -170,7 +267,7 @@ export function UnitDialog({
   // Photos: the saved ones are loaded once, then edited locally and written on save.
   const savedPhotos = useQuery({
     queryKey: ["unit-photos", initial.id],
-    enabled: open && Boolean(initial.id),
+    enabled: open && Boolean(initial.id) && !isOwner,
     queryFn: async (): Promise<ExistingPhoto[]> => {
       const { data, error } = await supabase
         .from("unit_photos")
@@ -204,7 +301,7 @@ export function UnitDialog({
   const clients = useQuery({
     queryKey: ["client-accounts"],
     queryFn: () => fetchClients(),
-    enabled: canManage,
+    enabled: canManage && !isOwner,
   });
   // Only owner accounts can own a unit — not the office's staff, tenants or technicians. A unit
   // already assigned to someone else keeps that option so the field doesn't show blank.
@@ -246,7 +343,7 @@ export function UnitDialog({
           halls: halls ?? 0,
           bathrooms: bathrooms ?? 0,
           area: area ?? null,
-          furnished: form.furnished,
+          furnished: form.furnishing !== "none",
           floorNo: form.floor_no.trim() || null,
         },
       }),
@@ -262,6 +359,7 @@ export function UnitDialog({
   const save = useMutation({
     mutationFn: async () => {
       if (formError) throw new Error(formError);
+      const furnished = form.furnishing !== "none";
       const payload = {
         property_id: propertyId,
         unit_number: form.unit_number.trim(),
@@ -281,17 +379,22 @@ export function UnitDialog({
         price_floor: form.auto_price_decay ? (priceFloor ?? null) : null,
         // A rental's status is derived from its lease (sync_unit_status); sending it here would
         // fight that trigger. Only a sale unit's status is staff-set, so only it is sent.
-        ...(form.listing_purpose === "sale" ? { status: form.status } : {}),
+        ...(form.listing_purpose === "sale" && !isOwner ? { status: form.status } : {}),
         electricity_meter_no: form.electricity_meter_no.trim() || null,
         water_meter_no: form.water_meter_no.trim() || null,
-        furnished: form.furnished,
-        owner_id: form.owner_id === "none" ? null : form.owner_id,
+        deed_number: form.deed_number.trim() || null,
+        // `furnished` (the market flag) follows `furnishing` in the database (a1_sync_furnishing).
+        furnishing: form.furnishing,
+        furniture: furnished ? form.furniture : [],
+        furniture_notes: furnished ? form.furniture_notes.trim() || null : null,
+        // An owner's own unit is always theirs (the database sets it).
+        ...(isOwner ? {} : { owner_id: form.owner_id === "none" ? null : form.owner_id }),
         notes: form.notes.trim() || null,
         listing_description: form.listing_description.trim() || null,
         amenities: form.amenities,
         // Only once the saved value is known (a failed load must not silently unpublish), and the
         // listing date is stamped only when the unit newly goes on the market.
-        ...(!isEdit || listingFields.data
+        ...(!isOwner && (!isEdit || listingFields.data)
           ? {
               market_listed: form.market_listed,
               ...(form.market_listed && !listingFields.data?.market_listed
@@ -312,7 +415,7 @@ export function UnitDialog({
         setForm((f) => ({ ...f, id: data.id }));
       }
       // Don't touch the photos of a unit whose saved photos never loaded (that would delete them).
-      if (!form.id || savedPhotos.data) {
+      if (!isOwner && (!form.id || savedPhotos.data)) {
         await syncUnitPhotos(supabase, unitId, savedPhotos.data ?? [], photoItems);
         queryClient.invalidateQueries({ queryKey: ["unit-photos", unitId] });
       }
@@ -320,6 +423,8 @@ export function UnitDialog({
     onSuccess: () => {
       toast.success(isEdit ? "تم تحديث الوحدة" : "تمت إضافة الوحدة");
       queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-own-properties"] });
+      queryClient.invalidateQueries({ queryKey: ["owner-agreements-properties"] });
       queryClient.invalidateQueries({ queryKey: ["market"] });
       queryClient.invalidateQueries({ queryKey: ["unit-listing-fields", form.id] });
       onOpenChange(false);
@@ -334,7 +439,10 @@ export function UnitDialog({
           <DialogTitle className="font-display">
             {isEdit ? "تعديل بيانات الوحدة" : "تسجيل وحدة جديدة"}
           </DialogTitle>
-          <DialogDescription>{propertyName}</DialogDescription>
+          <DialogDescription>
+            {propertyName}
+            {isOwner ? " — مواصفات وحدتك كما ستصل للمكتب الذي تتعاقد معه." : ""}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -420,6 +528,14 @@ export function UnitDialog({
               aria-invalid={Boolean(errors.area)}
             />
           </Field>
+          <Field label="رقم صك الوحدة">
+            <Input
+              dir="ltr"
+              value={form.deed_number}
+              onChange={(e) => set("deed_number", e.target.value)}
+              placeholder="إن كان للوحدة صك مستقل"
+            />
+          </Field>
           <Field label="نوع العرض">
             <Select
               value={form.listing_purpose}
@@ -444,23 +560,28 @@ export function UnitDialog({
                   aria-invalid={Boolean(errors.sale_price)}
                 />
               </Field>
-              <Field label="حالة البيع">
-                <Select
-                  value={form.status === "sold" ? "sold" : "vacant"}
-                  onValueChange={(v) => set("status", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vacant">متاحة للبيع</SelectItem>
-                    <SelectItem value="sold">تم البيع</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
+              {isOwner ? null : (
+                <Field label="حالة البيع">
+                  <Select
+                    value={form.status === "sold" ? "sold" : "vacant"}
+                    onValueChange={(v) => set("status", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vacant">متاحة للبيع</SelectItem>
+                      <SelectItem value="sold">تم البيع</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
             </>
           ) : (
-            <Field label="الإيجار السنوي (ريال)" error={errors.annual_rent}>
+            <Field
+              label={isOwner ? "الإيجار السنوي المتوقع (ريال)" : "الإيجار السنوي (ريال)"}
+              error={errors.annual_rent}
+            >
               <Input
                 inputMode="decimal"
                 value={form.annual_rent}
@@ -469,40 +590,44 @@ export function UnitDialog({
               />
             </Field>
           )}
-          <Field label="تخفيض تلقائي عند طول الشغور">
-            <div className="flex h-9 items-center gap-2">
-              <Switch
-                checked={form.auto_price_decay}
-                onCheckedChange={(v) => set("auto_price_decay", v)}
-              />
-              <span className="text-sm text-muted-foreground">
-                يخفَّض 2% أسبوعيًا بعد 14 يوم شغور
-              </span>
-            </div>
-          </Field>
-          {form.auto_price_decay ? (
-            <Field label="الحد الأدنى للسعر (ريال) — ما ينزل عنه" error={errors.price_floor}>
-              <Input
-                inputMode="decimal"
-                value={form.price_floor}
-                onChange={(e) => set("price_floor", e.target.value)}
-                aria-invalid={Boolean(errors.price_floor)}
-              />
-            </Field>
-          ) : null}
-          <div className="flex items-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => suggest.mutate()}
-              disabled={suggest.isPending}
-            >
-              <Sparkles className="size-4 text-brass" />
-              {suggest.isPending ? "جارٍ التسعير..." : "اقترح سعر الإيجار"}
-            </Button>
-          </div>
+          {isOwner ? null : (
+            <>
+              <Field label="تخفيض تلقائي عند طول الشغور">
+                <div className="flex h-9 items-center gap-2">
+                  <Switch
+                    checked={form.auto_price_decay}
+                    onCheckedChange={(v) => set("auto_price_decay", v)}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    يخفَّض 2% أسبوعيًا بعد 14 يوم شغور
+                  </span>
+                </div>
+              </Field>
+              {form.auto_price_decay ? (
+                <Field label="الحد الأدنى للسعر (ريال) — ما ينزل عنه" error={errors.price_floor}>
+                  <Input
+                    inputMode="decimal"
+                    value={form.price_floor}
+                    onChange={(e) => set("price_floor", e.target.value)}
+                    aria-invalid={Boolean(errors.price_floor)}
+                  />
+                </Field>
+              ) : null}
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => suggest.mutate()}
+                  disabled={suggest.isPending}
+                >
+                  <Sparkles className="size-4 text-brass" />
+                  {suggest.isPending ? "جارٍ التسعير..." : "اقترح سعر الإيجار"}
+                </Button>
+              </div>
+            </>
+          )}
           <Field label="رقم عداد الكهرباء">
             <Input
               dir="ltr"
@@ -517,64 +642,85 @@ export function UnitDialog({
               onChange={(e) => set("water_meter_no", e.target.value)}
             />
           </Field>
-          <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-            <Label htmlFor="furnished">الوحدة مؤثثة</Label>
-            <Switch
-              id="furnished"
-              checked={form.furnished}
-              onCheckedChange={(v) => set("furnished", v)}
+          <div className="rounded-lg border border-border p-4 sm:col-span-2">
+            <FurnitureEditor
+              furnishing={form.furnishing}
+              items={form.furniture}
+              notes={form.furniture_notes}
+              disabled={!canManage || save.isPending}
+              onChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  furnishing: v.furnishing,
+                  furniture: v.items,
+                  furniture_notes: v.notes,
+                }))
+              }
             />
           </div>
-          <Field label="المالك">
-            <Select value={form.owner_id} onValueChange={(v) => set("owner_id", v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="اختر المالك" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">بدون مالك</SelectItem>
-                {ownerOptions.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.fullName || c.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="المستأجر">
-            {/* Who lives in the unit comes from its active lease (it also drives the unit's
+          {isOwner ? null : (
+            <>
+              <Field label="المالك">
+                <Select value={form.owner_id} onValueChange={(v) => set("owner_id", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر المالك" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">بدون مالك</SelectItem>
+                    {ownerOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.fullName || c.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="المستأجر">
+                {/* Who lives in the unit comes from its active lease (it also drives the unit's
                 status); a lease is created from «المستأجرون والعقود». */}
-            <p className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm">
-              {leaseTenant ?? "بدون مستأجر"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              يُحدَّد من عقد الإيجار الساري — أنشئ العقد من «المستأجرون والعقود».
-            </p>
-          </Field>
-          <div className="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Label htmlFor="market_listed" className="font-medium">
-                  الإعلان في سوق العروض
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  تظهر الوحدة للجميع في سوق العروض عندما تكون شاغرة ويكون «العرض العلني» مفعّلًا في
-                  هوية المكتب ومعتمدًا من المنصة.
+                <p className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm">
+                  {leaseTenant ?? "بدون مستأجر"}
                 </p>
-              </div>
-              <Switch
-                id="market_listed"
-                checked={form.market_listed}
-                onCheckedChange={(v) => set("market_listed", v)}
-              />
-            </div>
-            <Field label="صور الوحدة">
-              <UnitPhotosEditor
-                items={photoItems}
-                onChange={setPhotoItems}
-                disabled={!canManage || save.isPending || (isEdit && savedPhotos.isLoading)}
-              />
-            </Field>
-            <Field label="وصف الإعلان (يظهر للعموم)">
+                <p className="text-xs text-muted-foreground">
+                  يُحدَّد من عقد الإيجار الساري — أنشئ العقد من «المستأجرون والعقود».
+                </p>
+              </Field>
+            </>
+          )}
+          <div className="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
+            {isOwner ? (
+              <p className="text-xs text-muted-foreground">
+                الوصف والمزايا تساعد المكتب على تسويق وحدتك؛ النشر في سوق العروض يتولاه المكتب بعد
+                قبول اتفاقية الإدارة.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Label htmlFor="market_listed" className="font-medium">
+                      الإعلان في سوق العروض
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      تظهر الوحدة للجميع في سوق العروض عندما تكون شاغرة ويكون «العرض العلني» مفعّلًا
+                      في هوية المكتب ومعتمدًا من المنصة.
+                    </p>
+                  </div>
+                  <Switch
+                    id="market_listed"
+                    checked={form.market_listed}
+                    onCheckedChange={(v) => set("market_listed", v)}
+                  />
+                </div>
+                <Field label="صور الوحدة">
+                  <UnitPhotosEditor
+                    items={photoItems}
+                    onChange={setPhotoItems}
+                    disabled={!canManage || save.isPending || (isEdit && savedPhotos.isLoading)}
+                  />
+                </Field>
+              </>
+            )}
+            <Field label={isOwner ? "وصف الوحدة" : "وصف الإعلان (يظهر للعموم)"}>
               <Textarea
                 rows={4}
                 maxLength={2000}
@@ -623,7 +769,7 @@ export function UnitDialog({
           </div>
         </div>
 
-        {form.id ? <RepairInvoices unitId={form.id} canManage={canManage} /> : null}
+        {form.id && !isOwner ? <RepairInvoices unitId={form.id} canManage={canManage} /> : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

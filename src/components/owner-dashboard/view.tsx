@@ -96,11 +96,14 @@ export function OwnerDashboardView({
             </span>
             <h2 className="font-display text-lg font-bold">لا توجد وحدات مسجّلة باسمك بعد</h2>
             <p className="max-w-md text-sm text-muted-foreground">
-              اطلب من مكتبك ربط وحداتك بحسابك، أو اطلب من مكتب عقاري إدارة أملاكك — وسيظهر هنا دخلك
-              وإشغالك وكل ما يحتاج قرارك.
+              سجّل شقتك أو فيلتك أو عمارتك بمواصفاتها، ثم اطلب من مكتب قريب إدارتها — أو اطلب من
+              مكتبك ربط وحداتك بحسابك. وسيظهر هنا دخلك وإشغالك وكل ما يحتاج قرارك.
             </p>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
               <Button asChild>
+                <Link to="/owner/properties">أضف عقارك</Link>
+              </Button>
+              <Button variant="outline" asChild>
                 <Link to="/owner/agreements">المكاتب والاتفاقيات</Link>
               </Button>
               <Button variant="outline" asChild>

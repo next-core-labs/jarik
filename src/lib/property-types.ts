@@ -25,6 +25,34 @@ export const PROPERTY_TYPE_GROUPS: { group: string; types: string[] }[] = [
 
 export const PROPERTY_TYPES: string[] = PROPERTY_TYPE_GROUPS.flatMap((g) => g.types);
 
+/** properties.structure: one standalone unit, or a building of several units. */
+export type PropertyStructure = "single" | "building";
+
+/** What a multi-unit property is (properties.building_type). */
+export const BUILDING_TYPES: string[] = [
+  "عمارة سكنية",
+  "عمارة تجارية",
+  "عمارة سكنية تجارية",
+  "برج سكني",
+  "برج تجاري",
+  "مجمع سكني",
+  "مجمع تجاري",
+];
+
+/** A standalone unit is any type except the buildings themselves (those are BUILDING_TYPES). */
+const BUILDING_WORDS = new Set(["عمارة سكنية", "عمارة تجارية", "برج", "فندق"]);
+export const SINGLE_UNIT_TYPE_GROUPS: { group: string; types: string[] }[] =
+  PROPERTY_TYPE_GROUPS.map((g) => ({
+    group: g.group,
+    types: g.types.filter((t) => !BUILDING_WORDS.has(t)),
+  })).filter((g) => g.types.length > 0);
+
+/** The broad class (properties.property_type) of a unit or building type. */
+export function groupOfType(type: string): string {
+  if (type.includes("تجاري")) return "تجاري";
+  return PROPERTY_TYPE_GROUPS.find((g) => g.types.includes(type))?.group ?? "سكني";
+}
+
 /** ماذا يريد المعلن أو الباحث: إيجار أم بيع. */
 export type ListingPurpose = "rent" | "sale";
 

@@ -31,6 +31,8 @@ const row = (over: Partial<ListingRow> = {}): ListingRow => ({
   area: 120,
   annual_rent: 40000,
   furnished: false,
+  furnishing: "none",
+  furniture: [],
   company_name: "مكتب جارك",
   logo_url: null,
   fal_license_no: "1200012345",

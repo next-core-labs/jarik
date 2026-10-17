@@ -14,6 +14,9 @@ import {
   Copy,
   Link2,
   Search,
+  Layers,
+  FileText,
+  Handshake,
 } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
@@ -40,8 +43,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PropertyDialog, type EditableProperty } from "@/components/property-dialog";
-import { UnitDialog, emptyUnit, type UnitFormValues } from "@/components/unit-dialog";
+import {
+  PropertyDialog,
+  type CreatedProperty,
+  type EditableProperty,
+} from "@/components/property-dialog";
+import {
+  UnitDialog,
+  emptyUnit,
+  unitFormFromRow,
+  type UnitFormValues,
+} from "@/components/unit-dialog";
+import { BulkUnitsDialog } from "@/components/bulk-units-dialog";
+import { buildingSpecsLine, UnitFurnishingLine } from "@/components/unit-specs-summary";
 import { sar, unitStatusLabel } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
 import { generateAdText } from "@/lib/pricing.functions";
@@ -63,6 +77,13 @@ export const Route = createFileRoute("/_authenticated/properties")({
   component: Properties,
 });
 
+/** 101, 102 … 110 — numeric-aware, so a building reads floor by floor. */
+function sortUnits<T extends { unit_number: string | null }>(units: T[]): T[] {
+  return [...units].sort((a, b) =>
+    (a.unit_number ?? "").localeCompare(b.unit_number ?? "", "ar", { numeric: true }),
+  );
+}
+
 function Properties() {
   const queryClient = useQueryClient();
   const { data: me } = useMyRoles();
@@ -75,6 +96,13 @@ function Properties() {
     leaseTenant: string | null;
   } | null>(null);
   const [newProperty, setNewProperty] = useState(false);
+  const [bulk, setBulk] = useState<{
+    propertyId: string;
+    propertyName: string;
+    district: string | null;
+    floorsCount: number | null;
+    existingNumbers: string[];
+  } | null>(null);
   const [editingProperty, setEditingProperty] = useState<EditableProperty | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -95,7 +123,7 @@ function Properties() {
       const { data, error } = await supabase
         .from("properties")
         .select(
-          "id, name, property_type, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, leases(status, tenants(full_name)))",
+          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, leases(status, tenants(full_name)))",
         )
         .order("created_at");
       if (error) throw error;
@@ -122,7 +150,7 @@ function Properties() {
         Boolean(query) &&
         [p.name, p.city, p.district].some((v) => (v ?? "").toLowerCase().includes(query));
       // A search that names the building keeps all of its units (still narrowed by status).
-      const units = (p.units ?? []).filter((u) =>
+      const units = sortUnits(p.units ?? []).filter((u) =>
         propertyHit ? statusFilter === "all" || u.status === statusFilter : unitMatches(u),
       );
       return { p, units, show: !filtering || units.length > 0 || propertyHit };
@@ -147,6 +175,32 @@ function Properties() {
     },
     onError: () => toast.error("تعذّر الإسناد"),
   });
+
+  // A new standalone unit goes straight to its unit form; a new building to adding its units.
+  const continueAfterCreate = (c: CreatedProperty) => {
+    if (c.structure === "single") {
+      setDialog({
+        propertyId: c.id,
+        propertyName: c.name,
+        values: {
+          ...emptyUnit,
+          unit_number: "1",
+          unit_type: c.unit_type,
+          district: c.district,
+          deed_number: c.deed_number,
+        },
+        leaseTenant: null,
+      });
+    } else {
+      setBulk({
+        propertyId: c.id,
+        propertyName: c.name,
+        district: c.district || null,
+        floorsCount: c.floors_count,
+        existingNumbers: [],
+      });
+    }
+  };
 
   const clientName = (id: string | null) => {
     if (!id) return null;
@@ -213,6 +267,11 @@ function Properties() {
           {visible.map(({ p, units }) => {
             const all = p.units ?? [];
             const occupied = all.filter((u) => u.status === "occupied").length;
+            // An owner's own property, seen here through an accepted management agreement: the
+            // owner keeps its record and units; the office manages within the agreement.
+            const ownerManaged = p.org_id == null;
+            const canAddUnits = !ownerManaged && (p.structure !== "single" || all.length === 0);
+            const specs = buildingSpecsLine(p);
             return (
               <Card key={p.id} className="shadow-deed">
                 <CardHeader>
@@ -221,13 +280,28 @@ function Properties() {
                       <CardTitle className="font-display text-xl">{p.name}</CardTitle>
                       <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                         <MapPin className="size-3.5" />
-                        {p.city} {p.district ? `· ${p.district}` : ""} · {p.property_type}
+                        {p.city} {p.district ? `· ${p.district}` : ""} ·{" "}
+                        {p.structure === "single"
+                          ? p.property_type
+                          : (p.building_type ?? p.property_type)}
                       </p>
+                      {specs ? (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <Layers className="size-3.5" />
+                          {specs}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {ownerManaged ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Handshake className="size-3.5" />
+                          عقار مالك — باتفاقية إدارة
+                        </Badge>
+                      ) : null}
                       <Badge variant="outline">{all.length} وحدة</Badge>
                       <Badge>{occupied} مشغولة</Badge>
-                      {isStaff ? (
+                      {isStaff && !ownerManaged ? (
                         <>
                           <Button
                             size="sm"
@@ -237,6 +311,8 @@ function Properties() {
                                 id: p.id,
                                 name: p.name,
                                 property_type: p.property_type,
+                                structure: p.structure,
+                                building_type: p.building_type,
                                 city: p.city,
                                 district: p.district,
                                 address: p.address,
@@ -244,26 +320,56 @@ function Properties() {
                                 owner_name: p.owner_name,
                                 lat: p.lat,
                                 lng: p.lng,
+                                floors_count: p.floors_count,
+                                year_built: p.year_built,
+                                elevators: p.elevators,
+                                parking_spaces: p.parking_spaces,
                               })
                             }
                           >
                             <Pencil className="size-4" />
                             تعديل العقار
                           </Button>
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              setDialog({
-                                propertyId: p.id,
-                                propertyName: p.name,
-                                values: { ...emptyUnit, district: p.district ?? "" },
-                                leaseTenant: null,
-                              })
-                            }
-                          >
-                            <Plus className="size-4" />
-                            تسجيل وحدة
-                          </Button>
+                          {canAddUnits && p.structure !== "single" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setBulk({
+                                  propertyId: p.id,
+                                  propertyName: p.name,
+                                  district: p.district,
+                                  floorsCount: p.floors_count,
+                                  existingNumbers: all.map((u) => u.unit_number ?? ""),
+                                })
+                              }
+                            >
+                              <Layers className="size-4" />
+                              إضافة وحدات دفعة واحدة
+                            </Button>
+                          ) : null}
+                          {canAddUnits ? (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                setDialog({
+                                  propertyId: p.id,
+                                  propertyName: p.name,
+                                  values: {
+                                    ...emptyUnit,
+                                    district: p.district ?? "",
+                                    ...(p.structure === "single"
+                                      ? { unit_number: "1", deed_number: p.deed_number ?? "" }
+                                      : {}),
+                                  },
+                                  leaseTenant: null,
+                                })
+                              }
+                            >
+                              <Plus className="size-4" />
+                              تسجيل وحدة
+                            </Button>
+                          ) : null}
                         </>
                       ) : null}
                     </div>
@@ -302,10 +408,17 @@ function Properties() {
                                 .join(" · ")}
                             </p>
                           ) : null}
-                          <p className="flex items-center gap-1.5">
-                            <Sofa className="size-3.5 text-brass" />
-                            {u.furnished ? "مؤثثة" : "غير مؤثثة"}
-                          </p>
+                          <UnitFurnishingLine
+                            furnishing={u.furnishing}
+                            furniture={u.furniture}
+                            icon={<Sofa className="size-3.5 shrink-0 text-brass" />}
+                          />
+                          {u.deed_number ? (
+                            <p className="flex items-center gap-1.5">
+                              <FileText className="size-3.5 text-brass" />
+                              صك الوحدة: <span dir="ltr">{u.deed_number}</span>
+                            </p>
+                          ) : null}
                           <p className="flex items-center gap-1.5">
                             <Zap className="size-3.5 text-brass" />
                             عداد الكهرباء: <span dir="ltr">{u.electricity_meter_no ?? "—"}</span>
@@ -316,7 +429,10 @@ function Properties() {
                           </p>
                           <p className="flex items-center gap-1.5">
                             <UserCheck className="size-3.5 text-brass" />
-                            المالك: {clientName(u.owner_id) ?? "غير مسند"}
+                            المالك:{" "}
+                            {ownerManaged
+                              ? (p.owner_name ?? "المالك المتعاقد")
+                              : (clientName(u.owner_id) ?? "غير مسند")}
                           </p>
                           <p className="flex items-center gap-1.5">
                             <UserCheck className="size-3.5 text-brass" />
@@ -341,31 +457,33 @@ function Properties() {
                                 إعلان جاهز
                               </Button>
                             ) : null}
-                            <Select
-                              value={u.owner_id ?? "none"}
-                              onValueChange={(v) =>
-                                assignOwner.mutate({
-                                  unitId: u.id,
-                                  ownerId: v === "none" ? null : v,
-                                })
-                              }
-                            >
-                              <SelectTrigger aria-label="إسناد الوحدة لمالك">
-                                <SelectValue placeholder="إسناد الوحدة لمالك" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">بدون مالك</SelectItem>
-                                {/* Owner accounts only (not staff, tenants or technicians); a unit
+                            {ownerManaged ? null : (
+                              <Select
+                                value={u.owner_id ?? "none"}
+                                onValueChange={(v) =>
+                                  assignOwner.mutate({
+                                    unitId: u.id,
+                                    ownerId: v === "none" ? null : v,
+                                  })
+                                }
+                              >
+                                <SelectTrigger aria-label="إسناد الوحدة لمالك">
+                                  <SelectValue placeholder="إسناد الوحدة لمالك" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">بدون مالك</SelectItem>
+                                  {/* Owner accounts only (not staff, tenants or technicians); a unit
                                     already assigned to someone else keeps that option visible. */}
-                                {(clients.data ?? [])
-                                  .filter((c) => c.roles.includes("owner") || c.id === u.owner_id)
-                                  .map((c) => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                      {c.fullName || c.email}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
+                                  {(clients.data ?? [])
+                                    .filter((c) => c.roles.includes("owner") || c.id === u.owner_id)
+                                    .map((c) => (
+                                      <SelectItem key={c.id} value={c.id}>
+                                        {c.fullName || c.email}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            )}
                             <Button
                               variant="outline"
                               className="w-full"
@@ -373,35 +491,7 @@ function Properties() {
                                 setDialog({
                                   propertyId: p.id,
                                   propertyName: p.name,
-                                  values: {
-                                    id: u.id,
-                                    unit_number: u.unit_number ?? "",
-                                    unit_name: u.unit_name ?? "",
-                                    unit_type: u.unit_type ?? "شقة",
-                                    district: u.district ?? "",
-                                    street: u.street ?? "",
-                                    floor_no: u.floor_no ?? "",
-                                    rooms: u.rooms == null ? "" : String(u.rooms),
-                                    halls: String(u.halls ?? 0),
-                                    bathrooms: String(u.bathrooms ?? 0),
-                                    area: u.area == null ? "" : String(u.area),
-                                    annual_rent: String(u.annual_rent ?? 0),
-                                    sale_price: String(u.sale_price ?? 0),
-                                    listing_purpose: u.listing_purpose === "sale" ? "sale" : "rent",
-                                    auto_price_decay: Boolean(u.auto_price_decay),
-                                    price_floor: u.price_floor == null ? "" : String(u.price_floor),
-                                    status: u.status ?? "vacant",
-                                    electricity_meter_no: u.electricity_meter_no ?? "",
-                                    water_meter_no: u.water_meter_no ?? "",
-                                    furnished: Boolean(u.furnished),
-                                    owner_id: u.owner_id ?? "none",
-                                    notes: u.notes ?? "",
-                                    // Loaded by the dialog itself (see UnitDialog), so this screen
-                                    // does not depend on the listing columns.
-                                    listing_description: "",
-                                    amenities: [],
-                                    market_listed: false,
-                                  },
+                                  values: unitFormFromRow(u),
                                   leaseTenant: leaseTenant(u),
                                 })
                               }
@@ -409,6 +499,24 @@ function Properties() {
                               <Pencil className="size-4" />
                               تعديل وفواتير الإصلاح
                             </Button>
+                            {canAddUnits ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full"
+                                onClick={() =>
+                                  setDialog({
+                                    propertyId: p.id,
+                                    propertyName: p.name,
+                                    values: unitFormFromRow(u, true),
+                                    leaseTenant: null,
+                                  })
+                                }
+                              >
+                                <Copy className="size-4" />
+                                نسخ كوحدة جديدة
+                              </Button>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -429,7 +537,20 @@ function Properties() {
         </div>
       )}
 
-      <PropertyDialog open={newProperty} onOpenChange={setNewProperty} />
+      <PropertyDialog
+        open={newProperty}
+        onOpenChange={setNewProperty}
+        onCreated={continueAfterCreate}
+      />
+      {bulk ? (
+        <BulkUnitsDialog
+          open
+          onOpenChange={(v) => {
+            if (!v) setBulk(null);
+          }}
+          {...bulk}
+        />
+      ) : null}
       <PropertyDialog
         open={Boolean(editingProperty)}
         onOpenChange={(v) => {

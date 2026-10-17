@@ -1163,8 +1163,10 @@ export type Database = {
           initiated_by: string;
           maintenance_cap: number | null;
           notice_period_days: number;
+          office_note: string | null;
           org_id: string;
           owner_id: string;
+          owner_note: string | null;
           start_date: string;
           status: string;
           termination_requested_at: string | null;
@@ -1181,8 +1183,10 @@ export type Database = {
           initiated_by?: string;
           maintenance_cap?: number | null;
           notice_period_days?: number;
+          office_note?: string | null;
           org_id: string;
           owner_id: string;
+          owner_note?: string | null;
           start_date: string;
           status?: string;
           termination_requested_at?: string | null;
@@ -1199,8 +1203,10 @@ export type Database = {
           initiated_by?: string;
           maintenance_cap?: number | null;
           notice_period_days?: number;
+          office_note?: string | null;
           org_id?: string;
           owner_id?: string;
+          owner_note?: string | null;
           start_date?: string;
           status?: string;
           termination_requested_at?: string | null;
@@ -2132,10 +2138,13 @@ export type Database = {
       properties: {
         Row: {
           address: string | null;
+          building_type: string | null;
           city: string | null;
           created_at: string;
           deed_number: string | null;
           district: string | null;
+          elevators: number | null;
+          floors_count: number | null;
           id: string;
           lat: number | null;
           lng: number | null;
@@ -2144,15 +2153,21 @@ export type Database = {
           org_id: string | null;
           owner_id: string | null;
           owner_name: string | null;
+          parking_spaces: number | null;
           property_type: string;
+          structure: string;
           updated_at: string;
+          year_built: number | null;
         };
         Insert: {
           address?: string | null;
+          building_type?: string | null;
           city?: string | null;
           created_at?: string;
           deed_number?: string | null;
           district?: string | null;
+          elevators?: number | null;
+          floors_count?: number | null;
           id?: string;
           lat?: number | null;
           lng?: number | null;
@@ -2161,15 +2176,21 @@ export type Database = {
           org_id?: string | null;
           owner_id?: string | null;
           owner_name?: string | null;
+          parking_spaces?: number | null;
           property_type?: string;
+          structure?: string;
           updated_at?: string;
+          year_built?: number | null;
         };
         Update: {
           address?: string | null;
+          building_type?: string | null;
           city?: string | null;
           created_at?: string;
           deed_number?: string | null;
           district?: string | null;
+          elevators?: number | null;
+          floors_count?: number | null;
           id?: string;
           lat?: number | null;
           lng?: number | null;
@@ -2178,8 +2199,11 @@ export type Database = {
           org_id?: string | null;
           owner_id?: string | null;
           owner_name?: string | null;
+          parking_spaces?: number | null;
           property_type?: string;
+          structure?: string;
           updated_at?: string;
+          year_built?: number | null;
         };
         Relationships: [
           {
@@ -2860,12 +2884,16 @@ export type Database = {
           auto_price_decay: boolean;
           bathrooms: number;
           created_at: string;
+          deed_number: string | null;
           district: string | null;
           electricity_meter_no: string | null;
           featured: boolean;
           featured_at: string | null;
           floor_no: string | null;
           furnished: boolean;
+          furnishing: string;
+          furniture: Json;
+          furniture_notes: string | null;
           halls: number;
           id: string;
           list_price: number | null;
@@ -2898,12 +2926,16 @@ export type Database = {
           auto_price_decay?: boolean;
           bathrooms?: number;
           created_at?: string;
+          deed_number?: string | null;
           district?: string | null;
           electricity_meter_no?: string | null;
           featured?: boolean;
           featured_at?: string | null;
           floor_no?: string | null;
           furnished?: boolean;
+          furnishing?: string;
+          furniture?: Json;
+          furniture_notes?: string | null;
           halls?: number;
           id?: string;
           list_price?: number | null;
@@ -2936,12 +2968,16 @@ export type Database = {
           auto_price_decay?: boolean;
           bathrooms?: number;
           created_at?: string;
+          deed_number?: string | null;
           district?: string | null;
           electricity_meter_no?: string | null;
           featured?: boolean;
           featured_at?: string | null;
           floor_no?: string | null;
           furnished?: boolean;
+          furnishing?: string;
+          furniture?: Json;
+          furniture_notes?: string | null;
           halls?: number;
           id?: string;
           list_price?: number | null;
@@ -3333,6 +3369,8 @@ export type Database = {
           featured: boolean | null;
           floor_no: string | null;
           furnished: boolean | null;
+          furnishing: string | null;
+          furniture: Json | null;
           halls: number | null;
           id: string | null;
           lat: number | null;
@@ -3573,8 +3611,10 @@ export type Database = {
           id: string;
           maintenance_cap: number;
           notice_period_days: number;
+          office_note: string;
           owner_email: string;
           owner_name: string;
+          owner_note: string;
           permissions: string[];
           start_date: string;
           status: string;
@@ -3637,6 +3677,7 @@ export type Database = {
           _commission_value?: number;
           _decision: string;
           _maintenance_cap?: number;
+          _note?: string;
           _notice_period_days?: number;
           _permissions?: string[];
         };
@@ -3648,6 +3689,26 @@ export type Database = {
         Returns: undefined;
       };
       office_unlink_client: { Args: { _user: string }; Returns: undefined };
+      offices_near: {
+        Args: {
+          _city?: string;
+          _district?: string;
+          _lat?: number;
+          _lng?: number;
+        };
+        Returns: {
+          city: string;
+          company_name: string;
+          distance_km: number;
+          district: string;
+          fal_license_no: string;
+          id: string;
+          logo_url: string;
+          office_phone: string;
+          same_city: boolean;
+          same_district: boolean;
+        }[];
+      };
       org_of: { Args: { _id: string; _table: string }; Returns: string };
       org_user_ids: { Args: { _org: string }; Returns: string[] };
       orgs_of_user: { Args: { _uid: string }; Returns: string[] };
@@ -3818,6 +3879,7 @@ export type Database = {
           _commission_value: number;
           _end_date: string;
           _maintenance_cap: number;
+          _note?: string;
           _notice_period_days: number;
           _org_id: string;
           _permissions: string[];

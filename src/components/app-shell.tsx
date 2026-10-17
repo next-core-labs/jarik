@@ -142,12 +142,13 @@ const tenantBottomNav = tenantNav.slice(0, 5);
 // "المكاتب والاتفاقيات" مسار مستقل فعلي (/owner/agreements)، لا "#anchor" داخل owner-dashboard —
 // خلافًا لبقية العناصر: هذا قسم 2 بالمواصفة (اتفاقية الإدارة)، كان مؤجَّلًا عمدًا (قرار مستخدم
 // سابق)، وحجمه (تصفّح مكاتب، طلب اتفاقية، إدارة صلاحيات) يستاهل صفحة قائمة بذاتها لا قسمًا فرعيًا.
+// "عقاراتي" كذلك صفحة مستقلة (/owner/properties): المالك يسجّل فيها عقاراته ووحداته وأثاثها بنفسه.
 // "الموافقات" مختلفة: موجودة اليوم فعلاً (قسم "صيانة تنتظر موافقتك" لا يعتمد على نظام
 // الاتفاقيات — موافقة المالك على تكلفة الصيانة مبنية على ملكية الوحدة مباشرة)، فعدّادها حقيقي.
 // بلا شريط سفلي للجوال — المواصفة ما تطلبه صراحة لهذي البوابة (خلافًا للمستأجر).
 const ownerNav: PortalNavItem[] = [
   { key: "home", label: "الرئيسية", icon: Gauge, href: "/owner-dashboard" },
-  { key: "properties", label: "عقاراتي", icon: Building2, href: "/owner-dashboard#units" },
+  { key: "properties", label: "عقاراتي", icon: Building2, href: "/owner/properties" },
   { key: "map", label: "الخريطة والجوار", icon: MapPin, href: "/owner-dashboard#map" },
   {
     key: "approvals",
@@ -282,6 +283,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.rpc("owner_pending_approvals");
       if (error) throw error;
       return data?.length ?? 0;
+    },
+  });
+  // Management requests from owners still waiting for this office's answer (RLS: its own org).
+  const pendingAgreements = useQuery({
+    queryKey: ["office-nav-pending-agreements", me?.userId],
+    enabled: staff,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("management_agreements")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "sent");
+      if (error) throw error;
+      return count ?? 0;
     },
   });
   const navBadge = (key: "overdue" | "unread" | "approvals") =>
@@ -471,7 +486,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                       )}
                     >
                       <item.icon className="size-4" />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {item.to === "/agreements" && (pendingAgreements.data ?? 0) > 0 ? (
+                        <span
+                          className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground"
+                          aria-label={`${pendingAgreements.data} طلب بانتظار ردّك`}
+                        >
+                          {pendingAgreements.data}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}

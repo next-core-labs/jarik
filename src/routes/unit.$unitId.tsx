@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Check, Heart, MessageCircle, Phone, Share2 } from "lucide-react";
+import { ArrowLeft, Check, Heart, MessageCircle, Phone, Share2, Sofa } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdvertiserCard, type AdvertiserView } from "@/components/advertiser-card";
@@ -373,7 +373,11 @@ function UnitPublic() {
   ].filter(Boolean);
   const features = [
     ...l.amenities,
-    l.furnished ? t("filter_furnished_yes") : t("filter_furnished_no"),
+    l.furnishing === "full"
+      ? t("furnished_full")
+      : l.furnishing === "partial"
+        ? t("furnished_partial")
+        : t("filter_furnished_no"),
   ];
 
   const purposeBadge = (
@@ -488,6 +492,26 @@ function UnitPublic() {
                 ))}
               </ul>
             </section>
+
+            {l.furnishing !== "none" && l.furniture.length > 0 ? (
+              <section className="flex flex-col gap-3">
+                <h2 className="text-xl font-bold">{t("ld_furniture")}</h2>
+                <ul className="flex flex-wrap gap-2" dir="rtl" lang="ar">
+                  {l.furniture.map((item) => (
+                    <li
+                      key={item.name}
+                      className="flex h-9 items-center gap-[7px] border border-border bg-card px-3 text-sm font-medium"
+                    >
+                      <Sofa className="size-3.5" aria-hidden />
+                      {item.name}
+                      {item.qty > 1 ? (
+                        <span className="text-muted-foreground tabular-nums">×{num(item.qty)}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {l.lat != null && l.lng != null ? (
               <NearbyPlacesSection lat={l.lat} lng={l.lng} locale={locale} />

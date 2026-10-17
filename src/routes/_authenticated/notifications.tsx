@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, CheckCheck, Wrench } from "lucide-react";
+import { Bell, BellOff, CheckCheck, Handshake, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -41,6 +41,7 @@ const kindLabel: Record<string, string> = {
   lease: "عقد",
   unit: "وحدة",
   deal: "صفقة",
+  agreement: "اتفاقية إدارة",
 };
 
 /** What this page is about, in the words of the role reading it. */
@@ -72,11 +73,19 @@ function maintenanceLinkFor(roles: AppRole[]): MaintenanceLink | null {
   return null;
 }
 
+/** Where a management-agreement notification is answered: the office's requests, or the owner's. */
+function agreementLinkFor(roles: AppRole[]): "/agreements" | "/owner/agreements" | null {
+  if (isStaffRole(roles)) return "/agreements";
+  if (roles.includes("owner")) return "/owner/agreements";
+  return null;
+}
+
 function Notifications() {
   const queryClient = useQueryClient();
   const { data: me } = useMyRoles();
   const roles = me?.roles ?? [];
   const jobLink = maintenanceLinkFor(roles);
+  const agreementLink = agreementLinkFor(roles);
 
   const { data, isLoading } = useQuery({
     queryKey: ["notifications"],
@@ -168,6 +177,14 @@ function Notifications() {
                       <Link {...jobLink}>
                         <Wrench className="size-4" />
                         عرض طلبات الصيانة
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {n.kind === "agreement" && agreementLink ? (
+                    <Button variant="link" size="sm" className="h-auto px-0" asChild>
+                      <Link to={agreementLink}>
+                        <Handshake className="size-4" />
+                        {agreementLink === "/agreements" ? "مراجعة الطلب والرد" : "عرض الاتفاقية"}
                       </Link>
                     </Button>
                   ) : null}

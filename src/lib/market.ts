@@ -1,5 +1,6 @@
 import type { Database } from "@/integrations/supabase/types";
 import { isPurpose, PURPOSE_LABEL, type ListingPurpose } from "@/lib/property-types";
+import { isFurnishing, parseFurniture, type Furnishing, type FurnitureItem } from "@/lib/furniture";
 
 export type ListingRow = Database["public"]["Views"]["vacant_units_public"]["Row"];
 
@@ -25,6 +26,9 @@ export type Listing = {
   listPrice: number | null;
   purpose: ListingPurpose;
   furnished: boolean;
+  furnishing: Furnishing;
+  /** What the furnished unit comes with (item names are as the office typed them, in Arabic). */
+  furniture: FurnitureItem[];
   description: string | null;
   amenities: string[];
   createdAt: string | null;
@@ -68,6 +72,8 @@ export function toListing(row: ListingRow): Listing | null {
     listPrice: row.list_price != null ? Number(row.list_price) : null,
     purpose: isPurpose(row.listing_purpose) ? row.listing_purpose : "rent",
     furnished: Boolean(row.furnished),
+    furnishing: isFurnishing(row.furnishing) ? row.furnishing : row.furnished ? "full" : "none",
+    furniture: parseFurniture(row.furniture),
     description: row.listing_description,
     amenities: row.amenities ?? [],
     createdAt: row.created_at,

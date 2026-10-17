@@ -54,6 +54,7 @@ import { Route as UnitUnitIdRouteImport } from './routes/unit.$unitId'
 import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices.index'
 import { Route as AuthenticatedInvoicesNewRouteImport } from './routes/_authenticated/invoices.new'
 import { Route as AuthenticatedOwnerAgreementsRouteImport } from './routes/_authenticated/owner.agreements'
+import { Route as AuthenticatedOwnerPropertiesRouteImport } from './routes/_authenticated/owner.properties'
 import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authenticated/owner.settings'
 import { Route as AuthenticatedTenantSettingsRouteImport } from './routes/_authenticated/tenant.settings'
 import { Route as ApiAuthSendEmailRouteImport } from './routes/api/auth/send-email'
@@ -293,6 +294,12 @@ const AuthenticatedOwnerAgreementsRoute =
     path: '/owner/agreements',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOwnerPropertiesRoute =
+  AuthenticatedOwnerPropertiesRouteImport.update({
+    id: '/owner/properties',
+    path: '/owner/properties',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOwnerSettingsRoute =
   AuthenticatedOwnerSettingsRouteImport.update({
     id: '/owner/settings',
@@ -361,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/unit/$unitId': typeof UnitUnitIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
+  '/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
@@ -411,6 +419,7 @@ export interface FileRoutesByTo {
   '/unit/$unitId': typeof UnitUnitIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
+  '/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
@@ -463,6 +472,7 @@ export interface FileRoutesById {
   '/unit/$unitId': typeof UnitUnitIdRoute
   '/_authenticated/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/_authenticated/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
+  '/_authenticated/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
   '/_authenticated/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/_authenticated/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
@@ -515,6 +525,7 @@ export interface FileRouteTypes {
     | '/unit/$unitId'
     | '/invoices/new'
     | '/owner/agreements'
+    | '/owner/properties'
     | '/owner/settings'
     | '/tenant/settings'
     | '/api/auth/send-email'
@@ -565,6 +576,7 @@ export interface FileRouteTypes {
     | '/unit/$unitId'
     | '/invoices/new'
     | '/owner/agreements'
+    | '/owner/properties'
     | '/owner/settings'
     | '/tenant/settings'
     | '/api/auth/send-email'
@@ -616,6 +628,7 @@ export interface FileRouteTypes {
     | '/unit/$unitId'
     | '/_authenticated/invoices/new'
     | '/_authenticated/owner/agreements'
+    | '/_authenticated/owner/properties'
     | '/_authenticated/owner/settings'
     | '/_authenticated/tenant/settings'
     | '/api/auth/send-email'
@@ -959,6 +972,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOwnerAgreementsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/owner/properties': {
+      id: '/_authenticated/owner/properties'
+      path: '/owner/properties'
+      fullPath: '/owner/properties'
+      preLoaderRoute: typeof AuthenticatedOwnerPropertiesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/owner/settings': {
       id: '/_authenticated/owner/settings'
       path: '/owner/settings'
@@ -1021,6 +1041,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedWhatsappRoute: typeof AuthenticatedWhatsappRoute
   AuthenticatedInvoicesNewRoute: typeof AuthenticatedInvoicesNewRoute
   AuthenticatedOwnerAgreementsRoute: typeof AuthenticatedOwnerAgreementsRoute
+  AuthenticatedOwnerPropertiesRoute: typeof AuthenticatedOwnerPropertiesRoute
   AuthenticatedOwnerSettingsRoute: typeof AuthenticatedOwnerSettingsRoute
   AuthenticatedTenantSettingsRoute: typeof AuthenticatedTenantSettingsRoute
   AuthenticatedInvoicesIndexRoute: typeof AuthenticatedInvoicesIndexRoute
@@ -1057,6 +1078,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedWhatsappRoute: AuthenticatedWhatsappRoute,
   AuthenticatedInvoicesNewRoute: AuthenticatedInvoicesNewRoute,
   AuthenticatedOwnerAgreementsRoute: AuthenticatedOwnerAgreementsRoute,
+  AuthenticatedOwnerPropertiesRoute: AuthenticatedOwnerPropertiesRoute,
   AuthenticatedOwnerSettingsRoute: AuthenticatedOwnerSettingsRoute,
   AuthenticatedTenantSettingsRoute: AuthenticatedTenantSettingsRoute,
   AuthenticatedInvoicesIndexRoute: AuthenticatedInvoicesIndexRoute,

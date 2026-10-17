@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Handshake, Search } from "lucide-react";
+import { Building2, Handshake } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -19,24 +19,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   PERMISSION_LABEL,
   PERMISSION_OPTIONS,
   UNENFORCED_PERMISSIONS,
 } from "@/lib/agreement-permissions";
-import { todayRiyadh } from "@/lib/dates";
 import { sar, shortDate } from "@/lib/format";
-import { toLatinDigits } from "@/lib/saudi-id";
+import { RequestAgreementDialog } from "@/components/request-agreement-dialog";
+import { activeAgreementUnitIds, useOwnerUnitGroups } from "@/lib/owner-units";
 
 export const Route = createFileRoute("/_authenticated/owner/agreements")({
   staticData: { sitemap: false },
@@ -67,15 +58,6 @@ const STATUS_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructiv
   cancelled: "outline",
 };
 
-type Office = {
-  id: string;
-  company_name: string;
-  fal_license_no: string | null;
-  office_phone: string | null;
-  city: string | null;
-  district: string | null;
-};
-
 type AgreementRow = {
   id: string;
   status: string;
@@ -88,6 +70,8 @@ type AgreementRow = {
   termination_requested_at: string | null;
   termination_requested_by: string | null;
   org_id: string;
+  owner_note: string | null;
+  office_note: string | null;
   agreement_units: {
     unit_id: string;
     units: { unit_number: string; properties: { name: string } | null } | null;
@@ -106,7 +90,7 @@ function OwnerAgreements() {
       const { data, error } = await supabase
         .from("management_agreements")
         .select(
-          "id, status, commission_type, commission_value, start_date, end_date, notice_period_days, maintenance_cap, termination_requested_at, termination_requested_by, org_id, agreement_units(unit_id, units(unit_number, properties(name))), agreement_permissions(permission)",
+          "id, status, commission_type, commission_value, start_date, end_date, notice_period_days, maintenance_cap, termination_requested_at, termination_requested_by, org_id, owner_note, office_note, agreement_units(unit_id, units(unit_number, properties(name))), agreement_permissions(permission)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -128,56 +112,11 @@ function OwnerAgreements() {
     },
   });
 
-  // owner_units(), not properties→units: same ownership rule as request_management_agreement
-  // (the unit's own owner, else the property's), so an owner of a single unit inside someone
-  // else's property can still pick it — properties RLS hides that property from them.
-  const properties = useQuery({
-    queryKey: ["owner-agreements-properties"],
-    queryFn: async (): Promise<PropertyWithUnits[]> => {
-      const { data, error } = await supabase.rpc("owner_units");
-      if (error) throw error;
-      const byProperty = new Map<
-        string,
-        PropertyWithUnits & { units: NonNullable<PropertyWithUnits["units"]> }
-      >();
-      for (const u of data ?? []) {
-        const p = byProperty.get(u.property_id) ?? {
-          id: u.property_id,
-          name: u.property_name,
-          units: [],
-        };
-        p.units.push({
-          id: u.unit_id,
-          unit_number: u.unit_number,
-          unit_type: u.unit_type,
-          status: u.status,
-        });
-        byProperty.set(u.property_id, p);
-      }
-      return [...byProperty.values()];
-    },
-  });
-
-  // وحدة عليها اتفاقية سارية فعلاً (أو منتهية بفترة إشعار لسه ما خلصت) تُستبعد من اختيار طلب جديد —
-  // نفس شرط request_management_agreement بالضبط (status='active' AND (بلا طلب إنهاء، أو فترة
-  // الإشعار ما خلصت بعد)): status تبقى 'active' حتى بعد ما تنتهي فترة الإشعار فعليًا (تُحسب حيّة،
-  // لا عمود منفصل) — فحص status وحده بدون هذا الشرط يُبقي الوحدة مستبعدة للأبد حتى بعد ما يقبل
-  // الخادم فعليًا طلبًا جديدًا عليها.
-  const unitsUnderActiveAgreement = useMemo(() => {
-    const s = new Set<string>();
-    const now = Date.now();
-    for (const a of agreements.data ?? []) {
-      if (a.status !== "active") continue;
-      if (
-        a.termination_requested_at &&
-        now >= new Date(a.termination_requested_at).getTime() + a.notice_period_days * 86400000
-      ) {
-        continue;
-      }
-      for (const au of a.agreement_units) s.add(au.unit_id);
-    }
-    return s;
-  }, [agreements.data]);
+  const properties = useOwnerUnitGroups();
+  const unitsUnderActiveAgreement = useMemo(
+    () => activeAgreementUnitIds(agreements.data ?? []),
+    [agreements.data],
+  );
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["owner-agreements"] });
@@ -287,6 +226,18 @@ function OwnerAgreements() {
                       ))
                     )}
                   </div>
+                  {a.owner_note ? (
+                    <p className="rounded-md bg-muted/40 px-3 py-2 text-sm">
+                      <span className="text-muted-foreground">رسالتك: </span>
+                      {a.owner_note}
+                    </p>
+                  ) : null}
+                  {a.office_note ? (
+                    <p className="rounded-md border border-border px-3 py-2 text-sm">
+                      <span className="text-muted-foreground">ردّ المكتب: </span>
+                      {a.office_note}
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
                     {a.agreement_units.map((au) => (
                       <span key={au.unit_id} className="rounded-md border border-border px-2 py-1">
@@ -378,306 +329,6 @@ function OwnerAgreements() {
         />
       ) : null}
     </>
-  );
-}
-
-/** A number typed on either keyboard: Arabic-Indic digits, "٫" as the decimal point, and "٬" or ","
- * as thousands separators. Anything else gives NaN, so "abc" is rejected instead of becoming null. */
-function parseAmount(raw: string): number {
-  const s = toLatinDigits(raw.trim()).replace(/٫/g, ".").replace(/[٬,]/g, "");
-  return s === "" ? NaN : Number(s);
-}
-
-type PropertyWithUnits = {
-  id: string;
-  name: string;
-  units: { id: string; unit_number: string; unit_type: string; status: string }[] | null;
-};
-
-function RequestAgreementDialog({
-  properties,
-  excludedUnitIds,
-  onClose,
-  onDone,
-}: {
-  properties: PropertyWithUnits[];
-  excludedUnitIds: Set<string>;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [step, setStep] = useState<"office" | "terms">("office");
-  const [officeQuery, setOfficeQuery] = useState("");
-  const [selectedOffice, setSelectedOffice] = useState<Office | null>(null);
-  const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
-  const [commissionType, setCommissionType] = useState<"percent" | "fixed">("percent");
-  const [commissionValue, setCommissionValue] = useState("5");
-  const [startDate, setStartDate] = useState(() => todayRiyadh());
-  const [endDate, setEndDate] = useState("");
-  const [noticeDays, setNoticeDays] = useState("30");
-  const [maintenanceCap, setMaintenanceCap] = useState("");
-  const [permissions, setPermissions] = useState<Set<string>>(new Set(["leasing", "maintenance"]));
-
-  const offices = useQuery({
-    queryKey: ["owner-agreements-offices"],
-    queryFn: async (): Promise<Office[]> => {
-      const { data, error } = await supabase
-        .from("office_directory")
-        .select("id, company_name, fal_license_no, office_phone, city, district");
-      if (error) throw error;
-      return (data ?? []) as Office[];
-    },
-  });
-
-  const term = officeQuery.trim();
-  const officeList = (offices.data ?? []).filter(
-    (o) =>
-      !term ||
-      o.company_name.includes(term) ||
-      (o.city ?? "").includes(term) ||
-      (o.district ?? "").includes(term),
-  );
-
-  const toggleUnit = (id: string) =>
-    setSelectedUnits((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const togglePermission = (p: string) =>
-    setPermissions((s) => {
-      const next = new Set(s);
-      if (next.has(p)) next.delete(p);
-      else next.add(p);
-      return next;
-    });
-
-  const send = useMutation({
-    mutationFn: async () => {
-      if (!selectedOffice) throw new Error("اختر مكتبًا أولًا");
-      if (selectedUnits.size === 0) throw new Error("اختر وحدة واحدة على الأقل");
-      const value = parseAmount(commissionValue || "0");
-      if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل قيمة عمولة صحيحة");
-      if (commissionType === "percent" && value > 100)
-        throw new Error("نسبة العمولة لا تتجاوز ١٠٠٪");
-      if (!startDate) throw new Error("اختر تاريخ البدء");
-      if (endDate && endDate <= startDate)
-        throw new Error("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء");
-      const days = parseAmount(noticeDays || "30");
-      if (!Number.isInteger(days) || days < 0)
-        throw new Error("فترة الإشعار يجب أن تكون رقمًا صحيحًا");
-      const cap = maintenanceCap.trim() ? parseAmount(maintenanceCap) : null;
-      if (cap !== null && (!Number.isFinite(cap) || cap < 0))
-        throw new Error("سقف الصيانة يجب أن يكون مبلغًا بالأرقام، أو اتركه فارغًا");
-      const { error } = await supabase.rpc("request_management_agreement", {
-        _org_id: selectedOffice.id,
-        _unit_ids: Array.from(selectedUnits),
-        _commission_type: commissionType,
-        _commission_value: value,
-        _start_date: startDate,
-        _end_date: (endDate || null) as unknown as string,
-        _notice_period_days: days,
-        _maintenance_cap: cap as unknown as number,
-        _permissions: Array.from(permissions),
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("أُرسل طلب الاتفاقية للمكتب — يصلك إشعار عند رده");
-      onDone();
-    },
-    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
-  });
-
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="font-display">طلب اتفاقية إدارة</DialogTitle>
-          <DialogDescription>
-            {step === "office"
-              ? "اختر المكتب الذي تريده أن يدير وحداتك."
-              : `${selectedOffice?.company_name ?? ""} — حدد الوحدات والشروط.`}
-          </DialogDescription>
-        </DialogHeader>
-
-        {step === "office" ? (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pe-9"
-                placeholder="ابحث باسم المكتب أو المدينة أو الحي"
-                value={officeQuery}
-                onChange={(e) => setOfficeQuery(e.target.value)}
-              />
-            </div>
-            <div className="max-h-72 space-y-2 overflow-y-auto">
-              {offices.isLoading ? (
-                <Skeleton className="h-16" />
-              ) : offices.error ? (
-                <p className="text-destructive">
-                  {userErrorMessage(offices.error, "تعذّر تحميل المكاتب — حاول مرة أخرى")}
-                </p>
-              ) : officeList.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  لا توجد مكاتب مطابقة.
-                </p>
-              ) : (
-                officeList.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className="w-full rounded-md border border-border p-3 text-start hover:bg-muted/50"
-                    onClick={() => {
-                      setSelectedOffice(o);
-                      setStep("terms");
-                    }}
-                  >
-                    <p className="font-medium">{o.company_name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {[o.city, o.district].filter(Boolean).join(" · ") || "غير محدّد"}
-                      {o.fal_license_no ? ` · فال ${o.fal_license_no}` : ""}
-                    </p>
-                  </button>
-                ))
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={onClose}>
-                إلغاء
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>الوحدات المشمولة</Label>
-              <div className="max-h-48 space-y-3 overflow-y-auto rounded-md border border-border p-3">
-                {properties.map((p) => (
-                  <div key={p.id}>
-                    <p className="text-sm font-medium">{p.name}</p>
-                    <div className="mt-1 space-y-1 ps-2">
-                      {(p.units ?? []).map((u) => {
-                        const disabled = excludedUnitIds.has(u.id);
-                        return (
-                          <label
-                            key={u.id}
-                            className={`flex items-center gap-2 text-sm ${disabled ? "opacity-50" : ""}`}
-                          >
-                            <Checkbox
-                              checked={selectedUnits.has(u.id)}
-                              disabled={disabled}
-                              onCheckedChange={() => toggleUnit(u.id)}
-                            />
-                            وحدة {u.unit_number} ({u.unit_type})
-                            {disabled ? " — لها اتفاقية سارية بالفعل" : ""}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {properties.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">ما عندك عقارات مسجّلة بعد.</p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>نوع العمولة</Label>
-                <Select
-                  value={commissionType}
-                  onValueChange={(v) => setCommissionType(v as "percent" | "fixed")}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percent">نسبة مئوية</SelectItem>
-                    <SelectItem value="fixed">مبلغ ثابت</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>{commissionType === "percent" ? "النسبة %" : "المبلغ (ريال)"}</Label>
-                <Input
-                  inputMode="decimal"
-                  value={commissionValue}
-                  onChange={(e) => setCommissionValue(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>تاريخ البدء</Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>تاريخ الانتهاء (اختياري)</Label>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>فترة إشعار الإنهاء (يوم)</Label>
-                <Input
-                  inputMode="numeric"
-                  value={noticeDays}
-                  onChange={(e) => setNoticeDays(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>سقف صيانة بلا موافقتك (اختياري)</Label>
-                <Input
-                  inputMode="decimal"
-                  placeholder="يستخدم سقف المكتب الافتراضي إن تُرك فارغًا"
-                  value={maintenanceCap}
-                  onChange={(e) => setMaintenanceCap(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>الصلاحيات الممنوحة للمكتب</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {PERMISSION_OPTIONS.map((p) => (
-                  <label key={p} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={permissions.has(p)}
-                      onCheckedChange={() => togglePermission(p)}
-                    />
-                    {PERMISSION_LABEL[p]}
-                    {UNENFORCED_PERMISSIONS.has(p) ? (
-                      <Badge variant="outline" className="text-xs">
-                        قريبًا
-                      </Badge>
-                    ) : null}
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                عرض بيانات وحداتك متاح للمكتب دائمًا طالما الاتفاقية سارية، بصرف النظر عن الصلاحيات
-                المحددة هنا.
-              </p>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setStep("office")}>
-                رجوع
-              </Button>
-              <Button
-                disabled={send.isPending || selectedUnits.size === 0}
-                onClick={() => send.mutate()}
-              >
-                {send.isPending ? "جارٍ الإرسال..." : "إرسال الطلب"}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 
