@@ -307,14 +307,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         : approvalsCount.data) ?? 0;
 
   // A newly registered office works fully in private but stays out of the public market until the
-  // platform verifies it. Best effort: if this lookup fails the banner is simply not shown.
+  // platform verifies it. "none": a staff account in no office at all, which can record nothing
+  // (every row belongs to an office). Best effort: if this lookup fails no banner is shown.
   const officeVerified = useQuery({
     queryKey: ["office-verified", me?.userId],
     enabled: staff,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<boolean | "none" | null> => {
       const orgId = await myOrgId();
-      if (!orgId) return null;
+      if (!orgId) return "none";
       const { data, error } = await supabase
         .from("org_settings")
         .select("verified")
@@ -527,6 +528,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Undo2 className="size-4" />
               العودة لحساب المدير العام
             </Button>
+          </div>
+        ) : null}
+        {!platformTeamPage && staff && officeVerified.data === "none" ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-warning-tint px-4 py-2 text-sm text-warning-tint-foreground">
+            <Building2 className="size-4 shrink-0" aria-hidden />
+            <span>
+              حسابك غير مرتبط بأي مكتب، لذلك لا يستطيع تسجيل عقارات أو وحدات أو عقود. اطلب من مدير
+              مكتبك دعوتك من «فريق المكتب».
+            </span>
           </div>
         ) : null}
         {!platformTeamPage && staff && officeVerified.data === false ? (

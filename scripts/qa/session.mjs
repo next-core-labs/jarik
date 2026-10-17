@@ -38,6 +38,7 @@ const READ_RPCS = new Set([
   "office_invitations",
   "office_link_requests",
   "office_people",
+  "offices_near",
   "org_of",
   "org_user_ids",
   "orgs_of_user",

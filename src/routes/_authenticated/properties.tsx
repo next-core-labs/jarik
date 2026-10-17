@@ -60,6 +60,7 @@ import { sar, unitStatusLabel } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
 import { generateAdText } from "@/lib/pricing.functions";
 import { useMyRoles } from "@/lib/use-role";
+import { myOrgId } from "@/lib/use-org-branding";
 
 export const Route = createFileRoute("/_authenticated/properties")({
   staticData: { sitemap: false },
@@ -88,6 +89,15 @@ function Properties() {
   const queryClient = useQueryClient();
   const { data: me } = useMyRoles();
   const isStaff = (me?.roles ?? []).some((r) => r === "admin" || r === "staff");
+  // A staff account in no office can record nothing: every property belongs to an office, and the
+  // database refuses one this account is not a member of (app-shell explains it in a banner).
+  const myOffice = useQuery({
+    queryKey: ["my-org-id", me?.userId],
+    enabled: isStaff,
+    staleTime: 60_000,
+    queryFn: () => myOrgId(),
+  });
+  const noOffice = isStaff && myOffice.isSuccess && myOffice.data === null;
 
   const [dialog, setDialog] = useState<{
     propertyId: string;
@@ -214,7 +224,7 @@ function Properties() {
         title="الأملاك والوحدات"
         subtitle="كل عقار ووحداته، حالة الإشغال، ورقم عداد الكهرباء والمياه لكل وحدة."
         action={
-          isStaff ? (
+          isStaff && !noOffice ? (
             <Button onClick={() => setNewProperty(true)}>
               <Plus className="size-4" />
               تسجيل عقار
@@ -233,7 +243,9 @@ function Properties() {
           <CardContent className="py-10 text-center">
             <p className="font-medium">لا توجد عقارات بعد</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              سجّل أول عقار، ثم أضف وحداته الشاغرة لتظهر في سوق العروض.
+              {noOffice
+                ? "حسابك غير مرتبط بأي مكتب — اطلب من مدير مكتبك دعوتك من «فريق المكتب» لتسجّل عقاراته."
+                : "سجّل أول عقار، ثم أضف وحداته الشاغرة لتظهر في سوق العروض."}
             </p>
           </CardContent>
         </Card>
