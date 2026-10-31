@@ -33,6 +33,9 @@ import { sar, shortDate } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
 import { parseAmount } from "@/lib/public-form";
 import { suggestRent } from "@/lib/pricing.functions";
+import { startListingPayment } from "@/lib/listing-payments.functions";
+import { canListWithoutPaying, LISTING_FEE_LABEL, marketState } from "@/lib/listing-fee";
+import { isMoyasarCheckoutUrl } from "@/lib/moyasar-url";
 import { AMENITIES } from "@/lib/amenities";
 import { PROPERTY_TYPE_GROUPS, PROPERTY_TYPES, type ListingPurpose } from "@/lib/property-types";
 import { mediaUrl, syncUnitPhotos, type ExistingPhoto, type PhotoItem } from "@/lib/unit-photos";
@@ -104,7 +107,8 @@ export const emptyUnit: UnitFormValues = {
   notes: "",
   listing_description: "",
   amenities: [],
-  market_listed: true,
+  // Publishing is paid (listing-fee.ts), so a new unit starts off the market.
+  market_listed: false,
 };
 
 /** The saved unit as the columns the properties screens load it. */
@@ -239,7 +243,7 @@ export function UnitDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("units")
-        .select("listing_description, amenities, market_listed")
+        .select("listing_description, amenities, market_listed, market_paid_until")
         .eq("id", initial.id!)
         .single();
       if (error) throw error;
@@ -263,6 +267,15 @@ export function UnitDialog({
       market_listed,
     }));
   }, [listingFields.data, listingFields.isFetching]);
+
+  // Where the saved unit stands on the website; a new unit has never been published.
+  const market = marketState(
+    listingFields.data ?? { market_listed: false, market_paid_until: null },
+  );
+  // Switching the unit on without a paid period (or a free legacy listing) saves it unlisted and then
+  // sends the office to pay; the database refuses to list it before then (guard_market_publish).
+  const needsPayment = !isOwner && form.market_listed && !canListWithoutPaying(market);
+  const startPayment = useServerFn(startListingPayment);
 
   // Photos: the saved ones are loaded once, then edited locally and written on save.
   const savedPhotos = useQuery({
@@ -396,8 +409,8 @@ export function UnitDialog({
         // listing date is stamped only when the unit newly goes on the market.
         ...(!isOwner && (!isEdit || listingFields.data)
           ? {
-              market_listed: form.market_listed,
-              ...(form.market_listed && !listingFields.data?.market_listed
+              market_listed: form.market_listed && !needsPayment,
+              ...(form.market_listed && !needsPayment && !listingFields.data?.market_listed
                 ? { market_listed_at: new Date().toISOString() }
                 : {}),
             }
@@ -419,9 +432,22 @@ export function UnitDialog({
         await syncUnitPhotos(supabase, unitId, savedPhotos.data ?? [], photoItems);
         queryClient.invalidateQueries({ queryKey: ["unit-photos", unitId] });
       }
+      if (!needsPayment) return null;
+      // The unit is saved either way; a payment that cannot start is reported, not a failed save.
+      try {
+        return await startPayment({ data: { unitId } });
+      } catch (e) {
+        return { status: "error" as const, message: userErrorMessage(e, "تعذّر فتح صفحة الدفع") };
+      }
     },
-    onSuccess: () => {
+    onSuccess: (payment) => {
       toast.success(isEdit ? "تم تحديث الوحدة" : "تمت إضافة الوحدة");
+      if (payment?.status === "error") toast.error(payment.message);
+      if (payment?.status === "paid") toast.success("تم نشر الوحدة في الموقع");
+      if (payment?.status === "pending" && isMoyasarCheckoutUrl(payment.url)) {
+        toast.info("جارٍ تحويلك إلى صفحة الدفع…");
+        window.location.assign(payment.url);
+      }
       queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
       queryClient.invalidateQueries({ queryKey: ["owner-own-properties"] });
       queryClient.invalidateQueries({ queryKey: ["owner-agreements-properties"] });
@@ -704,10 +730,18 @@ export function UnitDialog({
                       تظهر الوحدة للجميع في سوق العروض عندما تكون شاغرة ويكون «العرض العلني» مفعّلًا
                       في هوية المكتب ومعتمدًا من المنصة.
                     </p>
+                    <p className="mt-1 text-xs font-medium">
+                      {market.kind === "paid"
+                        ? `النشر مدفوع حتى ${shortDate(market.until.toISOString())}`
+                        : market.kind === "free"
+                          ? "منشورة مجانًا — إن أوقفت نشرها فإعادة النشر برسوم."
+                          : `رسوم النشر ${LISTING_FEE_LABEL} شاملة الضريبة — بعد الحفظ تنتقل لصفحة الدفع.`}
+                    </p>
                   </div>
                   <Switch
                     id="market_listed"
                     checked={form.market_listed}
+                    disabled={isEdit && !listingFields.data}
                     onCheckedChange={(v) => set("market_listed", v)}
                   />
                 </div>
@@ -786,6 +820,7 @@ export function UnitDialog({
             }
           >
             {isEdit ? "حفظ التعديلات" : "إضافة الوحدة"}
+            {needsPayment ? " والدفع للنشر" : ""}
           </Button>
         </DialogFooter>
       </DialogContent>

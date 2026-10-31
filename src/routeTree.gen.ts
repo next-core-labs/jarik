@@ -58,6 +58,7 @@ import { Route as AuthenticatedOwnerPropertiesRouteImport } from './routes/_auth
 import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authenticated/owner.settings'
 import { Route as AuthenticatedTenantSettingsRouteImport } from './routes/_authenticated/tenant.settings'
 import { Route as ApiAuthSendEmailRouteImport } from './routes/api/auth/send-email'
+import { Route as ApiPublicMoyasarWebhookRouteImport } from './routes/api/public/moyasar.webhook'
 import { Route as ApiPublicWhatsappChannelIdRouteImport } from './routes/api/public/whatsapp.$channelId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -317,6 +318,11 @@ const ApiAuthSendEmailRoute = ApiAuthSendEmailRouteImport.update({
   path: '/api/auth/send-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMoyasarWebhookRoute = ApiPublicMoyasarWebhookRouteImport.update({
+  id: '/api/public/moyasar/webhook',
+  path: '/api/public/moyasar/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWhatsappChannelIdRoute =
   ApiPublicWhatsappChannelIdRouteImport.update({
     id: '/api/public/whatsapp/$channelId',
@@ -373,6 +379,7 @@ export interface FileRoutesByFullPath {
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/invoices/': typeof AuthenticatedInvoicesIndexRoute
+  '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
 export interface FileRoutesByTo {
@@ -424,6 +431,7 @@ export interface FileRoutesByTo {
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/invoices': typeof AuthenticatedInvoicesIndexRoute
+  '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
 export interface FileRoutesById {
@@ -477,6 +485,7 @@ export interface FileRoutesById {
   '/_authenticated/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
+  '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
 export interface FileRouteTypes {
@@ -530,6 +539,7 @@ export interface FileRouteTypes {
     | '/tenant/settings'
     | '/api/auth/send-email'
     | '/invoices/'
+    | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -581,6 +591,7 @@ export interface FileRouteTypes {
     | '/tenant/settings'
     | '/api/auth/send-email'
     | '/invoices'
+    | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
   id:
     | '__root__'
@@ -633,6 +644,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tenant/settings'
     | '/api/auth/send-email'
     | '/_authenticated/invoices/'
+    | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
   fileRoutesById: FileRoutesById
 }
@@ -652,6 +664,7 @@ export interface RootRouteChildren {
   TenantLoginRoute: typeof TenantLoginRoute
   UnitUnitIdRoute: typeof UnitUnitIdRoute
   ApiAuthSendEmailRoute: typeof ApiAuthSendEmailRoute
+  ApiPublicMoyasarWebhookRoute: typeof ApiPublicMoyasarWebhookRoute
   ApiPublicWhatsappChannelIdRoute: typeof ApiPublicWhatsappChannelIdRoute
 }
 
@@ -1000,6 +1013,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSendEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/moyasar/webhook': {
+      id: '/api/public/moyasar/webhook'
+      path: '/api/public/moyasar/webhook'
+      fullPath: '/api/public/moyasar/webhook'
+      preLoaderRoute: typeof ApiPublicMoyasarWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/whatsapp/$channelId': {
       id: '/api/public/whatsapp/$channelId'
       path: '/api/public/whatsapp/$channelId'
@@ -1103,6 +1123,7 @@ const rootRouteChildren: RootRouteChildren = {
   TenantLoginRoute: TenantLoginRoute,
   UnitUnitIdRoute: UnitUnitIdRoute,
   ApiAuthSendEmailRoute: ApiAuthSendEmailRoute,
+  ApiPublicMoyasarWebhookRoute: ApiPublicMoyasarWebhookRoute,
   ApiPublicWhatsappChannelIdRoute: ApiPublicWhatsappChannelIdRoute,
 }
 export const routeTree = rootRouteImport

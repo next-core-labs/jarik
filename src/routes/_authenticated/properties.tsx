@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -17,6 +17,7 @@ import {
   Layers,
   FileText,
   Handshake,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
@@ -56,9 +57,17 @@ import {
 } from "@/components/unit-dialog";
 import { BulkUnitsDialog } from "@/components/bulk-units-dialog";
 import { buildingSpecsLine, UnitFurnishingLine } from "@/components/unit-specs-summary";
-import { sar, unitStatusLabel } from "@/lib/format";
+import { sar, shortDate, unitStatusLabel } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
 import { generateAdText } from "@/lib/pricing.functions";
+import { confirmListingPayment, startListingPayment } from "@/lib/listing-payments.functions";
+import {
+  LISTING_FEE_SAR,
+  LISTING_PERIOD_DAYS,
+  listingPaymentIdFromSearch,
+  marketState,
+} from "@/lib/listing-fee";
+import { isMoyasarCheckoutUrl } from "@/lib/moyasar-url";
 import { useMyRoles } from "@/lib/use-role";
 import { myOrgId } from "@/lib/use-org-branding";
 
@@ -127,13 +136,51 @@ function Properties() {
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر توليد الإعلان")),
   });
 
+  // Publishing on the website is paid per unit (listing-fee.ts): the office pays on Moyasar's page.
+  const startPayment = useServerFn(startListingPayment);
+  const publish = useMutation({
+    mutationFn: (unitId: string) => startPayment({ data: { unitId } }),
+    onSuccess: (res) => {
+      if (res.status === "paid") {
+        toast.success("تم نشر الوحدة في الموقع");
+        queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
+      } else if (isMoyasarCheckoutUrl(res.url)) {
+        toast.info("جارٍ تحويلك إلى صفحة الدفع…");
+        window.location.assign(res.url);
+      }
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر فتح صفحة الدفع")),
+  });
+
+  // Back from Moyasar: the server asks Moyasar whether it was paid; the URL itself proves nothing.
+  const confirmPayment = useServerFn(confirmListingPayment);
+  useEffect(() => {
+    const paymentId = listingPaymentIdFromSearch(window.location.search);
+    if (!paymentId) return;
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+    confirmPayment({ data: { paymentId } })
+      .then((res) => {
+        if (res.status === "paid") {
+          toast.success(`تم الدفع ونُشرت الوحدة في الموقع حتى ${shortDate(res.paidUntil)}`);
+        } else if (res.status === "pending") {
+          toast.info(
+            "لم يتأكد الدفع بعد. إن أتممته فاضغط «نشر في الموقع» على الوحدة مرة أخرى للتحقق.",
+          );
+        } else {
+          toast.warning("أُلغيت عملية الدفع ولم تُنشر الوحدة.");
+        }
+        queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
+      })
+      .catch((e: Error) => toast.error(userErrorMessage(e, "تعذّر التحقق من الدفع")));
+  }, [confirmPayment, queryClient]);
+
   const { data, isLoading } = useQuery({
     queryKey: ["properties-with-units"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("properties")
         .select(
-          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, leases(status, tenants(full_name)))",
+          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, leases(status, tenants(full_name)))",
         )
         .order("created_at");
       if (error) throw error;
@@ -469,6 +516,11 @@ function Properties() {
                                 إعلان جاهز
                               </Button>
                             ) : null}
+                            <UnitMarketStatus
+                              unit={u}
+                              publishing={publish.isPending && publish.variables === u.id}
+                              onPublish={() => publish.mutate(u.id)}
+                            />
                             {ownerManaged ? null : (
                               <Select
                                 value={u.owner_id ?? "none"}
@@ -633,6 +685,54 @@ function Properties() {
             </div>
           </DialogContent>
         </Dialog>
+      ) : null}
+    </>
+  );
+}
+
+/** Whether the unit is on the website and until when, with the paid publish / extend button. */
+function UnitMarketStatus({
+  unit,
+  publishing,
+  onPublish,
+}: {
+  unit: { status: string; market_listed: boolean; market_paid_until: string | null };
+  publishing: boolean;
+  onPublish: () => void;
+}) {
+  const market = marketState(unit);
+  const line =
+    market.kind === "paid"
+      ? unit.market_listed
+        ? `منشورة في الموقع حتى ${shortDate(market.until.toISOString())}`
+        : `النشر مدفوع حتى ${shortDate(market.until.toISOString())} — مخفية حاليًا`
+      : market.kind === "free"
+        ? "منشورة في الموقع"
+        : market.kind === "expired"
+          ? `انتهى النشر في ${shortDate(market.until.toISOString())}`
+          : "غير منشورة في الموقع";
+  // An occupied unit never shows on the website, and a free legacy listing has nothing to pay.
+  const canPay = unit.status === "vacant" && market.kind !== "free";
+  return (
+    <>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Globe className="size-3.5 text-brass" />
+        {line}
+      </p>
+      {canPay ? (
+        <Button
+          variant={market.kind === "paid" ? "outline" : "default"}
+          className="w-full"
+          disabled={publishing}
+          onClick={onPublish}
+        >
+          <Globe className="size-4" />
+          {publishing
+            ? "جارٍ فتح صفحة الدفع…"
+            : market.kind === "paid"
+              ? `تمديد النشر ${LISTING_PERIOD_DAYS} يومًا — ${LISTING_FEE_SAR} ريال`
+              : `نشر في الموقع — ${LISTING_FEE_SAR} ريال`}
+        </Button>
       ) : null}
     </>
   );
