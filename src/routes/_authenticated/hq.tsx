@@ -104,12 +104,12 @@ export const Route = createFileRoute("/_authenticated/hq")({
   staticData: { sitemap: false },
   head: () => ({
     meta: [
-      { title: "لوحة المدير العام — جارك" },
+      { title: "لوحة مدير النظام — جارك" },
       {
         name: "description",
         content: "نظرة عامة على المنصة كلها: كل المشتركين عبر كل المكاتب وسجل نشاط كل واحد منهم.",
       },
-      { property: "og:title", content: "لوحة المدير العام — جارك" },
+      { property: "og:title", content: "لوحة مدير النظام — جارك" },
       { property: "og:description", content: "إدارة المشتركين والمحاسبة وأعمال فريق منصة جارك." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -318,9 +318,9 @@ function HqPage() {
   if (!hasAccess) {
     return (
       <>
-        <PageHeader title="لوحة المدير العام" />
+        <PageHeader title="لوحة مدير النظام" />
         <p className="text-sm text-muted-foreground">
-          هذه الصفحة لمالك الموقع أو المدراء المفوَّضين فقط.
+          هذه الصفحة لمدير النظام أو المشرفين المفوَّضين فقط.
         </p>
       </>
     );
@@ -329,7 +329,7 @@ function HqPage() {
   return (
     <>
       <PageHeader
-        title="لوحة المدير العام"
+        title="لوحة مدير النظام"
         subtitle="نظرة على المنصة كلها عبر كل المكاتب — دليل المشتركين وسجل نشاط كل واحد منهم وإحصاءات عامة."
       />
 
@@ -345,7 +345,7 @@ function HqPage() {
           {canOffices ? <TabsTrigger value="offices">المكاتب والسوق</TabsTrigger> : null}
           {canAnnouncements ? <TabsTrigger value="announcements">شات الإعلانات</TabsTrigger> : null}
           {canSystem ? <TabsTrigger value="system">النظام</TabsTrigger> : null}
-          {isSuperAdmin ? <TabsTrigger value="admins">المدراء</TabsTrigger> : null}
+          {isSuperAdmin ? <TabsTrigger value="admins">المشرفون</TabsTrigger> : null}
         </TabsList>
 
         {isSuperAdmin ? (
@@ -754,7 +754,7 @@ function HqPage() {
                               onClick={() => inviteAsHqAdmin(s.email)}
                             >
                               <UserPlus className="size-4" />
-                              دعوة كمدير عام
+                              تفويض كمشرف
                             </Button>
                           ) : null}
                           {canReviews ? (
@@ -973,7 +973,7 @@ function HqAdminsTab({ prefillEmail }: { prefillEmail?: string }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <UserPlus className="size-4 text-brass" />
-            دعوة مدير عام مفوَّض
+            دعوة مشرف مفوَّض
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1045,13 +1045,13 @@ function HqAdminsTab({ prefillEmail }: { prefillEmail?: string }) {
 
       <Card className="shadow-deed">
         <CardHeader>
-          <CardTitle className="text-base">المدراء الحاليون</CardTitle>
+          <CardTitle className="text-base">المشرفون المفوَّضون</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {admins.isLoading ? (
             <Skeleton className="h-32" />
           ) : (admins.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">لا يوجد مدراء مفوَّضون بعد.</p>
+            <p className="text-sm text-muted-foreground">لا يوجد مشرفون مفوَّضون بعد.</p>
           ) : (
             admins.data!.map((a) => (
               <div

@@ -433,7 +433,7 @@ export const hqSetAccountRole = createServerFn({ method: "POST" })
     ]);
     if (currentRolesError || hqAdminError) throw new Error("تعذّر التحقق من دور الحساب");
     if ((currentRoles ?? []).some((r) => r.role === "super_admin") || hqAdminRow) {
-      throw new Error("لا يمكن تغيير دور حساب مدير عام من هنا");
+      throw new Error("لا يمكن تغيير دور مدير النظام أو مشرف مفوَّض");
     }
 
     if (data.userId === ctx.userId) throw new Error("لا يمكنك تغيير دور حسابك أنت");

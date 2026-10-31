@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 export type AppRole = "admin" | "staff" | "owner" | "tenant" | "technician" | "super_admin";
 
 export const roleLabel: Record<AppRole, string> = {
-  admin: "مدير النظام",
+  // Legacy platform-wide role, retired (20261101100000_single_system_admin): nobody holds it now.
+  admin: "مدير (صلاحية ملغاة)",
   staff: "موظف / محاسب",
   owner: "مالك",
   tenant: "مستأجر",
   technician: "فني",
-  super_admin: "المدير العام",
+  super_admin: "مدير النظام",
 };
 
 export function useMyRoles() {
