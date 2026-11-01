@@ -17,7 +17,6 @@ import {
   LogOut,
   Menu,
   UserCircle,
-  ShieldCheck,
   BadgeCheck,
   CalendarClock,
   FileBarChart,
@@ -94,10 +93,8 @@ const technicianNav = [
   { to: "/", label: "سوق العروض", icon: Store },
 ] as const;
 
-const adminNav = [{ to: "/users", label: "المستخدمون والأدوار", icon: ShieldCheck }] as const;
-
-// دور super_admin منفصل تمامًا عن admin — لا يظهر لمدير مكتب عادي، فقط لحساب المدير العام.
-const superAdminNav = [{ to: "/hq", label: "لوحة المدير العام", icon: Landmark }] as const;
+// super_admin = «مدير النظام»، حساب واحد للمنصة كلها (20261101100000_single_system_admin) — لا يظهر لمدير مكتب.
+const superAdminNav = [{ to: "/hq", label: "لوحة مدير النظام", icon: Landmark }] as const;
 
 // المستأجر له قائمة خاصة فيه، مو قائمة المكتب أو "portalNav" العامة (spec: tenant-dashboard-prompt.md).
 // "عقدي" مو مسار مستقل — هو نفس قسم "كرت العقد" في لوحة المستأجر، فما ضفناه هنا لتفادي تكرار
@@ -387,7 +384,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     : [
         ...(staff ? staffNav : isTechnician ? technicianNav : portalNav),
         ...(staff ? [{ to: "/portal", label: "صفحتي", icon: UserCircle }] : []),
-        ...(roles.includes("admin") ? adminNav : []),
         ...(roles.includes("super_admin") || (hqPermissions.data?.length ?? 0) > 0
           ? superAdminNav
           : []),
@@ -523,10 +519,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : null}
         {canRestore ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-destructive-tint px-4 py-2 text-sm text-destructive-tint-foreground">
-            <span>أنت داخل حساب آخر بجلسة المدير العام — هل تريد العودة لحسابك؟</span>
+            <span>أنت داخل حساب آخر بجلسة مدير النظام — هل تريد العودة لحسابك؟</span>
             <Button size="sm" variant="outline" onClick={restoreAdminSession}>
               <Undo2 className="size-4" />
-              العودة لحساب المدير العام
+              العودة لحساب مدير النظام
             </Button>
           </div>
         ) : null}

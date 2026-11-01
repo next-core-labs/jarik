@@ -135,8 +135,24 @@ Cloudflare → **Workers & Pages → jarak → Settings → Variables and Secret
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`               | your existing WhatsApp Cloud API values                                                                                |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | if you use Twilio                                                                                                      |
 | `EJAR_API_BASE_URL`, `EJAR_CLIENT_ID`, `EJAR_CLIENT_SECRET`       | if you use the Ejar integration                                                                                        |
+| `MOYASAR_SECRET_KEY`                                              | Moyasar `sk_live_…` (or `sk_test_…`) — the same account as usil. Unset ⇒ offices cannot pay to publish                 |
+| `MOYASAR_WEBHOOK_SECRET`                                          | the shared secret of Jarak's Moyasar webhook (below). Unset ⇒ every webhook is rejected                                |
 
 After adding secrets, deploy again (B2) so the Worker picks them up.
+
+**Paid publishing (Moyasar).** An office pays 50 SAR (VAT included) to publish a unit on the website
+for 30 days, on a Moyasar hosted invoice. In the Moyasar dashboard → **Webhooks**, add a second
+webhook (usil keeps its own) to `https://jarak-ksa.com/api/public/moyasar/webhook`, event
+`payment_paid`, with the same shared secret as `MOYASAR_WEBHOOK_SECRET`. Without it a payment is
+still confirmed when the office returns from Moyasar, or when they press «نشر في الموقع» again.
+
+**System administrator (مدير النظام).** One account runs the platform from `/hq`: `superadmin@jarak.com`,
+fixed in the database (`private.system_admin_email()`, migration `20261101100000_single_system_admin.sql`),
+which refuses that role to any other account and no longer lets anyone grant roles from the app. After
+`npm run db:push`, create the account (or reset its password later) with
+`node scripts/set-system-admin.ts` — it asks for a password (12+ characters), confirms the email
+itself, and needs `SUPABASE_SERVICE_ROLE_KEY` in `.dev.vars`. Public sign-up with that address gets no
+role; the script takes such an account back by resetting its password.
 
 ### B4. Check the live site
 

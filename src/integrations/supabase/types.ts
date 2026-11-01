@@ -1009,6 +1009,97 @@ export type Database = {
           },
         ];
       };
+      listing_payments: {
+        Row: {
+          amount_halalas: number;
+          created_at: string;
+          created_by: string | null;
+          currency: string;
+          id: string;
+          invoice_url: string | null;
+          moyasar_invoice_id: string | null;
+          moyasar_payment_id: string | null;
+          org_id: string | null;
+          paid_at: string | null;
+          period_days: number;
+          status: string;
+          unit_id: string;
+        };
+        Insert: {
+          amount_halalas?: number;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          id?: string;
+          invoice_url?: string | null;
+          moyasar_invoice_id?: string | null;
+          moyasar_payment_id?: string | null;
+          org_id?: string | null;
+          paid_at?: string | null;
+          period_days?: number;
+          status?: string;
+          unit_id: string;
+        };
+        Update: {
+          amount_halalas?: number;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          id?: string;
+          invoice_url?: string | null;
+          moyasar_invoice_id?: string | null;
+          moyasar_payment_id?: string | null;
+          org_id?: string | null;
+          paid_at?: string | null;
+          period_days?: number;
+          status?: string;
+          unit_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "listing_payments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "listing_payments_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       login_attempts: {
         Row: {
           email: string;
@@ -2902,6 +2993,7 @@ export type Database = {
           market_listed: boolean;
           market_listed_at: string | null;
           market_note: string | null;
+          market_paid_until: string | null;
           notes: string | null;
           owner_id: string | null;
           price_decayed_at: string | null;
@@ -2944,6 +3036,7 @@ export type Database = {
           market_listed?: boolean;
           market_listed_at?: string | null;
           market_note?: string | null;
+          market_paid_until?: string | null;
           notes?: string | null;
           owner_id?: string | null;
           price_decayed_at?: string | null;
@@ -2986,6 +3079,7 @@ export type Database = {
           market_listed?: boolean;
           market_listed_at?: string | null;
           market_note?: string | null;
+          market_paid_until?: string | null;
           notes?: string | null;
           owner_id?: string | null;
           price_decayed_at?: string | null;
@@ -3456,6 +3550,7 @@ export type Database = {
           unit_id: string;
         }[];
       };
+      expire_paid_market_listings: { Args: never; Returns: number };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];
@@ -3524,6 +3619,14 @@ export type Database = {
           full_name: string;
           permissions: string[];
           user_id: string;
+        }[];
+      };
+      listing_publish_target: {
+        Args: { _unit_id: string };
+        Returns: {
+          office_ready: boolean;
+          org_id: string;
+          unit_label: string;
         }[];
       };
       market_stats: {
@@ -3900,6 +4003,10 @@ export type Database = {
       set_subscriber_vip: {
         Args: { _user_id: string; _vip: boolean };
         Returns: undefined;
+      };
+      settle_listing_payment: {
+        Args: { _moyasar_payment_id: string; _payment_id: string };
+        Returns: string;
       };
       site_visit_stats: {
         Args: never;

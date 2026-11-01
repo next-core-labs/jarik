@@ -82,7 +82,7 @@ export function InvitationsBanner() {
       return v;
     },
     onSuccess: async (v) => {
-      toast.success(v.accept ? "صرت مدير عام مفوَّض" : "رُفضت الدعوة");
+      toast.success(v.accept ? "صرت مشرفًا مفوَّضًا في إدارة المنصة" : "رُفضت الدعوة");
       await queryClient.invalidateQueries();
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ الطلب")),
@@ -130,7 +130,7 @@ export function InvitationsBanner() {
         >
           <span className="flex items-center gap-2">
             <MailCheck className="size-4 shrink-0" aria-hidden />
-            دعاك مالك المنصة للانضمام كمدير عام مفوَّض بصلاحيات:{" "}
+            دعاك مدير النظام للانضمام كمشرف مفوَّض بصلاحيات:{" "}
             {inv.permissions.map((p) => HQ_PERMISSION_LABEL[p] ?? p).join("، ")}.
           </span>
           <span className="flex items-center gap-2">

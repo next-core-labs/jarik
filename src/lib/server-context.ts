@@ -18,17 +18,8 @@ export async function getMyOrgId(ctx: ServerCtx): Promise<string> {
   return data;
 }
 
-/** Throws unless the caller is a platform admin. Fails closed if the check itself errors. */
-export async function requireAdmin(ctx: ServerCtx): Promise<void> {
-  const { data, error } = await ctx.supabase.rpc("has_role", {
-    _user_id: ctx.userId,
-    _role: "admin",
-  });
-  if (error || !data) throw new Error("هذه الصلاحية لمدير النظام فقط");
-}
-
 /**
- * Throws unless the caller holds `super_admin` — a role deliberately separate from `admin` and
+ * Throws unless the caller holds `super_admin` («مدير النظام», one account for the whole platform),
  * outside `is_staff`/org_isolation scope. Fails closed if the check itself errors.
  */
 export async function requireSuperAdmin(ctx: ServerCtx): Promise<void> {
@@ -36,7 +27,7 @@ export async function requireSuperAdmin(ctx: ServerCtx): Promise<void> {
     _user_id: ctx.userId,
     _role: "super_admin",
   });
-  if (error || !data) throw new Error("هذه الصلاحية للمدير العام فقط");
+  if (error || !data) throw new Error("هذه الصلاحية لمدير النظام فقط");
 }
 
 /**
