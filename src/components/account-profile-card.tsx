@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { userErrorMessage } from "@/lib/auth-errors";
+import { emailProblem, userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { avatarUrl, uploadAvatar } from "@/lib/avatar";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { compressImage, validateImageFile } from "@/lib/unit-photos";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -14,12 +15,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** بطاقة الحساب المشتركة: صورة، اسم قابل للتعديل، والرقم التعريفي (لبدء محادثة معك من أي حساب
- * آخر). تُركَّب في أعلى صفحات الإعدادات الثلاث (المكتب/المالك/المستأجر). */
+const PHONE_ERROR = "رقم الجوال غير صحيح — مثال: 05xxxxxxxx";
+
+/** بطاقة الحساب المشتركة: صورة، اسم وجوال وبريد قابلة للتعديل، والرقم التعريفي (لبدء محادثة معك
+ * من أي حساب آخر). تُركَّب في أعلى صفحات الإعدادات الثلاث (المكتب/المالك/المستأجر). */
 export function AccountProfileCard() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [phoneDirty, setPhoneDirty] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailDirty, setEmailDirty] = useState(false);
 
   const profile = useQuery({
     queryKey: ["my-account-profile"],
@@ -28,13 +35,21 @@ export function AccountProfileCard() {
       const userId = auth.user?.id;
       if (!userId) return null;
       const [{ data: row }, { data: code }] = await Promise.all([
-        supabase.from("profiles").select("full_name, avatar_path").eq("id", userId).maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("full_name, avatar_path, phone")
+          .eq("id", userId)
+          .maybeSingle(),
         supabase.rpc("my_reference_code"),
       ]);
       return {
         userId,
         fullName: row?.full_name ?? "",
         avatarPath: row?.avatar_path ?? null,
+        phone: row?.phone ?? "",
+        email: auth.user?.email ?? "",
+        // Set while an email change waits for its confirmation link.
+        pendingEmail: auth.user?.new_email ?? null,
         referenceCode: code ?? null,
       };
     },
@@ -43,9 +58,22 @@ export function AccountProfileCard() {
   useEffect(() => {
     if (profile.data && !dirty) setName(profile.data.fullName);
   }, [profile.data, dirty]);
+  useEffect(() => {
+    if (profile.data && !phoneDirty) setPhone(profile.data.phone);
+  }, [profile.data, phoneDirty]);
+  useEffect(() => {
+    if (profile.data && !emailDirty) setEmail(profile.data.email);
+  }, [profile.data, emailDirty]);
 
   const trimmedName = name.trim();
   const nameError = dirty && trimmedName.length < 2 ? "اكتب اسمك (حرفان على الأقل)" : null;
+  // The phone is optional: empty clears it, anything else must be a Saudi mobile (saved as 05…).
+  const trimmedPhone = phone.trim();
+  const parsedPhone = trimmedPhone ? parseSaudiMobile(trimmedPhone) : null;
+  const phoneError = phoneDirty && trimmedPhone && !parsedPhone ? PHONE_ERROR : null;
+  const trimmedEmail = email.trim();
+  const emailUnchanged = trimmedEmail.toLowerCase() === (profile.data?.email ?? "").toLowerCase();
+  const emailError = emailDirty && !emailUnchanged ? emailProblem(trimmedEmail) : null;
 
   const saveName = useMutation({
     mutationFn: async () => {
@@ -64,6 +92,57 @@ export function AccountProfileCard() {
       queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
+  });
+
+  const savePhone = useMutation({
+    mutationFn: async () => {
+      const userId = profile.data?.userId;
+      if (!userId) throw new Error("انتهت الجلسة، أعد الدخول");
+      if (trimmedPhone && !parsedPhone) throw new Error(PHONE_ERROR);
+      const { error } = await supabase
+        .from("profiles")
+        .update({ phone: parsedPhone })
+        .eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(parsedPhone ? "تم حفظ رقم الجوال" : "حُذف رقم الجوال");
+      setPhoneDirty(false);
+      queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ رقم الجوال")),
+  });
+
+  // Supabase sends a confirmation link (to the new address, and to the current one when "secure
+  // email change" is on); the account's email changes only once it is opened.
+  const changeEmail = useMutation({
+    mutationFn: async () => {
+      const problem = emailProblem(trimmedEmail);
+      if (problem) throw new Error(problem);
+      const { data, error } = await supabase.auth.updateUser(
+        { email: trimmedEmail },
+        { emailRedirectTo: `${window.location.origin}${window.location.pathname}` },
+      );
+      if (error) {
+        if (error.code === "email_exists") throw new Error("هذا البريد مسجّل لحساب آخر");
+        if (error.code === "over_email_send_rate_limit") {
+          throw new Error("أرسلنا رابطًا قبل قليل — انتظر دقيقة ثم أعد المحاولة");
+        }
+        throw error;
+      }
+      // A project without email confirmation applies the change at once.
+      return { confirmed: data.user?.email?.toLowerCase() === trimmedEmail.toLowerCase() };
+    },
+    onSuccess: ({ confirmed }) => {
+      toast.success(
+        confirmed
+          ? "تم تغيير البريد الإلكتروني"
+          : "أرسلنا رابط تأكيد إلى بريدك الجديد — يتغيّر البريد بعد فتح الرابط",
+      );
+      setEmailDirty(false);
+      queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تغيير البريد الإلكتروني")),
   });
 
   const uploadPhoto = useMutation({
@@ -96,7 +175,7 @@ export function AccountProfileCard() {
     );
   }
 
-  if (profile.isLoading) return <Skeleton className="h-44 max-w-md" />;
+  if (profile.isLoading) return <Skeleton className="h-80 max-w-md" />;
 
   return (
     <Card className="max-w-md shadow-deed">
@@ -161,6 +240,83 @@ export function AccountProfileCard() {
               </p>
             ) : null}
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="account-phone">رقم الجوال</Label>
+          <div className="flex gap-2">
+            <Input
+              id="account-phone"
+              type="tel"
+              dir="ltr"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="05xxxxxxxx"
+              value={phone}
+              aria-invalid={phoneError ? true : undefined}
+              aria-describedby={phoneError ? "account-phone-error" : undefined}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                setPhoneDirty(true);
+              }}
+            />
+            <Button
+              size="sm"
+              aria-label="حفظ رقم الجوال"
+              disabled={!phoneDirty || !!phoneError || savePhone.isPending}
+              onClick={() => savePhone.mutate()}
+            >
+              حفظ
+            </Button>
+          </div>
+          {phoneError ? (
+            <p id="account-phone-error" className="text-xs text-destructive">
+              {phoneError}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="account-email">البريد الإلكتروني</Label>
+          <div className="flex gap-2">
+            <Input
+              id="account-email"
+              type="email"
+              dir="ltr"
+              autoComplete="email"
+              value={email}
+              aria-invalid={emailError ? true : undefined}
+              aria-describedby={
+                emailError
+                  ? "account-email-error"
+                  : profile.data?.pendingEmail
+                    ? "account-email-pending"
+                    : undefined
+              }
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setEmailDirty(true);
+              }}
+            />
+            <Button
+              size="sm"
+              aria-label="تغيير البريد الإلكتروني"
+              disabled={!emailDirty || emailUnchanged || !!emailError || changeEmail.isPending}
+              onClick={() => changeEmail.mutate()}
+            >
+              تغيير
+            </Button>
+          </div>
+          {emailError ? (
+            <p id="account-email-error" className="text-xs text-destructive">
+              {emailError}
+            </p>
+          ) : profile.data?.pendingEmail ? (
+            <p id="account-email-pending" className="text-xs text-muted-foreground">
+              بانتظار التأكيد: أرسلنا رابطًا إلى <span dir="ltr">{profile.data.pendingEmail}</span>{" "}
+              — يبقى بريدك الحالي حتى تفتحه.
+            </p>
+          ) : null}
         </div>
 
         <div>

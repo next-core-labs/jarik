@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   DoorOpen,
   HeartPulse,
   ListChecks,
@@ -20,6 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { arCount, arNum, daysLabel, priorityText, sar, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -360,13 +368,16 @@ function AttentionRow({
           meta={when}
           action={
             <Button size="sm" variant="outline" asChild>
-              <Link to="/messages">{item.days < 0 ? "اطلب التسوية" : "ناقش التجديد"}</Link>
+              <Link to="/messages" search={{ unit: u.unit_id }}>
+                {item.days < 0 ? "اطلب التسوية" : "ناقش التجديد"}
+              </Link>
             </Button>
           }
         />
       );
     }
-    case "vacant":
+    case "vacant": {
+      const only = item.units.length === 1 ? item.units[0] : undefined;
       return (
         <RowShell
           icon={DoorOpen}
@@ -379,12 +390,40 @@ function AttentionRow({
           })}
           meta={item.units.map((u) => `${u.property_name} · ${u.unit_number}`).join("، ")}
           action={
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/messages">اطلب تسويقها</Link>
-            </Button>
+            // Each unit has its own thread (shared with its tenant), so with several vacancies the
+            // owner picks which one to ask about.
+            only ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/messages" search={{ unit: only.unit_id }}>
+                  اطلب تسويقها
+                </Link>
+              </Button>
+            ) : (
+              <DropdownMenu dir="rtl">
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    اطلب تسويقها
+                    <ChevronDown aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                    محادثة أي وحدة؟
+                  </DropdownMenuLabel>
+                  {item.units.map((u) => (
+                    <DropdownMenuItem key={u.unit_id} asChild>
+                      <Link to="/messages" search={{ unit: u.unit_id }}>
+                        {u.property_name} · {u.unit_number}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )
           }
         />
       );
+    }
   }
 }
 

@@ -25,7 +25,7 @@ const systemPrompts: Record<string, string> = {
 /** Calls the shared AI key: office staff only, and limited per user (30 requests / 10 minutes). */
 export const askAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => chatInput.parse(data))
+  .validator((data: unknown) => chatInput.parse(data))
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
     await requireStaff(ctx);

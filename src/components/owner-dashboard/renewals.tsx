@@ -287,7 +287,9 @@ function RenewalRow({
         </Button>
       ) : (
         <Button size="sm" variant="outline" asChild>
-          <Link to="/messages">{days < 0 ? "اطلب التسوية" : "ناقش التجديد"}</Link>
+          <Link to="/messages" search={{ unit: u.unit_id }}>
+            {days < 0 ? "اطلب التسوية" : "ناقش التجديد"}
+          </Link>
         </Button>
       )}
     </li>

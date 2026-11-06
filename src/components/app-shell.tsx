@@ -45,6 +45,8 @@ import { InvitationsBanner } from "@/components/invitations-banner";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { Button } from "@/components/ui/button";
 import { myOrgId } from "@/lib/use-org-branding";
+import { appPath } from "@/lib/app-path";
+import { arNum } from "@/lib/format";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
 import { todayRiyadh } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -85,10 +87,11 @@ const portalNav = [
   { to: "/register-office", label: "سجّل مكتبك", icon: Building2 },
 ] as const;
 
-// الفني عضو في فريق مكتب أصلًا: لا "سجّل مكتبك" ولا "وثائق عقاراتي" (ما يملك عقارات).
+// الفني عضو في فريق مكتب أصلًا: لا "سجّل مكتبك". "الوثائق" هي ما يشاركه معه المكتب فقط (documents.tsx).
 const technicianNav = [
   { to: "/portal", label: "أعمال الصيانة", icon: Wrench },
   { to: "/messages", label: "المحادثات", icon: MessagesSquare },
+  { to: "/documents", label: "الوثائق", icon: FileText },
   { to: "/notifications", label: "الإشعارات", icon: Bell },
   { to: "/", label: "سوق العروض", icon: Store },
 ] as const;
@@ -183,7 +186,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     void navigate({ href });
   };
   const queryClient = useQueryClient();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Normalized like the route gate (/HQ and /hq/ are the /hq page), so the shell and the gate
+  // always agree on which page is open.
+  const pathname = useRouterState({ select: (s) => appPath(s.location.pathname) });
+  const hash = useRouterState({ select: (s) => s.location.hash });
   const platformTeamPage = pathname === "/hq";
   const [open, setOpen] = useState(false);
   const [canRestore, setCanRestore] = useState(false);
@@ -220,6 +226,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const portalRoleNav: PortalNavItem[] = isTechnician
     ? [...roleNav, { key: "jobs", label: "أعمال الصيانة", icon: Wrench, href: "/portal" }]
     : roleNav;
+  // A "#قسم" item is active when the URL points at its section; the page's own item only when the
+  // URL points at none of its listed sections, so "الرئيسية" lets go once "الدفعات" is chosen.
+  const portalItemActive = (href: string) => {
+    const [path = href, section] = href.split("#");
+    if (appPath(path) !== pathname) return false;
+    if (section !== undefined) return section === hash;
+    return !portalRoleNav.some((item) => item.href === `${path}#${hash}`);
+  };
   // الاسم أعلى الشريط الجانبي/الهيدر يعكس دور الحساب بدل اسم المنصة العام — طلب من المستخدم.
   // حساب بلا دور بعد يبقى على اسم المنصة.
   const brandLabel = platformTeamPage
@@ -419,8 +433,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside
         className={cn(
           // On phones the drawer is taller than the screen (24 staff links), so it scrolls on its
-          // own to keep "خروج" reachable.
-          "fixed inset-y-0 end-0 z-40 w-64 shrink-0 flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-sidebar p-4 text-sidebar-foreground transition-transform lg:static lg:flex lg:translate-x-0 lg:overflow-visible",
+          // own to keep "خروج" reachable. On desktop it is sticky and one screen tall, so the nav
+          // stays in view down a long page and scrolls on its own the same way.
+          "fixed inset-y-0 end-0 z-40 w-64 shrink-0 flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-sidebar p-4 text-sidebar-foreground transition-transform lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0",
           open ? "flex" : "hidden",
         )}
       >
@@ -441,7 +456,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="mt-4 space-y-1">
             {!platformTeamPage && (tenant || owner)
               ? portalRoleNav.map((item) => {
-                  const active = !item.href.includes("#") && pathname === item.href;
+                  const active = portalItemActive(item.href);
                   const badgeCount = item.badge ? navBadge(item.badge) : 0;
                   return (
                     <a
@@ -462,7 +477,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       <span className="flex-1">{item.label}</span>
                       {badgeCount > 0 ? (
                         <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground">
-                          {badgeCount}
+                          {arNum(badgeCount)}
                         </span>
                       ) : null}
                     </a>
@@ -567,7 +582,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {!platformTeamPage && tenant ? (
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card lg:hidden">
           {tenantBottomNav.map((item) => {
-            const active = !item.href.includes("#") && pathname === item.href;
+            const active = portalItemActive(item.href);
             const badgeCount = item.badge ? navBadge(item.badge) : 0;
             return (
               <a
@@ -585,7 +600,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {item.label}
                 {badgeCount > 0 ? (
                   <span className="absolute right-4 top-1 min-w-4 rounded-full bg-destructive px-1 text-[9px] font-medium text-destructive-foreground">
-                    {badgeCount}
+                    {arNum(badgeCount)}
                   </span>
                 ) : null}
               </a>

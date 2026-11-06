@@ -126,9 +126,7 @@ export const subscriberDirectory = createServerFn({ method: "POST" })
 /** سجل نشاط مشترك واحد عبر كل المكاتب (بند "SEC") — يعيد استخدام audit_log الموجود أصلاً. */
 export const subscriberActivityLog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { userId: string }) =>
-    z.object({ userId: z.string().uuid() }).parse(input),
-  )
+  .validator((input: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
     await requireHqPermission(ctx, "subscribers");
@@ -151,9 +149,7 @@ export const subscriberActivityLog = createServerFn({ method: "POST" })
  */
 export const subscriberOverview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { userId: string }) =>
-    z.object({ userId: z.string().uuid() }).parse(input),
-  )
+  .validator((input: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
     await requireHqPermission(ctx, "subscribers");
@@ -217,7 +213,7 @@ export const subscriberOverview = createServerFn({ method: "POST" })
  */
 export const platformAuditLog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { orgId?: string; action?: string; tableName?: string }) =>
+  .validator((input: { orgId?: string; action?: string; tableName?: string }) =>
     z
       .object({
         orgId: z.string().uuid().optional(),
@@ -271,9 +267,7 @@ export const platformAuditLog = createServerFn({ method: "POST" })
  */
 export const hqImpersonateStart = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { userId: string }) =>
-    z.object({ userId: z.string().uuid() }).parse(input),
-  )
+  .validator((input: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
     await requireHqPermission(ctx, "subscribers");
@@ -340,7 +334,7 @@ export const hqImpersonateStart = createServerFn({ method: "POST" })
  */
 export const hqSetAccountSuspended = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { userId: string; suspended: boolean }) =>
+  .validator((input: { userId: string; suspended: boolean }) =>
     z.object({ userId: z.string().uuid(), suspended: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -416,7 +410,7 @@ const hqAccountRoleSchema = z.enum(["staff", "owner", "tenant", "technician"]);
  */
 export const hqSetAccountRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { userId: string; role: string }) =>
+  .validator((input: { userId: string; role: string }) =>
     z.object({ userId: z.string().uuid(), role: hqAccountRoleSchema }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -514,7 +508,7 @@ const hqNewSubscriberRoleSchema = z.enum(["owner", "tenant"]);
  */
 export const hqCreateSubscriberAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: { fullName: string; email: string; phone: string; password: string; role: string }) =>
       z
         .object({
@@ -777,7 +771,7 @@ export const platformSettings = createServerFn({ method: "GET" }).handler(async 
 /** تعديل إعدادات المنصة العامة — صلاحية "system" فقط. */
 export const hqUpdatePlatformSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: { newOfficeRegistrationEnabled: boolean; announcementBanner: string | null }) =>
       z
         .object({
@@ -898,7 +892,7 @@ export const platformCommissions = createServerFn({ method: "POST" })
 
 export const addPlatformCommission = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { orgId: string; description: string; amount: number }) =>
+  .validator((input: { orgId: string; description: string; amount: number }) =>
     z
       .object({
         orgId: z.string().uuid(),
@@ -923,7 +917,7 @@ export const addPlatformCommission = createServerFn({ method: "POST" })
 
 export const markCommissionCollected = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
     await requireHqPermission(ctx, "commissions");
@@ -964,7 +958,7 @@ export const platformAnnouncements = createServerFn({ method: "POST" })
  */
 export const sendPlatformAnnouncement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { title: string; body: string }) =>
+  .validator((input: { title: string; body: string }) =>
     z
       .object({
         title: z.string().trim().min(1).max(200),
@@ -1049,7 +1043,7 @@ export const platformFeedback = createServerFn({ method: "POST" })
 /** حالات التذكرة الثلاث (كانت ثنائية open/reviewed). */
 export const updateFeedbackStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; status: "open" | "in_progress" | "resolved" }) =>
+  .validator((input: { id: string; status: "open" | "in_progress" | "resolved" }) =>
     z
       .object({
         id: z.string().uuid(),

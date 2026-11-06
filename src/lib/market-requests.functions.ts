@@ -10,7 +10,7 @@ const MAX_MARKET_REQUESTS_PER_PHONE_PER_HOUR = 3;
  * لغير الموظفين المسجّلين أبدًا — القراءة العامة عبر market_requests_public تستثنيهما بالكامل.
  */
 export const submitMarketRequest = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         fullName: z.string().min(2).max(120),

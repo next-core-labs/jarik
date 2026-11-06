@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { Button } from "@/components/ui/button";
+import { useIsSignedIn } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 import { HQ_PERMISSION_LABEL } from "@/lib/hq-permissions";
 
@@ -35,9 +36,13 @@ const roleText: Record<string, string> = {
  */
 export function InvitationsBanner() {
   const queryClient = useQueryClient();
+  // Signing out clears the query cache while this banner is still on screen; without this gate the
+  // re-render that followed refetched both RPCs as a signed-out visitor (401 on /auth).
+  const signedIn = useIsSignedIn() === true;
 
   const invitations = useQuery({
     queryKey: ["my-invitations"],
+    enabled: signedIn,
     staleTime: 60_000,
     queryFn: async (): Promise<Invitation[]> => {
       const { data, error } = await supabase.rpc("my_invitations");
@@ -48,6 +53,7 @@ export function InvitationsBanner() {
 
   const hqInvitations = useQuery({
     queryKey: ["my-hq-invitations"],
+    enabled: signedIn,
     staleTime: 60_000,
     queryFn: async (): Promise<HqInvitation[]> => {
       const { data, error } = await supabase.rpc("my_hq_invitations");
@@ -90,7 +96,7 @@ export function InvitationsBanner() {
 
   const rows = invitations.data ?? [];
   const hqRows = hqInvitations.data ?? [];
-  if (rows.length === 0 && hqRows.length === 0) return null;
+  if (!signedIn || (rows.length === 0 && hqRows.length === 0)) return null;
 
   return (
     <div className="border-b border-border bg-accent/40">

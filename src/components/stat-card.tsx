@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { arNum } from "@/lib/format";
 
 /** بطاقة مؤشر رقمي بأيقونة — الوحدة المشتركة بين لوحات المؤشرات (الموظف/المالك/المستأجر/المدير العام).
  *  على الجوال تُعرض بطاقتان في الصف: حشوة أصغر وبدون الأيقونة الزخرفية حتى يتسع الرقم. */
@@ -13,6 +14,7 @@ export function StatCard({
 }: {
   icon: LucideIcon;
   label: string;
+  /** A number is written in Arabic-Indic digits; pass a string for an already formatted value. */
   value: string | number;
   hint?: string | undefined;
   /** "warn" يبرز البطاقة (مستحقات متأخرة، صيانة تنتظر قرارًا…). */
@@ -25,7 +27,7 @@ export function StatCard({
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground sm:text-sm">{label}</p>
             <p className="mt-2 truncate font-display text-2xl leading-none font-bold tabular-nums sm:text-3xl">
-              {value}
+              {typeof value === "number" ? arNum(value) : value}
             </p>
             {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
           </div>

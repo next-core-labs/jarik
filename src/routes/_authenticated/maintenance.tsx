@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toDatetimeLocalValue } from "@/lib/dates";
-import { sar, shortDate, maintenanceStatusLabel, priorityText } from "@/lib/format";
+import { arNum, sar, shortDate, maintenanceStatusLabel, priorityText } from "@/lib/format";
 import { useOrgBranding } from "@/lib/use-org-branding";
 
 const approvalLabel: Record<string, string> = {
@@ -70,7 +70,7 @@ function Maintenance() {
       const { data, error } = await supabase
         .from("maintenance_requests")
         .select(
-          "id, unit_id, title, description, priority, status, cost, source, created_at, scheduled_at, technician_id, approval_status, approval_note, rating, rating_note, photo_path, audio_path, tenants(full_name), units(unit_number, owner_id, properties(name, owner_id))",
+          "id, unit_id, title, description, priority, status, cost, technician_note, source, created_at, scheduled_at, technician_id, approval_status, approval_note, rating, rating_note, photo_path, audio_path, tenants(full_name), units(unit_number, owner_id, properties(name, owner_id))",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -256,9 +256,11 @@ function Maintenance() {
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">الحالة</Label>
+          <Label htmlFor="maintenance-status-filter" className="text-xs text-muted-foreground">
+            الحالة
+          </Label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger id="maintenance-status-filter" aria-label="الحالة" className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -272,9 +274,11 @@ function Maintenance() {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">الأولوية</Label>
+          <Label htmlFor="maintenance-priority-filter" className="text-xs text-muted-foreground">
+            الأولوية
+          </Label>
           <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger id="maintenance-priority-filter" aria-label="الأولوية" className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -304,7 +308,7 @@ function Maintenance() {
               <Card key={col.key} className="shadow-deed">
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle className="text-base">{col.title}</CardTitle>
-                  <Badge variant="outline">{items.length}</Badge>
+                  <Badge variant="outline">{arNum(items.length)}</Badge>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {items.map((m) => (
@@ -335,6 +339,11 @@ function Maintenance() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         الفني: {technicianName(m.technician_id) ?? "غير مسند"}
                       </p>
+                      {m.technician_note ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          ملاحظة الفني: {m.technician_note}
+                        </p>
+                      ) : null}
                       {m.approval_status && m.approval_status !== "not_required" ? (
                         <Badge
                           className="mt-2"
@@ -357,7 +366,9 @@ function Maintenance() {
                       ) : null}
                       {m.status !== "done" ? (
                         <div className="mt-3 space-y-1">
-                          <label className="text-xs text-muted-foreground">الفني المسند</label>
+                          <label htmlFor={`tech-${m.id}`} className="text-xs text-muted-foreground">
+                            الفني المسند
+                          </label>
                           <Select
                             value={m.technician_id ?? "none"}
                             disabled={assign.isPending}
@@ -369,7 +380,7 @@ function Maintenance() {
                               })
                             }
                           >
-                            <SelectTrigger className="h-8 text-xs">
+                            <SelectTrigger id={`tech-${m.id}`} className="h-8 text-xs">
                               <SelectValue placeholder="اختر الفني" />
                             </SelectTrigger>
                             <SelectContent>
@@ -409,7 +420,7 @@ function Maintenance() {
                               const v = Number(e.target.value || 0);
                               // A number input reports text it can't parse as "" (badInput).
                               if (e.target.validity.badInput || !Number.isFinite(v) || v < 0) {
-                                setFieldError(`${m.id}-cost`, "التكلفة رقم بالريال، 0 أو أكثر");
+                                setFieldError(`${m.id}-cost`, "التكلفة رقم بالريال، ٠ أو أكثر");
                                 return;
                               }
                               setFieldError(`${m.id}-cost`, null);

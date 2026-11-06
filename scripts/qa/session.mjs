@@ -25,6 +25,7 @@ const READ_RPCS = new Set([
   "hq_list_offices",
   "is_staff",
   "list_hq_admins",
+  "my_linked_offices",
   "market_stats",
   "my_agreement_offices",
   "my_direct_conversations",

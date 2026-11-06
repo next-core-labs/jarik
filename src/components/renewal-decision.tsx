@@ -94,7 +94,7 @@ export function RenewalDecision() {
       <Card className="mb-6 shadow-deed">
         <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <CalendarCheck className="size-4 shrink-0 text-brass" />
-          خيارات التجديد أو الإخلاء تظهر هنا قبل 90 يومًا من نهاية عقدك.
+          خيارات التجديد أو الإخلاء تظهر هنا قبل ٩٠ يومًا من نهاية عقدك.
         </CardContent>
       </Card>
     );
@@ -111,7 +111,7 @@ export function RenewalDecision() {
       <CardContent className="space-y-3">
         {soon.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            خيارات التجديد أو الإخلاء تظهر هنا قبل 90 يومًا من نهاية عقدك.
+            خيارات التجديد أو الإخلاء تظهر هنا قبل ٩٠ يومًا من نهاية عقدك.
           </p>
         ) : null}
         {soon.map((l) => {

@@ -97,7 +97,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { roleLabel, type AppRole, useMyRoles } from "@/lib/use-role";
-import { shortDate, sar } from "@/lib/format";
+import { shortDate, sar, arNum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/hq")({
@@ -527,13 +527,13 @@ function HqPage() {
                   <StatCard
                     icon={Store}
                     label="للإيجار / للبيع"
-                    value={`${overview.data.rentUnits} / ${overview.data.saleUnits}`}
+                    value={`${arNum(overview.data.rentUnits)} / ${arNum(overview.data.saleUnits)}`}
                   />
                   <StatCard icon={KeyRound} label="وحدات مباعة" value={overview.data.soldUnits} />
                   <StatCard
                     icon={Handshake}
                     label="عقود إيجار (سارية)"
-                    value={`${overview.data.totalLeases} (${overview.data.activeLeases})`}
+                    value={`${arNum(overview.data.totalLeases)} (${arNum(overview.data.activeLeases)})`}
                   />
                   <StatCard
                     icon={Handshake}
@@ -1877,7 +1877,7 @@ function ReviewsTab() {
         <StatCard
           icon={Star}
           label="متوسط تقييم الموقع"
-          value={avgRating ? `${avgRating.toFixed(1)} / 5` : "—"}
+          value={avgRating ? `${arNum(Number(avgRating.toFixed(1)))} / ٥` : "—"}
         />
         <StatCard icon={MessageSquareWarning} label="بانتظار المراجعة" value={openCount} />
       </div>

@@ -23,7 +23,7 @@ export const runSmartReminders = createServerFn({ method: "POST" })
 /** تحويل طلب وحدة من زائر إلى صفقة في مسار المبيعات. */
 export const createDealFromRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { requestId: string }) =>
+  .validator((input: { requestId: string }) =>
     z.object({ requestId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -85,7 +85,7 @@ const priorityHours: Record<string, number> = { urgent: 4, high: 24, medium: 72,
 
 export const smartScheduleMaintenance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { requestId: string }) =>
+  .validator((input: { requestId: string }) =>
     z.object({ requestId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -216,7 +216,7 @@ const MAX_UNIT_REQUESTS_PER_PHONE_PER_HOUR = 3;
 
 /** طلب وحدة من زائر (صفحة عامة بدون تسجيل). */
 export const submitUnitRequest = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         fullName: z.string().min(2).max(120),
@@ -309,7 +309,7 @@ const MAX_LISTING_EVENTS_PER_UNIT_PER_MINUTE = 30;
 
 /** تسجيل مشاهدة أو نقرة اتصال/واتساب على صفحة عرض عامة — لتقرير أداء الإعلان لكل وحدة. */
 export const trackListingEvent = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         unitId: z.string().uuid(),
@@ -351,7 +351,7 @@ const MAX_SITE_VISITS_PER_VISITOR_PER_MINUTE = 20;
 /** تسجيل تحميل صفحة عامة — لعدّاد "زوّار الموقع" بلوحة المدير العام. مثل trackListingEvent تمامًا:
  * فشل صامت، بلا middleware auth (أغلب الزوار بلا جلسة دخول). */
 export const trackSiteVisit = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ path: z.string().min(1).max(200), visitorId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -378,7 +378,7 @@ export const trackSiteVisit = createServerFn({ method: "POST" })
 /** المستأجر يوافق على تجديد عقده أو يطلب المغادرة. */
 export const submitRenewalDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { leaseId: string; decision: "renew" | "leave"; note?: string }) =>
+  .validator((input: { leaseId: string; decision: "renew" | "leave"; note?: string }) =>
     z
       .object({
         leaseId: z.string().uuid(),
@@ -445,7 +445,7 @@ const riyals = (n: number) => `${n.toLocaleString("ar-SA", { maximumFractionDigi
 
 export const settleDeposit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       leaseId: string;
       status: "refunded" | "deducted";
@@ -573,7 +573,7 @@ function isOwnStoragePath(path: string, userId: string): boolean {
 
 export const submitQuickMaintenance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: { title: string; description?: string; photoPath?: string; audioPath?: string }) =>
       z
         .object({

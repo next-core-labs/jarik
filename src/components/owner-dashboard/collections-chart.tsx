@@ -44,16 +44,19 @@ export function CollectionsChart({ points, total }: { points: ChartPoint[]; tota
             آخر ٦ أشهر · الإجمالي <span className="font-medium text-foreground">{sar(total)}</span>
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          aria-pressed={asTable}
-          onClick={() => setAsTable((v) => !v)}
-          className="text-muted-foreground"
-        >
-          {asTable ? <BarChart3 aria-hidden /> : <Table2 aria-hidden />}
-          {asTable ? "عرض كرسم" : "عرض كجدول"}
-        </Button>
+        {/* Nothing to tabulate in the empty state, so no toggle either. */}
+        {total === 0 ? null : (
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-pressed={asTable}
+            onClick={() => setAsTable((v) => !v)}
+            className="text-muted-foreground"
+          >
+            {asTable ? <BarChart3 aria-hidden /> : <Table2 aria-hidden />}
+            {asTable ? "عرض كرسم" : "عرض كجدول"}
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 px-3 pb-4 pt-2">

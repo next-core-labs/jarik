@@ -18,6 +18,19 @@ async function loadLegalPage(slug: string): Promise<LegalPage> {
   return data;
 }
 
+/**
+ * The rows start as a short seeded placeholder ("هذا نص مبدئي عام — يحتاج مراجعة قانونية…") until
+ * the platform admin enters the real text from /hq. Until then the page shows what is stored but
+ * stays out of search results.
+ */
+const PLACEHOLDER_MARK = "نص مبدئي عام";
+const MIN_PUBLISHED_LENGTH = 400;
+
+function isDraftLegalText(body: string): boolean {
+  const text = body.trim();
+  return text.length < MIN_PUBLISHED_LENGTH || text.includes(PLACEHOLDER_MARK);
+}
+
 export const Route = createFileRoute("/legal/$slug")({
   staticData: { sitemap: false, publicLocale: true },
   loader: ({ params }) => loadLegalPage(params.slug),
@@ -29,16 +42,18 @@ export const Route = createFileRoute("/legal/$slug")({
       ? tf(locale, "meta_legal_desc", { title: loaderData.title })
       : "";
     const url = `https://jarak-ksa.com/legal/${encodeURIComponent(params.slug)}`;
+    const draft = !loaderData || isDraftLegalText(loaderData.body);
     return {
       meta: [
         { title },
         { name: "description", content: description },
+        ...(draft ? [{ name: "robots", content: "noindex" }] : []),
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:type", content: "website" },
         { property: "og:url", content: url },
       ],
-      links: [{ rel: "canonical", href: url }],
+      links: draft ? [] : [{ rel: "canonical", href: url }],
     };
   },
   component: LegalPageRoute,

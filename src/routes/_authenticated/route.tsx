@@ -2,6 +2,7 @@ import { createFileRoute, Navigate, Outlet, redirect } from "@tanstack/react-rou
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { JarakSymbol } from "@/components/jarak-logo";
+import { appPath } from "@/lib/app-path";
 
 // Which `_authenticated/*` paths each kind of account may open. Every path not listed here is
 // office/staff territory: RLS already blocks the underlying data, but anyone else landing on a staff
@@ -53,6 +54,9 @@ export const Route = createFileRoute("/_authenticated")({
     // then sent them straight back. Row-level security still protects the data server-side.
     const firstLoad = !firstLoadDone;
     firstLoadDone = true;
+    // The router opens /HQ, /hq/ and /hq as the same page, so every check below compares the
+    // normalized path: a raw `pathname === "/hq"` let /HQ past the /hq gate into the generic rule.
+    const path = appPath(location.pathname);
 
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
@@ -61,7 +65,7 @@ export const Route = createFileRoute("/_authenticated")({
     // the office one at /auth.
     if (!user) {
       const next = location.href;
-      const signIn = signInPathFor(location.pathname);
+      const signIn = signInPathFor(path);
       if (firstLoad) return { user: null, bounce: { to: signIn, next } };
       throw redirect({ to: signIn, search: { next } });
     }
@@ -69,7 +73,7 @@ export const Route = createFileRoute("/_authenticated")({
     // /hq also needs the delegation row: fetch it alongside the roles, not after them.
     const [{ data: roleRows }, hqDelegation] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", user.id),
-      location.pathname === "/hq"
+      path === "/hq"
         ? supabase.from("hq_admins").select("permissions").eq("user_id", user.id).maybeSingle()
         : null,
     ]);
@@ -87,7 +91,7 @@ export const Route = createFileRoute("/_authenticated")({
 
     // The platform team page is separate from office administration. A regular office admin
     // cannot enter it; delegated team members can, even if they have no office/staff role.
-    if (location.pathname === "/hq" && !superAdmin) {
+    if (path === "/hq" && !superAdmin) {
       const delegation = hqDelegation?.data;
       if (hqDelegation?.error || !delegation?.permissions?.length) {
         return bounce(
@@ -102,7 +106,7 @@ export const Route = createFileRoute("/_authenticated")({
       }
     }
 
-    if (location.pathname === "/hq") return { user, bounce: null };
+    if (path === "/hq") return { user, bounce: null };
 
     const owner = roles.includes("owner");
     const tenant = roles.includes("tenant");
@@ -123,7 +127,6 @@ export const Route = createFileRoute("/_authenticated")({
               ? REGISTER_OFFICE_PATH
               : "/portal";
 
-    const path = location.pathname;
     const allowed = OWNER_PATHS.has(path)
       ? owner
       : TENANT_PATHS.has(path)

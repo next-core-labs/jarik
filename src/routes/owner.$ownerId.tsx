@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 
 import { AdvertiserPage, type AdvertiserPageData } from "@/components/advertiser-page";
 import { tf } from "@/components/listing-detail/format";
@@ -54,7 +54,12 @@ async function loadOwnerPage(ownerId: string): Promise<OwnerPageResult> {
 
 export const Route = createFileRoute("/owner/$ownerId")({
   staticData: { sitemap: false, publicLocale: true },
-  loader: ({ params }) => loadOwnerPage(params.ownerId),
+  loader: async ({ params }) => {
+    const data = await loadOwnerPage(params.ownerId);
+    // A real 404 status for a missing owner page; OwnerUnavailable still shows the friendly page.
+    if (data.status === "missing") throw notFound();
+    return data;
+  },
   head: ({ loaderData, params, match }) => {
     const locale = localeFromSearch(match.search);
     if (loaderData?.status !== "ok")
@@ -82,44 +87,43 @@ export const Route = createFileRoute("/owner/$ownerId")({
     };
   },
   component: OwnerPage,
+  notFoundComponent: () => <OwnerUnavailable error={false} />,
 });
 
 function OwnerPage() {
   useTrackSiteVisit("/owner/$ownerId");
   const data = Route.useLoaderData();
+  if (data.status !== "ok") return <OwnerUnavailable error />;
+  return <AdvertiserPage page={data.page} listings={data.listings} />;
+}
+
+/** A missing owner page (404) or one that failed to load, with the way back to the market. */
+function OwnerUnavailable({ error }: { error: boolean }) {
   const router = useRouter();
   const [locale] = useLocale();
-  if (data.status !== "ok") {
-    const error = data.status === "error";
-    return (
-      <div
-        dir={locale === "en" ? "ltr" : "rtl"}
-        lang={locale}
-        className="min-h-screen bg-background"
-      >
-        <SiteHeader />
-        <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-          <h1 className="font-display text-2xl font-bold">
-            {tf(locale, error ? "page_error_title" : "owner_missing_title")}
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            {tf(locale, error ? "results_error_body" : "owner_missing_body")}
-          </p>
-          <div className="mt-6 flex justify-center gap-2">
-            {error ? (
-              <Button variant="outline" onClick={() => router.invalidate()}>
-                {tf(locale, "results_retry")}
-              </Button>
-            ) : null}
-            <Button asChild>
-              <Link to="/" search={langSearch(locale)}>
-                {tf(locale, "back_market")}
-              </Link>
+  return (
+    <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
+      <SiteHeader />
+      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-bold">
+          {tf(locale, error ? "page_error_title" : "owner_missing_title")}
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          {tf(locale, error ? "results_error_body" : "owner_missing_body")}
+        </p>
+        <div className="mt-6 flex justify-center gap-2">
+          {error ? (
+            <Button variant="outline" onClick={() => router.invalidate()}>
+              {tf(locale, "results_retry")}
             </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-  return <AdvertiserPage page={data.page} listings={data.listings} />;
+          ) : null}
+          <Button asChild>
+            <Link to="/" search={langSearch(locale)}>
+              {tf(locale, "back_market")}
+            </Link>
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
 }

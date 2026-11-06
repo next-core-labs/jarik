@@ -18,7 +18,7 @@ const LOCKOUT_MINUTES = 15;
  * tenants.user_id بعد قبولها. */
 export const inviteTenant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { leaseId: string; email: string }) =>
+  .validator((input: { leaseId: string; email: string }) =>
     z.object({ leaseId: z.string().uuid(), email: z.string().email() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -115,7 +115,7 @@ export const completeTenantActivation = createServerFn({ method: "POST" })
  * العام check_rate_limit يتطلب auth.uid() فيفشل قبل تسجيل الدخول أصلًا).
  */
 export const portalSignIn = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; password: string }) =>
+  .validator((input: { email: string; password: string }) =>
     z.object({ email: z.string().email(), password: z.string().min(1) }).parse(input),
   )
   .handler(async ({ data }) => {

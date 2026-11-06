@@ -51,8 +51,8 @@ export function hasValidSaudiIdChecksum(digits: string): boolean {
  * An office is a Saudi business: it is identified by a national ID, never by an iqama.
  */
 export function validateSaudiId(value: string, account: AccountType): string | null {
+  if (!value.trim()) return "أدخل رقم الهوية";
   const d = digitsOnly(value);
-  if (d.length === 0) return "أدخل رقم الهوية";
   if (d.length !== 10) return "الرقم يجب أن يكون 10 أرقام";
   const type = idTypeOf(d);
   if (!type) return "الرقم يجب أن يبدأ بـ1 (هوية وطنية) أو 2 (إقامة)";
@@ -67,8 +67,10 @@ export function validateSaudiId(value: string, account: AccountType): string | n
 
 /** «فال» licence numbers are digits; the register is not public, so only the shape is checked. */
 export function validateFalLicense(value: string): string | null {
+  if (!value.trim()) return "أدخل رقم رخصة فال";
+  // Spaces and dashes typed for readability are fine; letters or other symbols are not.
+  if (/[^\d\s-]/.test(toLatinDigits(value))) return "رقم رخصة فال غير صحيح";
   const d = digitsOnly(value);
-  if (d.length === 0) return "أدخل رقم رخصة فال";
   if (d.length < 6 || d.length > 12) return "رقم رخصة فال غير صحيح";
   return null;
 }

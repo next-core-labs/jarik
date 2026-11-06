@@ -29,7 +29,7 @@ const ICON: Record<PortalDestination["role"], typeof Building2> = {
 /** حساب بأكثر من هوية (مثلًا موظف مكتب ومالك بنفس الوقت) يختار من هنا أي لوحة يفتح. */
 function ChooseRole() {
   const navigate = useNavigate();
-  const { data: me, isLoading } = useMyRoles();
+  const { data: me, isPending } = useMyRoles();
   const dests = portalDestinations(me?.roles ?? []);
   const signedIn = !!me?.userId;
 
@@ -41,7 +41,23 @@ function ChooseRole() {
     }
   }, [me, navigate]);
 
-  if (!isLoading && !signedIn) {
+  // The session lives in the browser, so the server (and the first client render) can't know who
+  // is visiting yet: show a neutral screen until it is known, never the signed-in chooser. The same
+  // screen covers a single-portal account while the effect above sends it home.
+  if (isPending || (signedIn && dests.length < 2)) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background p-6">
+        <div className="w-full max-w-sm text-center">
+          <JarakSymbol className="mx-auto size-12" />
+          <p className="mt-4 text-sm text-muted-foreground" role="status">
+            جارٍ التحميل…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!signedIn) {
     return (
       <div className="grid min-h-screen place-items-center bg-background p-6">
         <div className="w-full max-w-sm text-center">
@@ -76,24 +92,20 @@ function ChooseRole() {
         </p>
 
         <div className="mt-6 space-y-2">
-          {isLoading || dests.length < 2 ? (
-            <p className="text-sm text-muted-foreground">جارٍ التحميل…</p>
-          ) : (
-            dests.map((d) => {
-              const Icon = ICON[d.role];
-              return (
-                <Button
-                  key={d.role}
-                  variant="outline"
-                  className="h-14 w-full justify-start gap-3 text-base"
-                  onClick={() => navigate({ to: d.path, replace: true })}
-                >
-                  <Icon className="size-5" />
-                  {d.label}
-                </Button>
-              );
-            })
-          )}
+          {dests.map((d) => {
+            const Icon = ICON[d.role];
+            return (
+              <Button
+                key={d.role}
+                variant="outline"
+                className="h-14 w-full justify-start gap-3 text-base"
+                onClick={() => navigate({ to: d.path, replace: true })}
+              >
+                <Icon className="size-5" />
+                {d.label}
+              </Button>
+            );
+          })}
         </div>
 
         <button

@@ -33,7 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { sar, shortDate, leaseStatusLabel } from "@/lib/format";
+import { arCount, arNum, leaseStatusLabel, monthsLabel, sar, shortDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/tenants")({
   staticData: { sitemap: false },
@@ -170,7 +170,7 @@ function Tenants() {
   const termBadge = (l: Lease) =>
     l.term_months && l.term_months !== 12 ? (
       <Badge variant="outline" className="ms-2">
-        عقد {l.term_months} أشهر
+        عقد {monthsLabel(l.term_months)}
       </Badge>
     ) : null;
 
@@ -217,7 +217,7 @@ function Tenants() {
                 </p>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="font-semibold tabular-nums">
-                    {sar(l.annual_rent)} · {l.installments} دفعات
+                    {sar(l.annual_rent)} · {installmentsLabel(l.installments)}
                   </span>
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     إيجار {ejarBadge(l)}
@@ -270,7 +270,7 @@ function Tenants() {
                       {termBadge(l)}
                     </TableCell>
                     <TableCell>{sar(l.annual_rent)}</TableCell>
-                    <TableCell>{l.installments} دفعات</TableCell>
+                    <TableCell>{installmentsLabel(l.installments)}</TableCell>
                     <TableCell>{ejarBadge(l)}</TableCell>
                     <TableCell>{leaseBadge(l)}</TableCell>
                     <TableCell>{tenantAccount(l, false)}</TableCell>
@@ -306,8 +306,8 @@ function Tenants() {
                     {overdue === 0
                       ? "منتظم"
                       : overdue <= 2
-                        ? `متأخر ${overdue}`
-                        : `متعثر ${overdue}`}
+                        ? `متأخر ${arNum(overdue)}`
+                        : `متعثر ${arNum(overdue)}`}
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground" dir="ltr">
@@ -318,7 +318,12 @@ function Tenants() {
                 </p>
                 {overdue > 0 ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {overdue} {overdue === 1 ? "دفعة متأخرة" : "دفعات متأخرة"} غير مسددة
+                    {arCount(overdue, {
+                      one: "دفعة متأخرة غير مسددة",
+                      two: "دفعتان متأخرتان غير مسددتين",
+                      few: "دفعات متأخرة غير مسددة",
+                      many: "دفعة متأخرة غير مسددة",
+                    })}
                   </p>
                 ) : null}
               </div>
@@ -409,4 +414,9 @@ function InviteTenantDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** «٤ دفعات»، «دفعتان»، «١٢ دفعة». */
+function installmentsLabel(n: number) {
+  return arCount(n, { one: "دفعة واحدة", two: "دفعتان", few: "دفعات", many: "دفعة" });
 }

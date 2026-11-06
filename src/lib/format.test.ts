@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { arCount, arPct, daysLabel } from "@/lib/format";
+import { arCount, arPct, daysLabel, monthsLabel } from "@/lib/format";
 
 describe("daysLabel", () => {
-  it("uses the singular and dual forms for one and two", () => {
+  it("uses the singular and (oblique) dual forms for one and two", () => {
     expect(daysLabel(1)).toBe("يوم واحد");
-    expect(daysLabel(2)).toBe("يومان");
+    expect(daysLabel(2)).toBe("يومين");
   });
 
   it("uses أيام for 3 to 10 and يومًا from 11 up", () => {
@@ -16,6 +16,15 @@ describe("daysLabel", () => {
 
   it("labels the magnitude of a negative count (days already passed)", () => {
     expect(daysLabel(-5)).toBe(daysLabel(5));
+  });
+});
+
+describe("monthsLabel", () => {
+  it("agrees in number", () => {
+    expect(monthsLabel(1)).toBe("شهر واحد");
+    expect(monthsLabel(2)).toBe("شهرين");
+    expect(monthsLabel(6)).toBe(`${(6).toLocaleString("ar-SA")} أشهر`);
+    expect(monthsLabel(12)).toBe(`${(12).toLocaleString("ar-SA")} شهرًا`);
   });
 });
 

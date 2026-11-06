@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { MessagesSquare } from "lucide-react";
@@ -14,8 +14,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
 import { cn } from "@/lib/utils";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const Route = createFileRoute("/_authenticated/messages")({
   staticData: { sitemap: false },
+  // ?unit=<id> opens that unit's thread, so a per-unit action (e.g. "اطلب تسويقها" on the owner
+  // dashboard) never lands in another unit's tenant-visible thread.
+  validateSearch: (s: Record<string, unknown>): { unit?: string | undefined } => {
+    const unit = s["unit"];
+    // An explicit undefined, not {}: the router merges the raw search under the validated one, so
+    // {} would let ?unit=abc through to useSearch(). Ids are compared lowercase like the database.
+    return {
+      unit: typeof unit === "string" && UUID_RE.test(unit) ? unit.toLowerCase() : undefined,
+    };
+  },
   head: () => ({
     meta: [
       { title: "المحادثات — جارك" },
@@ -58,7 +70,8 @@ function MessagesPage() {
       : roles.includes("tenant")
         ? "tenant"
         : "unknown";
-  const [selected, setSelected] = useState<string | null>(null);
+  const { unit: linkedUnit } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const [selectedDirect, setSelectedDirect] = useState<string | null>(null);
 
   const profile = useQuery({
@@ -89,7 +102,12 @@ function MessagesPage() {
   });
 
   const list = units.data ?? [];
-  const active = selected ?? list[0]?.id ?? null;
+  // The selected unit lives in the URL. Without one, open the first thread; with one the account
+  // can't see, open none rather than fall back to an unrelated unit.
+  const linkedFound = !!linkedUnit && list.some((u) => u.id === linkedUnit);
+  const linkedMissing = !!linkedUnit && units.isSuccess && !linkedFound;
+  const active = linkedUnit ? (linkedFound ? linkedUnit : null) : (list[0]?.id ?? null);
+  const selectUnit = (id: string) => void navigate({ search: { unit: id }, replace: true });
 
   return (
     <>
@@ -104,7 +122,7 @@ function MessagesPage() {
 
       {technicianOnly ? (
         <p className="mb-4 text-sm text-muted-foreground">
-          للتواصل مع مستأجر عمل مسند لك استخدم زر الاتصال في بطاقة العمل في صفحتي.
+          للتواصل مع مستأجر عمل مسند لك استخدم زر الاتصال في بطاقة العمل في «أعمال الصيانة».
         </p>
       ) : null}
 
@@ -136,7 +154,7 @@ function MessagesPage() {
                     <Button
                       key={u.id}
                       variant="ghost"
-                      onClick={() => setSelected(u.id)}
+                      onClick={() => selectUnit(u.id)}
                       className={cn(
                         "w-full justify-start",
                         active === u.id && "bg-secondary text-secondary-foreground",
@@ -161,6 +179,10 @@ function MessagesPage() {
               <CardContent>
                 {active ? (
                   <UnitChat unitId={active} myRole={myRole} myName={profile.data ?? "مشارك"} />
+                ) : linkedMissing ? (
+                  <p className="text-sm text-muted-foreground">
+                    لا يمكنك فتح محادثة هذه الوحدة. اختر وحدة من القائمة.
+                  </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">اختر وحدة لبدء المحادثة.</p>
                 )}

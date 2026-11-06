@@ -1140,6 +1140,7 @@ export type Database = {
           source: string;
           status: string;
           technician_id: string | null;
+          technician_note: string | null;
           tenant_id: string | null;
           title: string;
           unit_id: string | null;
@@ -1163,6 +1164,7 @@ export type Database = {
           source?: string;
           status?: string;
           technician_id?: string | null;
+          technician_note?: string | null;
           tenant_id?: string | null;
           title: string;
           unit_id?: string | null;
@@ -1186,6 +1188,7 @@ export type Database = {
           source?: string;
           status?: string;
           technician_id?: string | null;
+          technician_note?: string | null;
           tenant_id?: string | null;
           title?: string;
           unit_id?: string | null;
@@ -3683,6 +3686,19 @@ export type Database = {
           office_name: string;
           org_id: string;
           status: string;
+        }[];
+      };
+      my_linked_offices: {
+        Args: never;
+        Returns: {
+          address: string;
+          city: string;
+          company_name: string;
+          district: string;
+          fal_license_no: string;
+          id: string;
+          logo_url: string;
+          office_phone: string;
         }[];
       };
       my_org: { Args: never; Returns: string };

@@ -152,9 +152,18 @@ export function listingsCount(n: number, locale: Locale) {
   );
 }
 
-/** A day count in correct Arabic number agreement: يوم واحد، يومان، ٣ أيام، ١١ يومًا. */
+/**
+ * A day count in correct Arabic number agreement: يوم واحد، يومين، ٣ أيام، ١١ يومًا. The dual is
+ * in the oblique case because every caller puts the count after a word that governs it
+ * (بعد يومين، منذ يومين، متأخرة يومين).
+ */
 export function daysLabel(n: number) {
-  return arCount(n, { one: "يوم واحد", two: "يومان", few: "أيام", many: "يومًا" });
+  return arCount(n, { one: "يوم واحد", two: "يومين", few: "أيام", many: "يومًا" });
+}
+
+/** A month count, same rules as daysLabel: شهر واحد، شهرين، ٦ أشهر، ١٢ شهرًا. */
+export function monthsLabel(n: number) {
+  return arCount(n, { one: "شهر واحد", two: "شهرين", few: "أشهر", many: "شهرًا" });
 }
 
 /** Whole calendar days from today (Saudi time) to a YYYY-MM-DD date; negative once it has passed. */

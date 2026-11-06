@@ -101,7 +101,7 @@ const FAILED: NearbyPlacesResult = { places: [], failed: true };
  * أسواق، مستشفيات وصيدليات، حدائق، محطات وقود، مطاعم ومقاهٍ، مولات، ومحطات نقل عام.
  */
 export const nearbyPlaces = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         lat: z.number().min(-90).max(90),

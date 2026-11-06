@@ -19,7 +19,7 @@ export const getWhatsappProvider = createServerFn({ method: "GET" })
 /** الموظف يرسل رسالة واتساب لأي رقم (تذكير، إشعار، متابعة). */
 export const sendOfficeWhatsapp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { phone: string; body: string; intent?: string | undefined }) =>
+  .validator((input: { phone: string; body: string; intent?: string | undefined }) =>
     z
       .object({
         phone: z.string().min(6).max(20),
@@ -58,7 +58,7 @@ export const sendOfficeWhatsapp = createServerFn({ method: "POST" })
 /** تذكير دفعات: إشعار داخل المنصة + رسالة واتساب للمستأجر (لدفعات مكتب الموظف فقط). */
 export const remindPayments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { paymentIds: string[] }) =>
+  .validator((input: { paymentIds: string[] }) =>
     z.object({ paymentIds: z.array(z.string().uuid()).min(1).max(100) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -163,7 +163,7 @@ export const remindPayments = createServerFn({ method: "POST" })
 /** رسالة من المالك أو المستأجر إلى مكتبه: إشعار لفريق المكتب + واتساب على رقم المكتب. */
 export const sendPortalMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { body: string; officeId?: string }) =>
+  .validator((input: { body: string; officeId?: string }) =>
     z
       .object({ body: z.string().min(2).max(1200), officeId: z.string().uuid().optional() })
       .parse(input),
@@ -237,7 +237,7 @@ export const sendPortalMessage = createServerFn({ method: "POST" })
 /** المكتب يرد على مالك أو مستأجر من عملائه: إشعار داخلي + واتساب إن توفّر رقمه. */
 export const replyToClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { userId: string; body: string }) =>
+  .validator((input: { userId: string; body: string }) =>
     z.object({ userId: z.string().uuid(), body: z.string().min(2).max(1200) }).parse(input),
   )
   .handler(async ({ data, context }) => {

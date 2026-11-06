@@ -17,7 +17,7 @@ export type DemoStatus = (typeof DEMO_STATUS)[number];
  * the service role into demo_requests (no client grants) after the rate checks; /hq reads it below.
  */
 export const submitDemoRequest = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         fullName: z.string().trim().min(2).max(120),
@@ -80,7 +80,7 @@ export const listDemoRequests = createServerFn({ method: "POST" })
 
 export const setDemoRequestStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ id: z.string().uuid(), status: z.enum(DEMO_STATUS) }).parse(input),
   )
   .handler(async ({ data, context }) => {
