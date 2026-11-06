@@ -9,7 +9,7 @@ import { userErrorMessage } from "@/lib/auth-errors";
 import { supabase } from "@/integrations/supabase/client";
 import { submitTransferNotice } from "@/lib/portal-actions.functions";
 import { downloadElementAsPdf } from "@/lib/pdf";
-import { sar, shortDate, daysUntil } from "@/lib/format";
+import { arNum, daysLabel, daysUntil, sar, shortDate } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,8 +95,9 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
     const remaining = daysUntil(p.due_date);
     // "default" (الأحمر) محجوز للسعر/الإجراء الرئيسي/التوفر — لا يُستخدم لحالة كهذه.
     if (p.status === "paid") return <Badge variant="secondary">مدفوعة</Badge>;
-    if (isOverdue(p)) return <Badge variant="destructive">متأخرة {Math.abs(remaining)} يوم</Badge>;
-    return <Badge variant="outline">بعد {remaining} يوم</Badge>;
+    if (isOverdue(p)) return <Badge variant="destructive">متأخرة {daysLabel(remaining)}</Badge>;
+    if (remaining === 0) return <Badge variant="outline">مستحقة اليوم</Badge>;
+    return <Badge variant="outline">بعد {daysLabel(remaining)}</Badge>;
   };
   /** The row's action, or null when there is none. `full` stretches it across a phone card. */
   const paymentAction = (p: Row, full: boolean) => {
@@ -118,26 +119,34 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
     if (p.transfer_reference) {
       return <p className="text-xs text-muted-foreground">أبلغت — بانتظار التأكيد</p>;
     }
+    const reference = (refs[p.id] ?? "").trim();
+    // The phone list and the desktop table both render this row, so the hint id says which one.
+    const hintId = `transfer-ref-hint-${p.id}-${full ? "card" : "row"}`;
     return (
-      <div className="flex flex-wrap gap-2">
-        <Input
-          className={full ? "h-9 min-w-0 flex-1" : "h-9 max-w-40"}
-          dir="ltr"
-          placeholder="رقم مرجع التحويل"
-          value={refs[p.id] ?? ""}
-          onChange={(e) => setRefs((v) => ({ ...v, [p.id]: e.target.value }))}
-        />
-        <Button
-          size="sm"
-          disabled={(refs[p.id] ?? "").trim().length < 3 || notifyTransfer.isPending}
-          onClick={() =>
-            notifyTransfer.mutate({
-              data: { paymentId: p.id, reference: (refs[p.id] ?? "").trim() },
-            })
-          }
-        >
-          سدّدت — أبلغ المكتب
-        </Button>
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-2">
+          <Input
+            className={full ? "h-9 min-w-0 flex-1" : "h-9 max-w-40"}
+            dir="ltr"
+            placeholder="رقم مرجع التحويل"
+            aria-label="رقم مرجع التحويل"
+            aria-describedby={reference.length < 3 ? hintId : undefined}
+            value={refs[p.id] ?? ""}
+            onChange={(e) => setRefs((v) => ({ ...v, [p.id]: e.target.value }))}
+          />
+          <Button
+            size="sm"
+            disabled={reference.length < 3 || notifyTransfer.isPending}
+            onClick={() => notifyTransfer.mutate({ data: { paymentId: p.id, reference } })}
+          >
+            سدّدت — أبلغ المكتب
+          </Button>
+        </div>
+        {reference.length < 3 ? (
+          <p id={hintId} className="text-xs text-muted-foreground">
+            رقم المرجع من إيصال البنك (٣ خانات على الأقل).
+          </p>
+        ) : null}
       </div>
     );
   };
@@ -155,7 +164,7 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">
-                    الدفعة {index + 1} من {data.length}
+                    الدفعة {arNum(index + 1)} من {arNum(data.length)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     تستحق {shortDate(p.due_date)}
@@ -185,7 +194,7 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
               {data.map((p, index) => (
                 <TableRow key={p.id}>
                   <TableCell>
-                    {index + 1} من {data.length}
+                    {arNum(index + 1)} من {arNum(data.length)}
                   </TableCell>
                   <TableCell>{shortDate(p.due_date)}</TableCell>
                   <TableCell>{sar(p.amount)}</TableCell>

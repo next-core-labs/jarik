@@ -1,11 +1,27 @@
 import { Link } from "@tanstack/react-router";
-import { Bath, BedDouble, Heart, LocateFixed, MessageCircle, Phone, Ruler } from "lucide-react";
+import {
+  Bath,
+  BedDouble,
+  Heart,
+  LocateFixed,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Ruler,
+} from "lucide-react";
 
 import { JarakSymbol } from "@/components/jarak-logo";
 import { inquiryText } from "@/components/listing-row";
 import { langSearch, translate, type Locale } from "@/lib/i18n";
 import { distanceText, priceParts } from "@/lib/market-format";
-import { listingTitle, phoneHref, priceDropPct, whatsappHref, type Listing } from "@/lib/market";
+import {
+  listingLocation,
+  listingTitle,
+  phoneHref,
+  priceDropPct,
+  whatsappHref,
+  type Listing,
+} from "@/lib/market";
 import { PURPOSE_LABEL } from "@/lib/property-types";
 import { brandingUrl, mediaUrl } from "@/lib/unit-photos";
 import { cn } from "@/lib/utils";
@@ -53,6 +69,7 @@ export function MarketCard({
   const [price, unit] = priceParts(l, locale);
   const rent = l.purpose === "rent";
   const drop = priceDropPct(l);
+  const location = listingLocation(l);
 
   return (
     <article
@@ -141,6 +158,13 @@ export function MarketCard({
         >
           {listingTitle(l)}
         </Link>
+        {/* The title truncates on a phone before its district, so the location gets its own line. */}
+        {location ? (
+          <p className="flex min-w-0 items-center gap-1 text-[13px] text-muted-foreground">
+            <MapPin className="size-3.5 shrink-0 text-brass" aria-hidden />
+            <span className="truncate">{location}</span>
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-x-[11px] gap-y-0.5 text-[13px] font-medium text-muted-foreground">
           {l.rooms ? (
             <span className="flex items-center gap-1">

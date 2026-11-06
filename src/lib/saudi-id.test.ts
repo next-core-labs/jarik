@@ -84,6 +84,10 @@ describe("validateSaudiId", () => {
     expect(validateSaudiId("12345", "owner")).toContain("10 أرقام");
     expect(validateSaudiId("3023456789", "owner")).toContain("يبدأ");
   });
+
+  it("does not call a field with letters in it empty", () => {
+    expect(validateSaudiId("abc", "owner")).toContain("10 أرقام");
+  });
 });
 
 describe("validateFalLicense", () => {
@@ -95,5 +99,16 @@ describe("validateFalLicense", () => {
     expect(validateFalLicense("")).toContain("أدخل");
     expect(validateFalLicense("123")).toContain("غير صحيح");
     expect(validateFalLicense("1234567890123")).toContain("غير صحيح");
+  });
+
+  it("calls letters invalid, not empty", () => {
+    expect(validateFalLicense("abc")).toBe("رقم رخصة فال غير صحيح");
+    expect(validateFalLicense("1200a12345")).toBe("رقم رخصة فال غير صحيح");
+    expect(validateFalLicense("   ")).toBe("أدخل رقم رخصة فال");
+  });
+
+  it("accepts Arabic-Indic digits and the spaces or dashes typed for readability", () => {
+    expect(validateFalLicense("١٢٠٠٠١٢٣٤٥")).toBeNull();
+    expect(validateFalLicense("1200 012-345")).toBeNull();
   });
 });

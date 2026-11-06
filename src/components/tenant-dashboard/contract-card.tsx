@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { sar, shortDate } from "@/lib/format";
+import { arNum, monthsLabel, sar, shortDate } from "@/lib/format";
 import { daysBetween, todayRiyadh } from "@/lib/dates";
 import { downloadElementAsPdf } from "@/lib/pdf";
 
@@ -89,7 +89,7 @@ export function ContractCard({ leaseId }: { leaseId: string }) {
           </CardTitle>
           <div className="flex items-center gap-2">
             {data.term_months && data.term_months !== 12 ? (
-              <Badge variant="outline">عقد {data.term_months} أشهر</Badge>
+              <Badge variant="outline">عقد {monthsLabel(data.term_months)}</Badge>
             ) : null}
             {data.ejar_status === "synced" ? (
               <Badge variant="secondary" dir={data.ejar_contract_no ? "ltr" : undefined}>
@@ -106,7 +106,7 @@ export function ContractCard({ leaseId }: { leaseId: string }) {
           <Progress value={pct} />
           <p className="text-sm text-muted-foreground">
             {shortDate(data.start_date)} — {shortDate(data.end_date)} · مضى{" "}
-            {Math.floor(elapsed / 30)} من {Math.floor(total / 30)} شهرًا
+            {arNum(Math.floor(elapsed / 30))} من {monthsLabel(Math.floor(total / 30))}
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">

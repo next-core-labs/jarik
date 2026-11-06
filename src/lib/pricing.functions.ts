@@ -6,7 +6,7 @@ import { generateAdAi, suggestRentAi } from "./pricing.server";
 
 export const suggestRent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
+  .validator((input) =>
     z
       .object({
         unitType: z.string().min(1),
@@ -32,7 +32,7 @@ export const suggestRent = createServerFn({ method: "POST" })
 
 export const generateAdText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ unitId: z.string().uuid() }).parse(input))
+  .validator((input) => z.object({ unitId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: staff } = await context.supabase.rpc("is_staff", {
       _user_id: context.userId,

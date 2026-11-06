@@ -7,7 +7,7 @@ import type { ServerCtx } from "@/lib/server-context";
 /** المستأجر يبلّغ عن تحويل دفعة مع مرجع الحوالة — يصل كإشعار لموظفي المكتب. */
 export const submitTransferNotice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { paymentId: string; reference: string }) =>
+  .validator((input: { paymentId: string; reference: string }) =>
     z.object({ paymentId: z.string().uuid(), reference: z.string().min(3).max(120) }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -50,7 +50,7 @@ export const submitTransferNotice = createServerFn({ method: "POST" })
 /** المستأجر يقيّم تجربة الصيانة بعد الإنجاز (مرة واحدة، على طلباته فقط). */
 export const rateMaintenance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { requestId: string; rating: number; note?: string | undefined }) =>
+  .validator((input: { requestId: string; rating: number; note?: string | undefined }) =>
     z
       .object({
         requestId: z.string().uuid(),
@@ -102,7 +102,7 @@ export const rateMaintenance = createServerFn({ method: "POST" })
 /** المالك يوافق أو يرفض طلب صيانة يتجاوز حد المبلغ (طلب معلّق فقط). */
 export const decideMaintenanceApproval = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { requestId: string; approved: boolean; note?: string | undefined }) =>
+  .validator((input: { requestId: string; approved: boolean; note?: string | undefined }) =>
     z
       .object({
         requestId: z.string().uuid(),
@@ -181,7 +181,7 @@ const RENEWAL_DECISION_LABEL = {
 /** المالك يحدّد قراره في تجديد عقد على وحدته — يصل للمكتب كإشعار ويظهر في صفحة التجديدات. */
 export const submitOwnerRenewalDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (input: {
       leaseId: string;
       decision: "renew" | "renew_new_rent" | "leave";
@@ -245,7 +245,7 @@ export const submitOwnerRenewalDecision = createServerFn({ method: "POST" })
 /** المالك يطلب من المكتب تعديل الإيجار المطلوب لوحدة شاغرة (المكتب هو من يعدّل السعر فعليًا). */
 export const requestVacantRentChange = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { unitId: string; newRent: number; note?: string | undefined }) =>
+  .validator((input: { unitId: string; newRent: number; note?: string | undefined }) =>
     z
       .object({
         unitId: z.string().uuid(),

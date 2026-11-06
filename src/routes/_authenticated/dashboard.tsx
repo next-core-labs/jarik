@@ -19,7 +19,16 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isOverdue } from "@/lib/dates";
-import { sar, shortDate, daysUntil, maintenanceStatusLabel } from "@/lib/format";
+import {
+  arCount,
+  arNum,
+  arPct,
+  daysLabel,
+  daysUntil,
+  maintenanceStatusLabel,
+  sar,
+  shortDate,
+} from "@/lib/format";
 import { useOrgBranding } from "@/lib/use-org-branding";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -128,14 +137,29 @@ function Dashboard() {
     })
     .sort((a, b) => (b.used ?? 0) - (a.used ?? 0));
 
-  const electricityUsed = consumption
-    .filter((c) => c.meterType !== "water")
-    .reduce((s, c) => s + Math.max(c.used ?? 0, 0), 0);
-  const waterUsed = consumption
-    .filter((c) => c.meterType === "water")
-    .reduce((s, c) => s + Math.max(c.used ?? 0, 0), 0);
-  const lastReadingDate = data.readings[0]?.reading_date ?? null;
   const numberFmt = new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 2 });
+  /** One meter card. Usage needs two readings of a meter, so until then the value is "—" rather
+   * than a "٠" that reads as a stray dot and suggests nothing was used. */
+  const meterCard = (water: boolean) => {
+    const meters = consumption.filter((c) => (c.meterType === "water") === water);
+    const measured = meters.filter((c) => c.used !== null);
+    const lastDate = meters.reduce<string | null>(
+      (latest, c) => (latest && latest > c.readingDate ? latest : c.readingDate),
+      null,
+    );
+    return {
+      value: measured.length
+        ? numberFmt.format(measured.reduce((s, c) => s + Math.max(c.used ?? 0, 0), 0))
+        : "—",
+      hint: !lastDate
+        ? "لا توجد قراءات بعد"
+        : measured.length
+          ? `آخر قراءة ${shortDate(lastDate)}`
+          : "يظهر الاستهلاك بعد القراءة الثانية",
+    };
+  };
+  const electricity = meterCard(false);
+  const water = meterCard(true);
 
   return (
     <>
@@ -174,15 +198,10 @@ function Dashboard() {
         <StatCard
           icon={Building2}
           label="نسبة الإشغال"
-          value={`${occupancy}%`}
-          hint={`${occupied} مشغولة من ${total} وحدة`}
+          value={arPct(occupancy)}
+          hint={`${arNum(occupied)} مشغولة من ${arCount(total, { one: "وحدة واحدة", two: "وحدتين", few: "وحدات", many: "وحدة" })}`}
         />
-        <StatCard
-          icon={DoorOpen}
-          label="الوحدات الشاغرة"
-          value={String(vacant)}
-          hint="جاهزة للتأجير"
-        />
+        <StatCard icon={DoorOpen} label="الوحدات الشاغرة" value={vacant} hint="جاهزة للتأجير" />
         <StatCard
           icon={Wallet}
           label="المحصّل"
@@ -193,7 +212,16 @@ function Dashboard() {
           icon={FileWarning}
           label="المستحق غير المحصّل"
           value={sar(outstanding)}
-          hint={`${overdue.length} دفعة متأخرة`}
+          hint={
+            overdue.length
+              ? arCount(overdue.length, {
+                  one: "دفعة متأخرة واحدة",
+                  two: "دفعتان متأخرتان",
+                  few: "دفعات متأخرة",
+                  many: "دفعة متأخرة",
+                })
+              : "لا توجد دفعات متأخرة"
+          }
         />
         <StatCard
           icon={TrendingUp}
@@ -204,21 +232,16 @@ function Dashboard() {
         <StatCard
           icon={Wrench}
           label="الصيانة المفتوحة"
-          value={String(openMaintenance.length)}
+          value={openMaintenance.length}
           hint="طلبات لم تُنجز"
         />
         <StatCard
           icon={Zap}
           label="استهلاك الكهرباء"
-          value={numberFmt.format(electricityUsed)}
-          hint={lastReadingDate ? `آخر قراءة ${shortDate(lastReadingDate)}` : "لا توجد قراءات بعد"}
+          value={electricity.value}
+          hint={electricity.hint}
         />
-        <StatCard
-          icon={Droplets}
-          label="استهلاك المياه"
-          value={numberFmt.format(waterUsed)}
-          hint={lastReadingDate ? `آخر قراءة ${shortDate(lastReadingDate)}` : "لا توجد قراءات بعد"}
-        />
+        <StatCard icon={Droplets} label="استهلاك المياه" value={water.value} hint={water.hint} />
       </div>
 
       <Card className="mt-6 shadow-deed">
@@ -262,7 +285,7 @@ function Dashboard() {
           <CardContent>
             <Progress value={occupancy} />
             <p className="mt-3 text-sm text-muted-foreground">
-              {occupied} مشغولة · {vacant} شاغرة
+              {arNum(occupied)} مشغولة · {arNum(vacant)} شاغرة
             </p>
           </CardContent>
         </Card>
@@ -290,7 +313,7 @@ function Dashboard() {
                     <p className="text-sm font-medium">عقد ينتهي {shortDate(l.end_date)}</p>
                     <p className="text-xs text-muted-foreground">إيجار سنوي {sar(l.annual_rent)}</p>
                   </div>
-                  <Badge variant="outline">متبقٍ {daysUntil(l.end_date)} يوم</Badge>
+                  <Badge variant="outline">{leaseEndsIn(daysUntil(l.end_date))}</Badge>
                 </div>
               ))
             )}
@@ -358,4 +381,10 @@ function Dashboard() {
       </div>
     </>
   );
+}
+
+/** «بعد ١٢ يومًا» — or «ينتهي اليوم» / «انتهى منذ يومين» for an active lease past its end date. */
+function leaseEndsIn(days: number) {
+  if (days === 0) return "ينتهي اليوم";
+  return days < 0 ? `انتهى منذ ${daysLabel(days)}` : `بعد ${daysLabel(days)}`;
 }

@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { addDays } from "@/lib/dates";
-import { sar, shortDate, daysUntil } from "@/lib/format";
+import { sar, shortDate, daysUntil, arCount } from "@/lib/format";
 import { depositSettleable, settleDeposit } from "@/lib/office-tools.functions";
 import { parseAmount } from "@/lib/public-form";
 import { suggestRent } from "@/lib/pricing.functions";
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_authenticated/renewals")({
       { title: "تجديد العقود — جارك" },
       {
         name: "description",
-        content: "العقود القريبة من الانتهاء خلال 90 يومًا مع تجديد العقد وإنشاء دفعاته بضغطة.",
+        content: "العقود القريبة من الانتهاء خلال ٩٠ يومًا مع تجديد العقد وإنشاء دفعاته بضغطة.",
       },
       { property: "og:title", content: "تجديد العقود — جارك" },
       { property: "og:description", content: "تابع العقود القريبة من الانتهاء وجدّدها بضغطة." },
@@ -106,7 +106,9 @@ function Renewals() {
     },
     onSuccess: (n) => {
       toast.success(
-        n > 0 ? `تم إرسال تنبيهات تجديد لـ ${n} عقد` : "لا توجد عقود تنتهي خلال 90 يومًا",
+        n > 0
+          ? `تم إرسال تنبيهات تجديد لـ ${arCount(n, { one: "عقد واحد", two: "عقدين", few: "عقود", many: "عقدًا" })}`
+          : "لا توجد عقود تنتهي خلال ٩٠ يومًا",
       );
       queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
     },
@@ -129,7 +131,7 @@ function Renewals() {
     <>
       <PageHeader
         title="تجديد العقود"
-        subtitle="العقود السارية التي تنتهي خلال 90 يومًا (أو انتهت ولم تُجدَّد)، مرتّبة من الأقرب انتهاءً."
+        subtitle="العقود السارية التي تنتهي خلال ٩٠ يومًا (أو انتهت ولم تُجدَّد)، مرتّبة من الأقرب انتهاءً."
         action={
           <div className="flex flex-wrap gap-2">
             {selectedLeases.length > 0 ? (

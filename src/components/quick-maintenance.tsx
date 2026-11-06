@@ -129,6 +129,8 @@ export function QuickMaintenance() {
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب")),
   });
 
+  const titleTooShort = title.trim().length < 2;
+
   return (
     <Card className="mb-6 border-brass/40 shadow-deed">
       <CardHeader>
@@ -139,17 +141,24 @@ export function QuickMaintenance() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1.5">
-          <Label>باختصار — ما المشكلة؟</Label>
+          <Label htmlFor="quick-maintenance-title">باختصار — ما المشكلة؟</Label>
           <Input
+            id="quick-maintenance-title"
             placeholder="مثال: تسريب مياه تحت المغسلة"
+            aria-describedby={titleTooShort ? "quick-maintenance-hint" : undefined}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label>تفاصيل إضافية (اختياري)</Label>
-          <Textarea rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <Label htmlFor="quick-maintenance-desc">تفاصيل إضافية (اختياري)</Label>
+          <Textarea
+            id="quick-maintenance-desc"
+            rows={2}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -191,13 +200,15 @@ export function QuickMaintenance() {
           ) : null}
         </div>
 
-        <Button
-          disabled={submit.isPending || title.trim().length < 2}
-          onClick={() => submit.mutate()}
-        >
+        <Button disabled={submit.isPending || titleTooShort} onClick={() => submit.mutate()}>
           <Send className="size-4" />
           {submit.isPending ? "جارٍ الإرسال…" : "أرسل الطلب"}
         </Button>
+        {titleTooShort ? (
+          <p id="quick-maintenance-hint" className="text-xs text-muted-foreground">
+            اكتب المشكلة باختصار (حرفان على الأقل) لتفعيل زر الإرسال.
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           الوصف الصوتي يتحوّل نصًا تلقائيًا بالذكاء الاصطناعي ويصل للمكتب مع صورة الطلب.
         </p>

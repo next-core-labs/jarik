@@ -292,8 +292,25 @@ const payments = [
   { due_date: iso(addMonths(2)), status: "due" },
   { due_date: iso(addMonths(5)), status: "due" },
 ];
-for (const p of payments)
-  await one("payments", { lease_id: leaseId, due_date: p.due_date }, { amount: 9000, ...p });
+// Due dates are relative to today, so matching on (lease_id, due_date) inserted a second schedule
+// whenever setup re-ran on another day. Seed the schedule only when the lease has none; run
+// teardown.mjs first to rebuild it around today.
+const paymentsRes = await admin
+  .from("payments")
+  .select("id", { count: "exact", head: true })
+  .eq("lease_id", leaseId);
+must(paymentsRes, "count payments");
+const paymentCount = paymentsRes.count ?? 0;
+if (paymentCount > 0) {
+  log(`payments: lease already has ${paymentCount}, left as is (teardown + setup to rebuild)`);
+} else {
+  must(
+    await admin
+      .from("payments")
+      .insert(payments.map((p) => ({ lease_id: leaseId, amount: 9000, ...p }))),
+    "insert payments",
+  );
+}
 await one(
   "maintenance_requests",
   { org_id: orgId, title: "QA-تسريب في المطبخ" },

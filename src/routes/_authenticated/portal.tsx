@@ -27,6 +27,7 @@ import {
 import { effectiveStatus, toDatetimeLocalValue } from "@/lib/dates";
 import { isStaffRole, roleLabel, useMyRoles, type AppRole } from "@/lib/use-role";
 import { downloadElementAsPdf } from "@/lib/pdf";
+import { userErrorMessage } from "@/lib/auth-errors";
 import { useOrgBranding } from "@/lib/use-org-branding";
 import {
   submitTransferNotice,
@@ -38,9 +39,11 @@ import { RenewalDecision } from "@/components/renewal-decision";
 
 export const Route = createFileRoute("/_authenticated/portal")({
   staticData: { sitemap: false },
+  // The page title depends on the account's roles ("أعمال الصيانة" for a technician, "صفحتي" for
+  // everyone else), which the head cannot know: Portal sets it once the roles have loaded.
   head: () => ({
     meta: [
-      { title: "صفحتي — جارك" },
+      { title: "جارك" },
       {
         name: "description",
         content: "بوابة المالك والمستأجر والفني: العقود والمدفوعات والفواتير وطلبات الصيانة.",
@@ -75,16 +78,19 @@ function Portal() {
   // A technician-only account has no leases, payments, invoices or units of its own: skip those
   // queries and cards and show just the assigned jobs.
   const technicianOnly = isTechnician && !isOwner && !isTenant;
-  // The route head is static ("صفحتي"); a technician's tab should match their nav label.
+  // The route head can't know the roles; a technician's tab should match their nav label.
   useEffect(() => {
-    if (technicianOnly) document.title = "أعمال الصيانة — جارك";
-  }, [technicianOnly]);
+    if (me) document.title = technicianOnly ? "أعمال الصيانة — جارك" : "صفحتي — جارك";
+  }, [me, technicianOnly]);
   // Office staff reach /portal from the nav too. Staff RLS returns the whole office, so nothing
   // here may rely on RLS for "mine": an account with no owner/tenant/technician role gets a plain
   // staff view, and every query below is scoped to the signed-in user.
   const hasPortalRole = isOwner || isTenant || isTechnician;
-  // Bumped after a failed visit-time save so the uncontrolled fields re-mount with the saved value.
-  const [visitResetNonce, setVisitResetNonce] = useState(0);
+  // Bumped after a failed visit-time, cost or note save so the uncontrolled fields re-mount with the
+  // saved value.
+  const [jobResetNonce, setJobResetNonce] = useState(0);
+  // Inline error of a job's cost field, keyed by request id.
+  const [costErrors, setCostErrors] = useState<Record<string, string | null>>({});
 
   // A single-role owner or tenant gets a dashboard built around that one role instead of this
   // combined page; anyone with more than one role (or a technician) keeps the combined view,
@@ -224,7 +230,7 @@ function Portal() {
         supabase
           .from("maintenance_requests")
           .select(
-            "id, title, description, priority, status, cost, created_at, approval_status, rating, technician_id, tenant_id, unit_id, scheduled_at, photo_path, audio_path, units(unit_number, owner_id, properties(name, owner_id))",
+            "id, title, description, priority, status, cost, technician_note, created_at, approval_status, rating, technician_id, tenant_id, unit_id, scheduled_at, photo_path, audio_path, units(unit_number, owner_id, properties(name, owner_id))",
           )
           .order("created_at", { ascending: false }),
         isOwner
@@ -349,8 +355,8 @@ function Portal() {
     onError: () => toast.error("تعذّر التحديث"),
   });
 
-  // The DB lets the assigned technician change only status and scheduled_at
-  // (guard_maintenance_columns), so the visit time is the one field they edit here.
+  // The DB lets the assigned technician change only status, scheduled_at and, while the job is open,
+  // cost and technician_note (guard_maintenance_columns): those are the fields they edit here.
   const schedule = useMutation({
     mutationFn: async ({ id, at }: { id: string; at: string }) => {
       const { error } = await supabase
@@ -365,7 +371,36 @@ function Portal() {
     },
     onError: () => {
       toast.error("تعذّر حفظ الموعد");
-      setVisitResetNonce((n) => n + 1);
+      setJobResetNonce((n) => n + 1);
+    },
+  });
+
+  // A cost above the approval cap goes back to the owner for approval: the database decides that,
+  // the same way the office screen does.
+  const saveJob = useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { cost: number } | { technician_note: string | null };
+    }) => {
+      const { error } = await supabase.from("maintenance_requests").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, { patch }) => {
+      toast.success(
+        "cost" in patch
+          ? "حُفظت التكلفة — إن تجاوزت الحد فستُرسل للمالك للموافقة"
+          : "حُفظت الملاحظة",
+      );
+      queryClient.invalidateQueries({ queryKey: ["portal"] });
+    },
+    onError: (e: Error, { patch }) => {
+      toast.error(
+        userErrorMessage(e, "cost" in patch ? "تعذّر حفظ التكلفة" : "تعذّر حفظ الملاحظة"),
+      );
+      setJobResetNonce((n) => n + 1);
     },
   });
 
@@ -417,7 +452,12 @@ function Portal() {
   if (isLoading || !data || !me) {
     return (
       <>
-        <PageHeader title={technicianOnly ? "أعمال الصيانة" : "صفحتي"} />
+        {/* Until the roles load the title is unknown ("أعمال الصيانة" or "صفحتي"): no guess. */}
+        {me ? (
+          <PageHeader title={technicianOnly ? "أعمال الصيانة" : "صفحتي"} />
+        ) : (
+          <Skeleton className="mb-6 h-9 w-48" />
+        )}
         <Skeleton className="h-64" />
       </>
     );
@@ -438,7 +478,7 @@ function Portal() {
         title={technicianOnly ? "أعمال الصيانة" : "صفحتي"}
         subtitle={
           technicianOnly
-            ? "الأعمال المسندة لك: موعد الزيارة، مرفقات الطلب، والتواصل مع المستأجر."
+            ? "الأعمال المسندة لك: موعد الزيارة، التكلفة والملاحظات، مرفقات الطلب، والتواصل مع المستأجر."
             : "كل ما يخصّك في مكان واحد — والنظام يلاحق المهام والاستحقاقات نيابةً عنك."
         }
         action={
@@ -509,7 +549,7 @@ function Portal() {
                         id={`visit-${m.id}`}
                         // Uncontrolled: re-mount when the saved time changes so the field shows
                         // the server value.
-                        key={`${m.id}-${m.scheduled_at ?? ""}-${visitResetNonce}`}
+                        key={`${m.id}-${m.scheduled_at ?? ""}-${jobResetNonce}`}
                         type="datetime-local"
                         dir="ltr"
                         min={visitMin}
@@ -534,6 +574,72 @@ function Portal() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       موعد الزيارة: {visitTime(m.scheduled_at)}
                     </p>
+                  ) : null}
+
+                  {m.status !== "done" && m.status !== "cancelled" ? (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+                      <div className="space-y-1">
+                        <label htmlFor={`cost-${m.id}`} className="text-xs text-muted-foreground">
+                          التكلفة (ر.س)
+                        </label>
+                        <input
+                          id={`cost-${m.id}`}
+                          key={`${m.id}-${m.cost}-${jobResetNonce}`}
+                          type="number"
+                          min={0}
+                          inputMode="decimal"
+                          dir="ltr"
+                          aria-invalid={Boolean(costErrors[m.id])}
+                          aria-describedby={costErrors[m.id] ? `cost-error-${m.id}` : undefined}
+                          className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                          defaultValue={Number(m.cost) || ""}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value || 0);
+                            // A number input reports text it can't parse as "" (badInput).
+                            if (e.target.validity.badInput || !Number.isFinite(v) || v < 0) {
+                              setCostErrors((c) => ({
+                                ...c,
+                                [m.id]: `التكلفة رقم بالريال، ${arNum(0)} أو أكثر`,
+                              }));
+                              return;
+                            }
+                            setCostErrors((c) => ({ ...c, [m.id]: null }));
+                            if (v !== Number(m.cost)) {
+                              saveJob.mutate({ id: m.id, patch: { cost: v } });
+                            }
+                          }}
+                        />
+                        {costErrors[m.id] ? (
+                          <p id={`cost-error-${m.id}`} className="text-xs text-destructive">
+                            {costErrors[m.id]}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor={`note-${m.id}`} className="text-xs text-muted-foreground">
+                          ملاحظة الفني
+                        </label>
+                        <Textarea
+                          id={`note-${m.id}`}
+                          key={`${m.id}-${m.technician_note ?? ""}-${jobResetNonce}`}
+                          rows={2}
+                          maxLength={1000}
+                          placeholder="ما الذي أُنجز، القطع المستبدلة…"
+                          defaultValue={m.technician_note ?? ""}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim() || null;
+                            if (v !== (m.technician_note ?? null)) {
+                              saveJob.mutate({ id: m.id, patch: { technician_note: v } });
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : Number(m.cost) > 0 || m.technician_note ? (
+                    <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                      {Number(m.cost) > 0 ? <p>التكلفة: {sar(m.cost)}</p> : null}
+                      {m.technician_note ? <p>ملاحظتك: {m.technician_note}</p> : null}
+                    </div>
                   ) : null}
 
                   {tenantPhone || m.photo_path || m.audio_path ? (

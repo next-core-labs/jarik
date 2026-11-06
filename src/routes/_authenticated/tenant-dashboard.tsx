@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { sar, shortDate } from "@/lib/format";
+import { sar, shortDate, arNum } from "@/lib/format";
 import { useMyRoles } from "@/lib/use-role";
 
 export const Route = createFileRoute("/_authenticated/tenant-dashboard")({
@@ -162,7 +162,7 @@ function TenantDashboard() {
               </Button>
               {data.unreadNotif > 0 ? (
                 <span className="absolute -end-1 -top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground">
-                  {data.unreadNotif > 9 ? "9+" : data.unreadNotif}
+                  {data.unreadNotif > 9 ? `+${arNum(9)}` : arNum(data.unreadNotif)}
                 </span>
               ) : null}
             </div>

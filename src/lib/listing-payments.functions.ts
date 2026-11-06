@@ -7,7 +7,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const startListingPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   // guid, not uuid: zod's uuid() rejects ids Postgres accepts (any 8-4-4-4-12 hex, e.g. imported rows).
-  .inputValidator((input) => z.object({ unitId: z.guid() }).parse(input))
+  .validator((input) => z.object({ unitId: z.guid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: target, error } = await context.supabase
       .rpc("listing_publish_target", { _unit_id: data.unitId })
@@ -32,7 +32,7 @@ export const startListingPayment = createServerFn({ method: "POST" })
 /** After Moyasar sends the office back: checks the invoice with Moyasar and publishes the unit if paid. */
 export const confirmListingPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) => z.object({ paymentId: z.guid() }).parse(input))
+  .validator((input) => z.object({ paymentId: z.guid() }).parse(input))
   .handler(async ({ data, context }) => {
     // Read through the caller's own access: only their office's staff can see the row.
     const { data: visible, error } = await context.supabase

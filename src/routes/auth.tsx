@@ -119,12 +119,22 @@ function AuthPage() {
     return resolvePostLoginPath(roles);
   }
 
+  /** After a successful sign-in. The form stays busy until the destination has rendered: the role
+   * lookup and the route gate still run, and meanwhile the URL already shows the new page over this
+   * form, which looked idle and could be submitted again. */
   async function goNext() {
+    setLoading(true);
     if (next) {
       window.location.href = next;
       return;
     }
-    navigate({ to: await roleBasedDestination(), replace: true });
+    try {
+      await navigate({ to: await roleBasedDestination(), replace: true });
+    } catch (e) {
+      console.error("Post-login navigation failed", e);
+      setLoading(false);
+      toast.error("تعذّر فتح صفحتك — حدّث الصفحة وحاول مرة أخرى");
+    }
   }
 
   useEffect(() => {
@@ -150,8 +160,8 @@ function AuthPage() {
     if (blocked(emailProblem(email) ?? (password ? null : "أدخل كلمة المرور"))) return;
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       // Supabase says "Email not confirmed" when the address was never verified.
       if (/confirm/i.test(error.message)) {
         toast.error("لم يُفعَّل بريدك بعد — أرسلنا لك رمزًا جديدًا");
@@ -516,7 +526,7 @@ function AuthPage() {
                       </button>
                     </div>
                     <Button type="submit" className="w-full" disabled={loading || !hydrated}>
-                      دخول
+                      {loading ? "جارٍ الدخول…" : "دخول"}
                     </Button>
                   </form>
                 </TabsContent>
@@ -589,7 +599,7 @@ function AuthPage() {
                           required
                           placeholder="1200012345"
                           value={falLicense}
-                          onChange={(e) => setFalLicense(digitsOnly(e.target.value))}
+                          onChange={(e) => setFalLicense(e.target.value)}
                         />
                       </div>
                     ) : null}

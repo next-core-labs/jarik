@@ -28,11 +28,12 @@ export function PasswordField({
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
+      {/* dir="ltr" on the wrapper, not just the input: the eye's `end-2` and the input's `pe-10`
+          must resolve on the same side, or in the RTL page the eye lands on the typed text. */}
+      <div className="relative" dir="ltr">
         <Input
           id={id}
           type={shown ? "text" : "password"}
-          dir="ltr"
           required
           minLength={minLength}
           autoComplete={autoComplete}

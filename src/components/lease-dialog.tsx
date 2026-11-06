@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
@@ -26,14 +26,21 @@ import {
 } from "@/components/ui/select";
 import { LEASE_TERMS, leaseEndDate, leaseSchedule } from "@/components/lease-schedule";
 import { effectiveStatus, todayRiyadh } from "@/lib/dates";
-import { arNum, leaseStatusLabel, paymentStatusLabel, sar, shortDate } from "@/lib/format";
+import {
+  arNum,
+  leaseStatusLabel,
+  monthsLabel,
+  paymentStatusLabel,
+  sar,
+  shortDate,
+} from "@/lib/format";
 import { parseSaudiMobile } from "@/lib/public-form";
 import { toLatinDigits, validateSaudiId } from "@/lib/saudi-id";
 
 const termLabel: Record<number, string> = {
-  1: "شهر واحد",
-  3: "3 أشهر",
-  6: "6 أشهر",
+  1: monthsLabel(1),
+  3: monthsLabel(3),
+  6: monthsLabel(6),
   12: "سنة كاملة",
 };
 
@@ -100,7 +107,7 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
               <Item label="المدة">
                 {shortDate(data.start_date)} — {shortDate(data.end_date)}
                 <span className="ms-2 text-muted-foreground">
-                  ({termLabel[data.term_months] ?? `${data.term_months} أشهر`})
+                  ({termLabel[data.term_months] ?? monthsLabel(data.term_months)})
                 </span>
               </Item>
               <Item label="الحالة">
@@ -228,6 +235,7 @@ export function NewLeaseDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const uid = useId();
   const [form, setForm] = useState(emptyForm);
   const [tried, setTried] = useState(false);
   const set = <K extends keyof typeof emptyForm>(key: K, value: (typeof emptyForm)[K]) =>
@@ -434,7 +442,7 @@ export function NewLeaseDialog({
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Field label="الوحدة" error={show("unit", false)}>
+              <Field id={`${uid}-unit`} label="الوحدة" error={show("unit", false)}>
                 <Select
                   value={form.unitId}
                   onValueChange={(v) => {
@@ -445,7 +453,7 @@ export function NewLeaseDialog({
                     }
                   }}
                 >
-                  <SelectTrigger aria-invalid={Boolean(show("unit", false))}>
+                  <SelectTrigger id={`${uid}-unit`} aria-invalid={Boolean(show("unit", false))}>
                     <SelectValue placeholder="اختر وحدة شاغرة" />
                   </SelectTrigger>
                   <SelectContent>
@@ -466,7 +474,11 @@ export function NewLeaseDialog({
             </div>
 
             <div className="sm:col-span-2">
-              <Field label="المستأجر" error={show("tenant", form.fullName.trim() !== "")}>
+              <Field
+                id={`${uid}-tenant`}
+                label="المستأجر"
+                error={show("tenant", form.fullName.trim() !== "")}
+              >
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -489,7 +501,7 @@ export function NewLeaseDialog({
                 </div>
                 {form.tenantMode === "existing" ? (
                   <Select value={form.tenantId} onValueChange={(v) => set("tenantId", v)}>
-                    <SelectTrigger>
+                    <SelectTrigger id={`${uid}-tenant`}>
                       <SelectValue
                         placeholder={tenants.length ? "اختر المستأجر" : "لا يوجد مستأجرون بعد"}
                       />
@@ -505,6 +517,7 @@ export function NewLeaseDialog({
                   </Select>
                 ) : (
                   <Input
+                    id={`${uid}-tenant`}
                     value={form.fullName}
                     onChange={(e) => set("fullName", e.target.value)}
                     placeholder="الاسم الكامل كما في الهوية"
@@ -515,8 +528,9 @@ export function NewLeaseDialog({
 
             {form.tenantMode === "new" ? (
               <>
-                <Field label="جوال المستأجر (اختياري)" error={errors.phone}>
+                <Field id={`${uid}-phone`} label="جوال المستأجر (اختياري)" error={errors.phone}>
                   <Input
+                    id={`${uid}-phone`}
                     dir="ltr"
                     inputMode="tel"
                     value={form.phone}
@@ -524,8 +538,13 @@ export function NewLeaseDialog({
                     placeholder="05xxxxxxxx"
                   />
                 </Field>
-                <Field label="رقم الهوية / الإقامة (اختياري)" error={errors.nationalId}>
+                <Field
+                  id={`${uid}-national-id`}
+                  label="رقم الهوية / الإقامة (اختياري)"
+                  error={errors.nationalId}
+                >
                   <Input
+                    id={`${uid}-national-id`}
                     dir="ltr"
                     inputMode="numeric"
                     value={form.nationalId}
@@ -533,8 +552,13 @@ export function NewLeaseDialog({
                   />
                 </Field>
                 <div className="sm:col-span-2">
-                  <Field label="البريد الإلكتروني (اختياري)" error={errors.email}>
+                  <Field
+                    id={`${uid}-email`}
+                    label="البريد الإلكتروني (اختياري)"
+                    error={errors.email}
+                  >
                     <Input
+                      id={`${uid}-email`}
                       dir="ltr"
                       type="email"
                       value={form.email}
@@ -546,17 +570,18 @@ export function NewLeaseDialog({
               </>
             ) : null}
 
-            <Field label="تاريخ بداية العقد" error={show("startDate", false)}>
+            <Field id={`${uid}-start`} label="تاريخ بداية العقد" error={show("startDate", false)}>
               <Input
+                id={`${uid}-start`}
                 type="date"
                 dir="ltr"
                 value={form.startDate}
                 onChange={(e) => set("startDate", e.target.value)}
               />
             </Field>
-            <Field label="مدة العقد">
+            <Field id={`${uid}-term`} label="مدة العقد">
               <Select value={form.termMonths} onValueChange={(v) => set("termMonths", v)}>
-                <SelectTrigger>
+                <SelectTrigger id={`${uid}-term`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -572,10 +597,12 @@ export function NewLeaseDialog({
               ) : null}
             </Field>
             <Field
+              id={`${uid}-rent`}
               label="الإيجار السنوي (ريال)"
               error={show("rent", form.annualRent.trim() !== "")}
             >
               <Input
+                id={`${uid}-rent`}
                 dir="ltr"
                 inputMode="decimal"
                 value={form.annualRent}
@@ -588,18 +615,21 @@ export function NewLeaseDialog({
               ) : null}
             </Field>
             <Field
+              id={`${uid}-installments`}
               label="عدد الدفعات"
               error={show("installments", form.installments.trim() !== "")}
             >
               <Input
+                id={`${uid}-installments`}
                 dir="ltr"
                 inputMode="numeric"
                 value={form.installments}
                 onChange={(e) => set("installments", e.target.value)}
               />
             </Field>
-            <Field label="التأمين (ريال)" error={errors.deposit}>
+            <Field id={`${uid}-deposit`} label="التأمين (ريال)" error={errors.deposit}>
               <Input
+                id={`${uid}-deposit`}
                 dir="ltr"
                 inputMode="decimal"
                 value={form.deposit}
@@ -644,18 +674,24 @@ export function NewLeaseDialog({
   );
 }
 
+/** A labelled form row. `id` must also be set on the field's control, so the label names it and
+ * clicking the label focuses it. */
 function Field({
+  id,
   label,
   error,
   children,
 }: {
+  id: string;
   label: string;
   error?: string | null;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Label htmlFor={id} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
       {children}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>

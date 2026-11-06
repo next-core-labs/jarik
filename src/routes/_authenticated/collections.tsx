@@ -42,7 +42,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { addDays, effectiveStatus, monthRange, todayRiyadh } from "@/lib/dates";
-import { arNum, sar, shortDate, paymentStatusLabel } from "@/lib/format";
+import { arCount, arNum, sar, shortDate, paymentStatusLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/collections")({
   staticData: { sitemap: false },
@@ -91,8 +91,8 @@ function Collections() {
     onSuccess: (res) => {
       toast.success(
         res.count > 0
-          ? `أُرسل ${res.count} تذكير ذكي للمستأجرين قبل استحقاق دفعاتهم`
-          : "لا توجد دفعات على موعد التذكير اليوم (قبل 7 أو 3 أيام أو يوم الاستحقاق)",
+          ? `أُرسل ${arCount(res.count, { one: "تذكير ذكي واحد", two: "تذكيران ذكيان", few: "تذكيرات ذكية", many: "تذكيرًا ذكيًا" })} للمستأجرين قبل استحقاق دفعاتهم`
+          : "لا توجد دفعات على موعد التذكير اليوم (قبل ٧ أو ٣ أيام أو يوم الاستحقاق)",
       );
       queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
     },
@@ -160,7 +160,7 @@ function Collections() {
     onSuccess: (res) => {
       toast.success(
         res.total > 0
-          ? `أُرسلت ${res.notified} تذكيرات داخل المنصة${res.whatsapped > 0 ? ` و${res.whatsapped} رسالة واتساب` : ""}`
+          ? `أُرسل ${arCount(res.notified, { one: "تذكير واحد", two: "تذكيران", few: "تذكيرات", many: "تذكيرًا" })} داخل المنصة${res.whatsapped > 0 ? ` و${arCount(res.whatsapped, { one: "رسالة واتساب واحدة", two: "رسالتا واتساب", few: "رسائل واتساب", many: "رسالة واتساب" })}` : ""}`
           : "لا توجد دفعات تحتاج تذكيرًا",
       );
       queryClient.invalidateQueries({ queryKey: ["collections"] });

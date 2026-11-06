@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Check, Heart, MessageCircle, Phone, Share2, Sofa } from "lucide-react";
@@ -141,7 +141,12 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
 
 export const Route = createFileRoute("/unit/$unitId")({
   staticData: { sitemap: false, publicLocale: true },
-  loader: ({ params }) => loadUnitPage(params.unitId),
+  loader: async ({ params }) => {
+    const data = await loadUnitPage(params.unitId);
+    // A real 404 status for a missing listing; UnitUnavailable still shows the friendly page.
+    if (data.status === "missing") throw notFound();
+    return data;
+  },
   head: ({ loaderData, params, match }) => {
     const en = localeFromSearch(match.search) === "en";
     if (loaderData?.status !== "ok") {
@@ -255,12 +260,56 @@ export const Route = createFileRoute("/unit/$unitId")({
     };
   },
   component: UnitPublic,
+  notFoundComponent: () => <UnitUnavailable error={false} />,
 });
+
+/** A listing that is gone (404) or failed to load, with the way back to the market. */
+function UnitUnavailable({ error }: { error: boolean }) {
+  const router = useRouter();
+  const [locale] = useLocale();
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  return (
+    <div dir={locale === "en" ? "ltr" : "rtl"} lang={locale} className="min-h-screen bg-background">
+      <SiteHeader />
+      <main className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-bold">
+          {error
+            ? locale === "en"
+              ? "Couldn't load this listing"
+              : "تعذّر تحميل العرض"
+            : locale === "en"
+              ? "This listing is unavailable"
+              : "العرض غير متاح حاليًا"}
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          {error
+            ? locale === "en"
+              ? "Check your connection and try again."
+              : "تحقّق من الاتصال ثم أعد المحاولة."
+            : locale === "en"
+              ? "It may have been rented, or the office no longer lists it publicly."
+              : "ربما تم تأجيره أو أن المكتب لا يعرض وحداته علنًا."}
+        </p>
+        <div className="mt-6 flex justify-center gap-2">
+          {error ? (
+            <Button variant="outline" onClick={() => router.invalidate()}>
+              {t("results_retry")}
+            </Button>
+          ) : null}
+          <Button asChild>
+            <Link to="/" search={langSearch(locale)}>
+              {locale === "en" ? "Back to the market" : "العودة إلى سوق العروض"}
+            </Link>
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 function UnitPublic() {
   useTrackSiteVisit("/unit/$unitId");
   const data = Route.useLoaderData();
-  const router = useRouter();
   const [locale] = useLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
@@ -276,49 +325,7 @@ function UnitPublic() {
     track({ data: { unitId, eventType: "view" } }).catch(() => {});
   }, [unitId, track]);
 
-  if (data.status !== "ok") {
-    return (
-      <div
-        dir={locale === "en" ? "ltr" : "rtl"}
-        lang={locale}
-        className="min-h-screen bg-background"
-      >
-        <SiteHeader />
-        <main className="mx-auto max-w-3xl px-4 py-16 text-center">
-          <h1 className="font-display text-2xl font-bold">
-            {data.status === "error"
-              ? locale === "en"
-                ? "Couldn't load this listing"
-                : "تعذّر تحميل العرض"
-              : locale === "en"
-                ? "This listing is unavailable"
-                : "العرض غير متاح حاليًا"}
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            {data.status === "error"
-              ? locale === "en"
-                ? "Check your connection and try again."
-                : "تحقّق من الاتصال ثم أعد المحاولة."
-              : locale === "en"
-                ? "It may have been rented, or the office no longer lists it publicly."
-                : "ربما تم تأجيره أو أن المكتب لا يعرض وحداته علنًا."}
-          </p>
-          <div className="mt-6 flex justify-center gap-2">
-            {data.status === "error" ? (
-              <Button variant="outline" onClick={() => router.invalidate()}>
-                {t("results_retry")}
-              </Button>
-            ) : null}
-            <Button asChild>
-              <Link to="/" search={langSearch(locale)}>
-                {locale === "en" ? "Back to the market" : "العودة إلى سوق العروض"}
-              </Link>
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  if (data.status !== "ok") return <UnitUnavailable error />;
 
   const { listing: l, photos, similar, advertiser } = data;
   const title = listingTitle(l);

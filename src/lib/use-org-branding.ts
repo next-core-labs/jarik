@@ -2,8 +2,28 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-/** The office the signed-in employee works for (null for owners, tenants and technicians). */
+type OrgRow = Database["public"]["Tables"]["org_settings"]["Row"];
+
+/**
+ * An office's settings as this account may see them. Owners and tenants get only the public identity
+ * (my_linked_offices()); the rest (VAT/CR numbers, rates, thresholds…) is for the office's own people.
+ */
+export type OrgBranding = Pick<
+  OrgRow,
+  | "id"
+  | "company_name"
+  | "fal_license_no"
+  | "office_phone"
+  | "city"
+  | "district"
+  | "address"
+  | "logo_url"
+> &
+  Partial<OrgRow>;
+
+/** The office the signed-in employee or technician works for (null for owners and tenants). */
 export async function myOrgId(): Promise<string | null> {
   const { data } = await supabase.rpc("my_org_id");
   return (data as string | null) ?? null;
@@ -13,18 +33,24 @@ export async function myOrgId(): Promise<string | null> {
 export function useOrgBranding() {
   const org = useQuery({
     queryKey: ["org-branding"],
-    queryFn: async () => {
-      // Staff see their own office. Owners and tenants see the office(s) they work with: the oldest one.
+    queryFn: async (): Promise<OrgBranding | null> => {
+      // Staff and technicians see their own office. Owners and tenants see the public identity of
+      // the office(s) they work with, the oldest one: org_settings itself is closed to them.
       const mine = await myOrgId();
-      let query = supabase
+      if (!mine) {
+        const { data, error } = await supabase.rpc("my_linked_offices");
+        if (error) throw error;
+        return data?.[0] ?? null;
+      }
+      const { data, error } = await supabase
         .from("org_settings")
         .select(
           "id, company_name, vat_number, cr_number, office_code, vat_rate, address, logo_url, fal_license_no, office_phone, city, district, listed_publicly, whatsapp_locked, electricity_rate, water_rate, owner_approval_threshold",
-        );
-      query = mine ? query.eq("id", mine) : query.order("created_at", { ascending: true });
-      const { data, error } = await query.limit(1);
+        )
+        .eq("id", mine)
+        .maybeSingle();
       if (error) throw error;
-      return data?.[0] ?? null;
+      return data;
     },
   });
 

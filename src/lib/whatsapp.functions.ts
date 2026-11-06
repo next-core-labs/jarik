@@ -12,7 +12,7 @@ const inputSchema = z.object({
 
 export const handleWhatsappMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => inputSchema.parse(input))
+  .validator((input: unknown) => inputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { data: staff, error } = await context.supabase.rpc("is_staff", {
       _user_id: context.userId,

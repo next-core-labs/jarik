@@ -13,15 +13,21 @@ export function markRouterMounted(router: object) {
   mountedRouters.add(router);
 }
 
-export function deferTransitionerUntilMounted(router: {
-  startTransition: (fn: () => void) => void;
-}) {
-  const beforeMount = (fn: () => void) => startTransition(fn);
+// Router signature since @tanstack/router-core 1.171: `expected` lists the matches the render must
+// acknowledge, and the promise says whether one did. Before mount nothing renders to acknowledge
+// it, so resolve false — the same answer router-core's own default gives.
+type StartTransition = (fn: () => void, expected: never) => Promise<boolean>;
+
+export function deferTransitionerUntilMounted(router: { startTransition: StartTransition }) {
+  const beforeMount: StartTransition = async (fn) => {
+    startTransition(fn);
+    return false;
+  };
   let installed = beforeMount;
   Object.defineProperty(router, "startTransition", {
     configurable: true,
     get: () => (mountedRouters.has(router) ? installed : beforeMount),
-    set: (fn: (fn: () => void) => void) => {
+    set: (fn: StartTransition) => {
       installed = fn;
     },
   });

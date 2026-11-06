@@ -8,7 +8,7 @@ import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { submitTransferNotice } from "@/lib/portal-actions.functions";
-import { sar, shortDate, daysUntil } from "@/lib/format";
+import { arNum, daysLabel, daysUntil, sar, shortDate } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,7 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm text-muted-foreground">
-              الدفعة {paymentIndex} من {paymentCount}
+              الدفعة {arNum(paymentIndex)} من {arNum(paymentCount)}
             </p>
             <p className="mt-1 font-display text-3xl font-bold md:text-4xl">
               {sar(nextDue.amount)}
@@ -112,10 +112,10 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
           </div>
           <Badge variant={isOverdue ? "destructive" : "secondary"}>
             {isOverdue
-              ? `متأخرة ${Math.abs(days)} يوم`
+              ? `متأخرة ${daysLabel(days)}`
               : isToday
                 ? "مستحقة اليوم"
-                : `بعد ${days} يوم`}
+                : `بعد ${daysLabel(days)}`}
           </Badge>
         </div>
 
