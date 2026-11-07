@@ -25,12 +25,15 @@ export function UnitRequestForm({
   district,
   city,
   officeId,
+  unitId,
   officeName,
   purpose = "rent",
   locale = "ar",
 }: {
   unitType?: string;
   district?: string | null;
+  /** The listing on screen: the server stores it on the request and takes the office from it. */
+  unitId?: string | null;
   city?: string | null;
   /** The office whose listing is on screen: the request is delivered to it, not to another office. */
   officeId?: string | null;
@@ -79,6 +82,7 @@ export function UnitRequestForm({
           budget: budgetValue ?? undefined,
           notes: notes || undefined,
           officeId: officeId ?? undefined,
+          unitId: unitId ?? undefined,
           purpose: want,
           referralCode: referralCode.trim() || undefined,
         },

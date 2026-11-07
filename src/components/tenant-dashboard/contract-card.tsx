@@ -18,6 +18,7 @@ const depositLabel: Record<string, string> = {
   held: "محجوزة",
   refunded: "مستردة",
   deducted: "مخصومة",
+  transferred: "منقولة للعقد المجدَّد",
 };
 
 /** بطاقة المستأجر: ملخص العقد الحالي — المدة، الإيجار، الوديعة، حالة توثيق إيجار، وتنزيل ملخص PDF. */

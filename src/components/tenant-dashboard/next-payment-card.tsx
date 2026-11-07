@@ -17,25 +17,39 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type Payment = {
   id: string;
+  lease_id: string;
   amount: number;
+  amount_paid: number;
   due_date: string;
   status: string;
   transfer_reference: string | null;
+  transfer_rejected_note: string | null;
 };
 
-/** أكبر بطاقة في لوحة المستأجر — الدفعة القادمة المستحقة على عقده، مع سداد سريع أو طلب مهلة. */
-export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: string }) {
+/**
+ * أكبر بطاقة في لوحة المستأجر — الدفعة القادمة المستحقة على عقده، مع سداد سريع أو طلب مهلة.
+ * `earlierLeaseIds`: the leases this one renewed; an installment they still owe comes first.
+ */
+export function NextPaymentCard({
+  leaseId,
+  earlierLeaseIds = [],
+}: {
+  leaseId: string;
+  earlierLeaseIds?: string[];
+}) {
   const queryClient = useQueryClient();
   const [showPayForm, setShowPayForm] = useState(false);
   const [reference, setReference] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["tenant-next-payment", leaseId],
+    queryKey: ["tenant-next-payment", leaseId, earlierLeaseIds],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("payments")
-        .select("id, amount, due_date, status, transfer_reference")
-        .eq("lease_id", leaseId)
+        .select(
+          "id, lease_id, amount, amount_paid, due_date, status, transfer_reference, transfer_rejected_note",
+        )
+        .in("lease_id", [leaseId, ...earlierLeaseIds])
         .order("due_date");
       if (error) throw error;
       return (data ?? []) as Payment[];
@@ -57,12 +71,7 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
 
   const requestGrace = useMutation({
     mutationFn: async (payment: Payment) => {
-      const { error } = await supabase.rpc("notify_unit_staff", {
-        _unit_id: unitId,
-        _title: "طلب مهلة أو تقسيط",
-        _body: `المستأجر يطلب مهلة أو تقسيطًا للدفعة المستحقة ${sar(payment.amount)} بتاريخ ${shortDate(payment.due_date)}`,
-        _kind: "payment",
-      });
+      const { error } = await supabase.rpc("request_payment_grace", { _payment_id: payment.id });
       if (error) throw error;
     },
     onSuccess: () => toast.success("وصل طلبك للمكتب"),
@@ -71,10 +80,12 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
 
   if (isLoading || !data) return <Skeleton className="h-48" />;
 
-  const paymentCount = data.length;
-  const nextDueIndex = data.findIndex((p) => p.status !== "paid");
-  const nextDue = nextDueIndex === -1 ? null : data[nextDueIndex];
-  const paymentIndex = nextDueIndex === -1 ? 0 : nextDueIndex + 1;
+  const nextDue = data.find((p) => p.status !== "paid") ?? null;
+  // «الدفعة ٣ من ٤» counts within the installment's own lease.
+  const sameLease = nextDue ? data.filter((p) => p.lease_id === nextDue.lease_id) : [];
+  const paymentCount = sameLease.length;
+  const paymentIndex = nextDue ? sameLease.indexOf(nextDue) + 1 : 0;
+  const remaining = nextDue ? Number(nextDue.amount) - Number(nextDue.amount_paid) : 0;
 
   if (!nextDue) {
     return (
@@ -104,11 +115,15 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
           <div>
             <p className="text-sm text-muted-foreground">
               الدفعة {arNum(paymentIndex)} من {arNum(paymentCount)}
+              {nextDue.lease_id !== leaseId ? " · من العقد السابق" : ""}
             </p>
-            <p className="mt-1 font-display text-3xl font-bold md:text-4xl">
-              {sar(nextDue.amount)}
+            <p className="mt-1 font-display text-3xl font-bold md:text-4xl">{sar(remaining)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {shortDate(nextDue.due_date)}
+              {Number(nextDue.amount_paid) > 0
+                ? ` · سدّدت ${sar(nextDue.amount_paid)} من ${sar(nextDue.amount)}`
+                : ""}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">{shortDate(nextDue.due_date)}</p>
           </div>
           <Badge variant={isOverdue ? "destructive" : "secondary"}>
             {isOverdue
@@ -119,6 +134,11 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
           </Badge>
         </div>
 
+        {nextDue.transfer_rejected_note && !nextDue.transfer_reference ? (
+          <p className="text-sm text-destructive">
+            لم يعتمد المكتب إبلاغك السابق: {nextDue.transfer_rejected_note}
+          </p>
+        ) : null}
         {nextDue.transfer_reference ? (
           <p className="text-sm text-brass">
             أبلغت عن تحويل: <span dir="ltr">{nextDue.transfer_reference}</span> — بانتظار تأكيد
@@ -146,7 +166,7 @@ export function NextPaymentCard({ leaseId, unitId }: { leaseId: string; unitId: 
                     the office; the amount is the one thing we can state with certainty. */}
                 <div className="space-y-1 text-sm">
                   <p>
-                    المبلغ المطلوب تحويله: <span className="font-bold">{sar(nextDue.amount)}</span>
+                    المبلغ المطلوب تحويله: <span className="font-bold">{sar(remaining)}</span>
                   </p>
                   <p className="text-muted-foreground">
                     حوّل المبلغ إلى حساب المكتب البنكي. إن لم تكن لديك بيانات الحساب فاطلبها من

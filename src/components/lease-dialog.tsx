@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -24,16 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LEASE_TERMS, leaseEndDate, leaseSchedule } from "@/components/lease-schedule";
-import { effectiveStatus, todayRiyadh } from "@/lib/dates";
 import {
-  arNum,
-  leaseStatusLabel,
-  monthsLabel,
-  paymentStatusLabel,
-  sar,
-  shortDate,
-} from "@/lib/format";
+  LEASE_TERMS,
+  leaseEndDate,
+  leaseSchedule,
+  leaseStatusText,
+} from "@/components/lease-schedule";
+import { effectiveStatus, todayRiyadh } from "@/lib/dates";
+import { arNum, monthsLabel, paymentStatusLabel, sar, shortDate } from "@/lib/format";
 import { parseSaudiMobile } from "@/lib/public-form";
 import { toLatinDigits, validateSaudiId } from "@/lib/saudi-id";
 
@@ -48,17 +47,37 @@ const depositStatusLabel: Record<string, string> = {
   held: "محجوزة",
   refunded: "مستردة",
   deducted: "مخصومة",
+  transferred: "منقولة للعقد المجدَّد",
 };
+
+/** Every screen that lists leases, payments or the unit's status. */
+function invalidateLeaseViews(queryClient: QueryClient) {
+  for (const key of [
+    "leases",
+    "lease-details",
+    "ejar-leases",
+    "properties-with-units",
+    "collections",
+    "dashboard",
+    "renewals",
+    "deposit-leases",
+    "new-lease-options",
+  ]) {
+    queryClient.invalidateQueries({ queryKey: [key] });
+  }
+}
 
 /** A lease's terms and its payment schedule, opened from a row on /tenants. */
 export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [action, setAction] = useState<"end" | "correct" | "void" | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["lease-details", leaseId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("leases")
         .select(
-          "id, start_date, end_date, annual_rent, term_months, installments, deposit, deposit_status, ejar_contract_no, ejar_status, status, tenants(full_name, phone, national_id, email), units(unit_number, unit_name, unit_type, properties(name)), payments(id, amount, due_date, paid_date, status)",
+          "id, start_date, end_date, annual_rent, term_months, installments, deposit, deposit_status, ejar_contract_no, ejar_status, status, moved_out_on, end_note, tenants(full_name, phone, national_id, email), units(unit_number, unit_name, unit_type, properties(name)), payments(id, amount, amount_paid, due_date, paid_date, status)",
         )
         .eq("id", leaseId)
         .single();
@@ -67,22 +86,36 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
     },
   });
 
+  const voidLease = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("void_lease", { _lease_id: leaseId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("أُلغي العقد ودفعاته");
+      invalidateLeaseViews(queryClient);
+      onClose();
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إلغاء العقد")),
+  });
+
   const payments = [...(data?.payments ?? [])].sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const paid = payments
-    .filter((p) => p.status === "paid")
-    .reduce((s, p) => s + Number(p.amount), 0);
+  const paid = payments.reduce((s, p) => s + Number(p.amount_paid), 0);
   const total = payments.reduce((s, p) => s + Number(p.amount), 0);
+  // Correcting or voiding is for a lease entered by mistake: nothing paid on it yet.
+  const untouched =
+    payments.every((p) => p.status !== "paid" && Number(p.amount_paid) === 0) &&
+    data?.deposit_status === "held";
+  const label = data
+    ? `${data.units?.properties?.name ?? ""} · وحدة ${data.units?.unit_number ?? "—"}`
+    : "";
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display">تفاصيل العقد</DialogTitle>
-          <DialogDescription>
-            {data
-              ? `${data.units?.properties?.name ?? ""} · وحدة ${data.units?.unit_number ?? "—"}`
-              : " "}
-          </DialogDescription>
+          <DialogDescription>{data ? label : " "}</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
@@ -112,8 +145,14 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
               </Item>
               <Item label="الحالة">
                 <Badge variant={data.status === "active" ? "secondary" : "outline"}>
-                  {leaseStatusLabel[data.status] ?? data.status}
+                  {leaseStatusText(data.status)}
                 </Badge>
+                {data.moved_out_on ? (
+                  <span className="ms-2 text-muted-foreground">
+                    أُخليت {shortDate(data.moved_out_on)}
+                    {data.end_note ? ` · ${data.end_note}` : ""}
+                  </span>
+                ) : null}
               </Item>
               <Item label="الإيجار السنوي">{sar(data.annual_rent)}</Item>
               <Item label="عدد الدفعات">{arNum(data.installments)}</Item>
@@ -154,6 +193,11 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
                       </span>
                       <span className="flex items-center gap-2">
                         <span className="font-medium tabular-nums">{sar(p.amount)}</span>
+                        {p.status !== "paid" && Number(p.amount_paid) > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            سُدد {sar(p.amount_paid)}
+                          </span>
+                        ) : null}
                         <Badge
                           variant={
                             status === "overdue"
@@ -179,9 +223,357 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2">
+          {data?.status === "active" ? (
+            <>
+              <Button variant="outline" onClick={() => setAction("end")}>
+                إنهاء العقد
+              </Button>
+              {untouched ? (
+                <>
+                  <Button variant="outline" onClick={() => setAction("correct")}>
+                    تصحيح العقد
+                  </Button>
+                  <Button variant="outline" onClick={() => setAction("void")}>
+                    إلغاء العقد
+                  </Button>
+                </>
+              ) : null}
+            </>
+          ) : null}
           <Button variant="outline" onClick={onClose}>
             إغلاق
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+
+      {data && action === "end" ? (
+        <EndLeaseDialog
+          lease={{ ...data, label }}
+          onClose={() => setAction(null)}
+          onDone={() => setAction(null)}
+        />
+      ) : null}
+      {data && action === "correct" ? (
+        <CorrectLeaseDialog
+          lease={{ ...data, label }}
+          onClose={() => setAction(null)}
+          onDone={() => setAction(null)}
+        />
+      ) : null}
+      {data && action === "void" ? (
+        <Dialog open onOpenChange={(v) => !v && setAction(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>إلغاء العقد</DialogTitle>
+              <DialogDescription>
+                {label} — {data.tenants?.full_name ?? "—"}
+              </DialogDescription>
+            </DialogHeader>
+            <p className="text-sm">
+              للعقود المُدخلة بالخطأ فقط: يُحذف العقد وكل دفعاته، وتعود الوحدة شاغرة (أو يعود العقد
+              السابق ساريًا إن كان هذا تجديدًا له). لا يمكن التراجع.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAction(null)}>
+                تراجع
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={voidLease.isPending}
+                onClick={() => voidLease.mutate()}
+              >
+                {voidLease.isPending ? "جارٍ الإلغاء…" : "إلغاء العقد نهائيًا"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </Dialog>
+  );
+}
+
+/**
+ * «إنهاء العقد»: the tenant moved out (or is leaving early). Unpaid installments due after the
+ * move-out are removed, the unit becomes vacant and the deposit stays held for settlement.
+ */
+export function EndLeaseDialog({
+  lease,
+  onClose,
+  onDone,
+}: {
+  lease: { id: string; start_date: string; end_date: string; label: string };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const uid = useId();
+  const today = todayRiyadh();
+  const [moveOut, setMoveOut] = useState(today);
+  const [reason, setReason] = useState<"ended" | "terminated">(
+    lease.end_date <= today ? "ended" : "terminated",
+  );
+  const [note, setNote] = useState("");
+
+  const moveOutError = !moveOut
+    ? "حدّد تاريخ الإخلاء"
+    : moveOut > today
+      ? "تاريخ الإخلاء لا يكون في المستقبل — سجّل الإنهاء يوم الإخلاء"
+      : moveOut < lease.start_date
+        ? "تاريخ الإخلاء قبل بداية العقد"
+        : null;
+
+  const end = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("end_lease", {
+        _lease_id: lease.id,
+        _move_out: moveOut,
+        _reason: reason,
+        ...(note.trim() ? { _note: note.trim() } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("أُنهي العقد وأصبحت الوحدة شاغرة — سوِّ الوديعة من «التجديدات»");
+      invalidateLeaseViews(queryClient);
+      onDone();
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إنهاء العقد")),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">إنهاء العقد</DialogTitle>
+          <DialogDescription>
+            {lease.label} — ينتهي {shortDate(lease.end_date)}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <Field id={`${uid}-reason`} label="سبب الإنهاء">
+            <Select value={reason} onValueChange={(v) => setReason(v as "ended" | "terminated")}>
+              <SelectTrigger id={`${uid}-reason`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ended">انتهاء مدة العقد</SelectItem>
+                <SelectItem value="terminated">فسخ قبل نهاية المدة</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field id={`${uid}-move-out`} label="تاريخ الإخلاء" error={moveOutError}>
+            <Input
+              id={`${uid}-move-out`}
+              type="date"
+              dir="ltr"
+              min={lease.start_date}
+              max={today}
+              value={moveOut}
+              onChange={(e) => setMoveOut(e.target.value)}
+              aria-invalid={Boolean(moveOutError)}
+            />
+          </Field>
+          <Field id={`${uid}-note`} label="ملاحظة (اختياري)">
+            <Textarea
+              id={`${uid}-note`}
+              rows={2}
+              maxLength={400}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            تُلغى الدفعات غير المسددة المستحقة بعد تاريخ الإخلاء، وتصبح الوحدة شاغرة، وتبقى الوديعة
+            محجوزة حتى تسويتها من «التجديدات». يصل إشعار للمستأجر والمالك.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            تراجع
+          </Button>
+          <Button disabled={Boolean(moveOutError) || end.isPending} onClick={() => end.mutate()}>
+            {end.isPending ? "جارٍ الإنهاء…" : "تأكيد الإنهاء"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * «تصحيح العقد»: rewrite the terms of a lease that has nothing paid yet (a mistyped start year,
+ * rent or term) and regenerate its schedule. `initial` prefills other terms, e.g. Ejar's.
+ */
+export function CorrectLeaseDialog({
+  lease,
+  initial,
+  onClose,
+  onDone,
+}: {
+  lease: {
+    id: string;
+    start_date: string;
+    term_months: number;
+    annual_rent: number;
+    installments: number;
+    deposit: number;
+    deposit_status: string;
+    label: string;
+  };
+  initial?: { startDate?: string; termMonths?: number; annualRent?: number };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const uid = useId();
+  const [startDate, setStartDate] = useState(initial?.startDate ?? lease.start_date);
+  const [termMonths, setTermMonths] = useState(String(initial?.termMonths ?? lease.term_months));
+  const [annualRent, setAnnualRent] = useState(String(initial?.annualRent ?? lease.annual_rent));
+  const [installments, setInstallments] = useState(String(lease.installments));
+  const [depositText, setDepositText] = useState(String(lease.deposit));
+
+  const term = Number(termMonths);
+  const rent = parseNumber(annualRent);
+  const count = parseNumber(installments);
+  const deposit = depositText.trim() ? parseNumber(depositText) : 0;
+  const errors = {
+    startDate: !startDate ? "حدّد تاريخ بداية العقد" : null,
+    rent:
+      rent === null || rent <= 0
+        ? "أدخل الإيجار السنوي بالريال"
+        : Math.round(rent * 100) !== rent * 100
+          ? "الإيجار بحد أقصى منزلتين عشريتين"
+          : null,
+    installments:
+      count === null || !Number.isInteger(count) || count < 1 || count > 24
+        ? "عدد الدفعات من 1 إلى 24"
+        : count > term
+          ? "عدد الدفعات لا يتجاوز مدة العقد بالأشهر"
+          : null,
+    deposit:
+      deposit === null
+        ? "أدخل مبلغ التأمين بالأرقام (0 إن لم يوجد)"
+        : deposit !== Number(lease.deposit) && lease.deposit_status !== "held"
+          ? "سبقت تسوية الوديعة — لا يتغير مبلغها"
+          : null,
+  };
+  const valid = Object.values(errors).every((e) => e === null);
+  const schedule =
+    valid && rent !== null && count !== null
+      ? leaseSchedule({ startDate, termMonths: term, annualRent: rent, installments: count })
+      : [];
+
+  const correct = useMutation({
+    mutationFn: async () => {
+      if (!valid || rent === null || count === null || deposit === null) {
+        throw new Error("أكمل بيانات العقد أولًا");
+      }
+      const { error } = await supabase.rpc("correct_lease", {
+        _lease_id: lease.id,
+        _start_date: startDate,
+        _term_months: term,
+        _annual_rent: rent,
+        _installments: count,
+        _deposit: deposit,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("صُحّح العقد وأُعيد إنشاء جدول دفعاته");
+      invalidateLeaseViews(queryClient);
+      onDone();
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تصحيح العقد")),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-display">تصحيح العقد</DialogTitle>
+          <DialogDescription>
+            {lease.label} — لعقد لم يُسدَّد منه شيء بعد. يُعاد إنشاء جدول الدفعات بالبيانات الجديدة.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field id={`${uid}-start`} label="تاريخ بداية العقد" error={errors.startDate}>
+            <Input
+              id={`${uid}-start`}
+              type="date"
+              dir="ltr"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </Field>
+          <Field id={`${uid}-term`} label="مدة العقد">
+            <Select value={termMonths} onValueChange={setTermMonths}>
+              <SelectTrigger id={`${uid}-term`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LEASE_TERMS.map((t) => (
+                  <SelectItem key={t} value={String(t)}>
+                    {termLabel[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {startDate ? (
+              <p className="text-xs text-muted-foreground">
+                ينتهي في {shortDate(leaseEndDate(startDate, term))}
+              </p>
+            ) : null}
+          </Field>
+          <Field id={`${uid}-rent`} label="الإيجار السنوي (ريال)" error={errors.rent}>
+            <Input
+              id={`${uid}-rent`}
+              dir="ltr"
+              inputMode="decimal"
+              value={annualRent}
+              onChange={(e) => setAnnualRent(e.target.value)}
+            />
+          </Field>
+          <Field id={`${uid}-installments`} label="عدد الدفعات" error={errors.installments}>
+            <Input
+              id={`${uid}-installments`}
+              dir="ltr"
+              inputMode="numeric"
+              value={installments}
+              onChange={(e) => setInstallments(e.target.value)}
+            />
+          </Field>
+          <Field id={`${uid}-deposit`} label="التأمين (ريال)" error={errors.deposit}>
+            <Input
+              id={`${uid}-deposit`}
+              dir="ltr"
+              inputMode="decimal"
+              value={depositText}
+              onChange={(e) => setDepositText(e.target.value)}
+            />
+          </Field>
+          {schedule.length > 0 ? (
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-sm font-medium">جدول الدفعات الجديد</p>
+              <ul className="divide-y divide-border rounded-md border border-border text-sm">
+                {schedule.map((p, i) => (
+                  <li key={p.due_date} className="flex justify-between gap-2 px-3 py-2">
+                    <span className="text-muted-foreground">
+                      الدفعة {arNum(i + 1)} · {shortDate(p.due_date)}
+                    </span>
+                    <span className="font-medium tabular-nums">{sar(p.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            تراجع
+          </Button>
+          <Button disabled={!valid || correct.isPending} onClick={() => correct.mutate()}>
+            {correct.isPending ? "جارٍ الحفظ…" : "حفظ التصحيح"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -224,8 +616,8 @@ function parseNumber(value: string): number | null {
 
 /**
  * «عقد جديد»: a first lease on a vacant rental unit, for an existing tenant of the office or a new
- * one, with its payment schedule. Built the same way renew_lease builds a renewal: one active lease
- * per unit (sync_unit_status then marks the unit occupied) and the rent split into installments.
+ * one, with its payment schedule, created by the create_lease RPC (same schedule as renew_lease;
+ * one active lease per unit, and sync_unit_status then marks the unit occupied).
  */
 export function NewLeaseDialog({
   open,
@@ -339,86 +731,32 @@ export function NewLeaseDialog({
       if (!valid || rent === null || count === null || deposit === null || !endDate) {
         throw new Error("أكمل بيانات العقد أولًا");
       }
-      // The unit list may be stale: never put a second active lease on a unit.
-      const active = await supabase
-        .from("leases")
-        .select("id")
-        .eq("unit_id", form.unitId)
-        .eq("status", "active")
-        .limit(1);
-      if (active.error) throw active.error;
-      if (active.data.length > 0) {
-        throw new Error("على هذه الوحدة عقد ساري — جدّده من صفحة «التجديدات»");
-      }
-
-      let tenantId = form.tenantId;
-      let createdTenant: string | null = null;
-      if (form.tenantMode === "new") {
-        // org_id is filled from the signed-in staff member's office (a_fill_org trigger).
-        const { data, error } = await supabase
-          .from("tenants")
-          .insert({
-            full_name: form.fullName.trim(),
-            phone: form.phone.trim() ? parseSaudiMobile(form.phone) : null,
-            national_id: form.nationalId.trim() ? toLatinDigits(form.nationalId.trim()) : null,
-            email: form.email.trim() || null,
-          })
-          .select("id")
-          .single();
-        if (error) throw error;
-        tenantId = data.id;
-        createdTenant = data.id;
-      }
-
-      const lease = await supabase
-        .from("leases")
-        .insert({
-          unit_id: form.unitId,
-          tenant_id: tenantId,
-          start_date: form.startDate,
-          end_date: endDate,
-          annual_rent: rent,
-          term_months: term,
-          installments: count,
-          deposit,
-          status: "active",
-          ejar_status: "pending",
-        })
-        .select("id")
-        .single();
-      if (lease.error) {
-        if (createdTenant) await supabase.from("tenants").delete().eq("id", createdTenant);
-        throw lease.error;
-      }
-
-      const rows = leaseSchedule({
-        startDate: form.startDate,
-        termMonths: term,
-        annualRent: rent,
-        installments: count,
-      }).map((p) => ({ ...p, lease_id: lease.data.id, status: "due" }));
-      const payments = await supabase.from("payments").insert(rows);
-      if (payments.error) {
-        // No lease without its schedule: undo, so a retry starts clean.
-        await supabase.from("leases").delete().eq("id", lease.data.id);
-        if (createdTenant) await supabase.from("tenants").delete().eq("id", createdTenant);
-        throw payments.error;
-      }
+      // One database transaction: the tenant (if new), the lease and its schedule are written
+      // together or not at all, and the database refuses a second active lease on the unit.
+      const { error } = await supabase.rpc("create_lease", {
+        _unit_id: form.unitId,
+        // create_lease takes NULL here for a new tenant; generated RPC types can't express a nullable arg.
+        _tenant_id: form.tenantMode === "existing" ? form.tenantId : (null as unknown as string),
+        _new_tenant:
+          form.tenantMode === "new"
+            ? {
+                full_name: form.fullName.trim(),
+                phone: form.phone.trim() ? parseSaudiMobile(form.phone) : null,
+                national_id: form.nationalId.trim() ? toLatinDigits(form.nationalId.trim()) : null,
+                email: form.email.trim() || null,
+              }
+            : null,
+        _start_date: form.startDate,
+        _term_months: term,
+        _annual_rent: rent,
+        _installments: count,
+        _deposit: deposit,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("أُنشئ العقد وجدول دفعاته — وثّقه في «إيجار» ثم اربط رقمه");
-      for (const key of [
-        "leases",
-        "ejar-leases",
-        "properties-with-units",
-        "collections",
-        "dashboard",
-        "renewals",
-        "deposit-leases",
-        "new-lease-options",
-      ]) {
-        queryClient.invalidateQueries({ queryKey: [key] });
-      }
+      invalidateLeaseViews(queryClient);
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إنشاء العقد")),

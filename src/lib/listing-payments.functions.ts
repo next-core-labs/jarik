@@ -3,7 +3,11 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-/** Raises (or reuses) the Moyasar invoice for publishing a unit for the next 30 days. */
+/**
+ * Raises (or reuses) the Moyasar invoice for publishing a unit for the next 30 days. The unit must be
+ * vacant and managed by the caller's office (with `leasing` for an owner's unit under an agreement);
+ * listing_publish_target refuses otherwise with the reason.
+ */
 export const startListingPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   // guid, not uuid: zod's uuid() rejects ids Postgres accepts (any 8-4-4-4-12 hex, e.g. imported rows).
@@ -47,7 +51,8 @@ export const confirmListingPayment = createServerFn({ method: "POST" })
     const row = await findListingPayment({ id: data.paymentId });
     if (!row) throw new Error("عملية الدفع غير موجودة");
     const paidUntil = await settleIfInvoicePaid(row);
-    return paidUntil
-      ? { status: "paid" as const, paidUntil }
-      : { status: row.status === "cancelled" ? ("cancelled" as const) : ("pending" as const) };
+    if (paidUntil) return { status: "paid" as const, paidUntil };
+    return ["cancelled", "refunded", "voided"].includes(row.status)
+      ? { status: "cancelled" as const }
+      : { status: "pending" as const };
   });

@@ -2,6 +2,7 @@ import { effectiveStatus } from "@/lib/dates";
 import { paymentStatusLabel, unitStatusLabel } from "@/lib/format";
 import {
   UNCATEGORISED,
+  paymentBalance,
   type DashboardModel,
   type OwnerDashboardData,
 } from "@/components/owner-dashboard/model";
@@ -53,13 +54,20 @@ export function ownerWorkbookSheets(
 
   const payments: Row[] = finance.recent.map((p) => {
     const status = effectiveStatus(p, finance.today || undefined);
+    const balance = paymentBalance(p);
     return {
       العقار: p.property_name,
       الوحدة: p.unit_number,
       المبلغ: Number(p.amount),
+      المسدد: balance.paid,
+      المتبقي: balance.remaining,
       الاستحقاق: p.due_date,
       السداد: p.paid_date ?? "",
-      الحالة: paymentStatusLabel[status] ?? status,
+      الحالة: balance.partial
+        ? status === "overdue"
+          ? "جزئية · متأخرة"
+          : (paymentStatusLabel["partial"] ?? "جزئية")
+        : (paymentStatusLabel[status] ?? status),
     };
   });
 

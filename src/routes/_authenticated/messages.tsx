@@ -63,13 +63,6 @@ function MessagesPage() {
   // reaches the tenant from the job card on /portal.
   const technicianOnly =
     roles.includes("technician") && !staff && !roles.includes("owner") && !roles.includes("tenant");
-  const myRole = staff
-    ? "staff"
-    : roles.includes("owner")
-      ? "owner"
-      : roles.includes("tenant")
-        ? "tenant"
-        : "unknown";
   const { unit: linkedUnit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const [selectedDirect, setSelectedDirect] = useState<string | null>(null);
@@ -178,7 +171,7 @@ function MessagesPage() {
               </CardHeader>
               <CardContent>
                 {active ? (
-                  <UnitChat unitId={active} myRole={myRole} myName={profile.data ?? "مشارك"} />
+                  <UnitChat unitId={active} />
                 ) : linkedMissing ? (
                   <p className="text-sm text-muted-foreground">
                     لا يمكنك فتح محادثة هذه الوحدة. اختر وحدة من القائمة.

@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   arNum,
+  arPct,
   sar,
   shortDate,
   paymentStatusLabel,
@@ -249,7 +250,9 @@ function Portal() {
               .order("unit_number")
           : skip,
         isOwner ? supabase.rpc("market_stats") : skip,
-        isOwner ? supabase.rpc("owner_property_roi") : skip,
+        // Same owner-scoped returns as the owner dashboard: only units this account owns (never a
+        // building it merely rents in), over the last 12 months, against the contracted rent.
+        isOwner ? supabase.rpc("owner_property_returns") : skip,
       ]);
 
       // As an owner: the units this account owns (same rule as private.unit_owner(): the unit's own
@@ -352,7 +355,11 @@ function Portal() {
       toast.success("تم تحديث حالة العمل");
       queryClient.invalidateQueries({ queryKey: ["portal"] });
     },
-    onError: () => toast.error("تعذّر التحديث"),
+    // Shows the database's reason, e.g. a cost still waiting on the owner's approval.
+    onError: (e: Error) => {
+      toast.error(userErrorMessage(e, "تعذّر التحديث"));
+      queryClient.invalidateQueries({ queryKey: ["portal"] });
+    },
   });
 
   // The DB lets the assigned technician change only status, scheduled_at and, while the job is open,
@@ -675,7 +682,16 @@ function Portal() {
                     </div>
                   ) : null}
 
-                  {m.status !== "done" && m.status !== "cancelled" ? (
+                  {m.status !== "done" &&
+                  m.status !== "cancelled" &&
+                  (m.approval_status === "pending" || m.approval_status === "rejected") ? (
+                    // Same rule as the database: no starting or finishing until the owner approves.
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {m.approval_status === "pending"
+                        ? "بانتظار موافقة المالك على التكلفة — لا يبدأ العمل ولا يُنجز قبل موافقته."
+                        : "رفض المالك هذه التكلفة — راجع المكتب قبل متابعة العمل."}
+                    </p>
+                  ) : m.status !== "done" && m.status !== "cancelled" ? (
                     <div className="mt-3 flex gap-2">
                       {m.status === "new" ? (
                         <Button
@@ -785,17 +801,7 @@ function Portal() {
             <CardTitle className="text-base">مقارنة عائد عقاراتي</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {(
-              data.roi as {
-                property_id: string;
-                property_name: string;
-                units_count: number;
-                collected: number;
-                expenses: number;
-                net: number;
-                roi_pct: number;
-              }[]
-            ).map((r) => (
+            {data.roi.map((r) => (
               <div
                 key={r.property_id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm"
@@ -804,17 +810,18 @@ function Portal() {
                   {r.property_name} · {r.units_count} وحدة
                 </p>
                 <p className="text-muted-foreground">
-                  محصّل <span className="font-bold text-foreground">{sar(r.collected)}</span>
+                  محصّل <span className="font-bold text-foreground">{sar(r.collected_12m)}</span>
                   {" · "}مصروفات{" "}
-                  <span className="font-bold text-foreground">{sar(r.expenses)}</span>
-                  {" · "}الصافي <span className="font-bold text-foreground">{sar(r.net)}</span>
+                  <span className="font-bold text-foreground">{sar(r.expenses_12m)}</span>
+                  {" · "}الصافي <span className="font-bold text-foreground">{sar(r.net_12m)}</span>
                   {" · "}العائد{" "}
-                  <span className="font-bold text-foreground">{Number(r.roi_pct)}%</span>
+                  <span className="font-bold text-foreground">{arPct(Number(r.net_pct))}</span>
                 </p>
               </div>
             ))}
             <p className="text-xs text-muted-foreground">
-              العائد = الصافي مقسومًا على إجمالي الإيجار السنوي للعقار.
+              آخر ١٢ شهرًا. العائد = الصافي مقسومًا على الإيجار السنوي في العقود السارية — الوحدات
+              الشاغرة لا تدخل فيه.
             </p>
           </CardContent>
         </Card>

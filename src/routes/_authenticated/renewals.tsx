@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { BellRing, CalendarClock, CalendarPlus, Sparkles } from "lucide-react";
+import { BellRing, CalendarClock, CalendarPlus, LogOut, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -30,8 +30,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { addDays } from "@/lib/dates";
-import { sar, shortDate, daysUntil, arCount } from "@/lib/format";
+import { EndLeaseDialog } from "@/components/lease-dialog";
+import { addDays, todayRiyadh } from "@/lib/dates";
+import { sar, shortDate, daysUntil, arCount, daysLabel } from "@/lib/format";
 import { depositSettleable, settleDeposit } from "@/lib/office-tools.functions";
 import { parseAmount } from "@/lib/public-form";
 import { suggestRent } from "@/lib/pricing.functions";
@@ -56,6 +57,7 @@ type RenewalLease = {
   id: string;
   unit_id: string;
   tenant_id: string;
+  start_date: string;
   end_date: string;
   annual_rent: number;
   installments: number;
@@ -74,13 +76,31 @@ type RenewalLease = {
     furnished: boolean;
     properties: { name: string } | null;
   } | null;
+  /** The owner's latest standing decision (not superseded), if any. */
+  owner: { decision: string; proposed_rent: number | null; status: string } | null;
+  /** The tenant's latest renewal request, if any. */
+  tenant: { decision: string; status: string } | null;
 };
+
+const ownerDecisionShort: Record<string, string> = {
+  renew: "المالك: يجدّد بنفس الإيجار",
+  renew_new_rent: "المالك: يجدّد بإيجار جديد",
+  leave: "المالك: لا يرغب بالتجديد",
+};
+
+/** The rent a renewal starts from: the owner's proposed rent when they asked for a new one. */
+function proposedRent(l: RenewalLease) {
+  return l.owner?.decision === "renew_new_rent" && l.owner.proposed_rent
+    ? Number(l.owner.proposed_rent)
+    : Number(l.annual_rent);
+}
 
 function Renewals() {
   const queryClient = useQueryClient();
   const [renewing, setRenewing] = useState<RenewalLease | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkRenewing, setBulkRenewing] = useState<RenewalLease[] | null>(null);
+  const [ending, setEnding] = useState<RenewalLease | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["renewals"],
@@ -88,13 +108,41 @@ function Renewals() {
       const { data: leases, error } = await supabase
         .from("leases")
         .select(
-          "id, unit_id, tenant_id, end_date, annual_rent, installments, deposit, tenants(full_name, phone), units(unit_number, unit_name, unit_type, district, floor_no, rooms, halls, bathrooms, area, furnished, properties(name))",
+          "id, unit_id, tenant_id, start_date, end_date, annual_rent, installments, deposit, tenants(full_name, phone), units(unit_number, unit_name, unit_type, district, floor_no, rooms, halls, bathrooms, area, furnished, properties(name))",
         )
         .eq("status", "active")
+        .lte("end_date", addDays(todayRiyadh(), 90))
         .order("end_date");
       if (error) throw error;
-      const rows = (leases ?? []) as unknown as RenewalLease[];
-      return rows.filter((l) => daysUntil(l.end_date) <= 90);
+      const ids = (leases ?? []).map((l) => l.id);
+      // Both sides' decisions next to each lease, newest first (the first one per lease wins).
+      const [owners, tenants] = ids.length
+        ? await Promise.all([
+            supabase
+              .from("owner_renewal_decisions")
+              .select("lease_id, decision, proposed_rent, status, created_at")
+              .in("lease_id", ids)
+              .neq("status", "superseded")
+              .order("created_at", { ascending: false }),
+            supabase
+              .from("renewal_requests")
+              .select("lease_id, decision, status, created_at")
+              .in("lease_id", ids)
+              .order("created_at", { ascending: false }),
+          ])
+        : [{ data: null }, { data: null }];
+      const latest = <T extends { lease_id: string }>(rows: T[] | null) => {
+        const map = new Map<string, T>();
+        for (const r of rows ?? []) if (!map.has(r.lease_id)) map.set(r.lease_id, r);
+        return map;
+      };
+      const ownerBy = latest(owners.data);
+      const tenantBy = latest(tenants.data);
+      return (leases ?? []).map((l) => ({
+        ...l,
+        owner: ownerBy.get(l.id) ?? null,
+        tenant: tenantBy.get(l.id) ?? null,
+      })) as unknown as RenewalLease[];
     },
   });
 
@@ -154,6 +202,7 @@ function Renewals() {
         <div className="space-y-4">
           {list.map((l) => {
             const days = daysUntil(l.end_date);
+            const ownerLeaves = l.owner?.decision === "leave";
             return (
               <Card key={l.id} className="shadow-deed">
                 <CardHeader>
@@ -161,6 +210,7 @@ function Renewals() {
                     <div className="flex items-start gap-3">
                       <Checkbox
                         className="mt-2"
+                        disabled={ownerLeaves}
                         checked={selectedIds.has(l.id)}
                         onCheckedChange={(v) => toggleSelected(l.id, v === true)}
                         aria-label="تحديد العقد للتجديد الجماعي"
@@ -183,7 +233,11 @@ function Renewals() {
                       <Badge
                         variant={days < 0 ? "destructive" : days <= 30 ? "secondary" : "outline"}
                       >
-                        {days < 0 ? `منتهٍ منذ ${Math.abs(days)} يوم` : `ينتهي بعد ${days} يوم`}
+                        {days < 0
+                          ? `منتهٍ منذ ${daysLabel(Math.abs(days))}`
+                          : days === 0
+                            ? "ينتهي اليوم"
+                            : `ينتهي بعد ${daysLabel(days)}`}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
                         {shortDate(l.end_date)} · {sar(l.annual_rent)}
@@ -191,11 +245,48 @@ function Renewals() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <Button onClick={() => setRenewing(l)}>
-                    <CalendarPlus className="size-4" />
-                    جدّد العقد
-                  </Button>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <Badge variant={ownerLeaves ? "destructive" : "outline"}>
+                      {l.owner
+                        ? `${ownerDecisionShort[l.owner.decision] ?? l.owner.decision}${
+                            l.owner.decision === "renew_new_rent" && l.owner.proposed_rent
+                              ? ` ${sar(l.owner.proposed_rent)}`
+                              : ""
+                          }`
+                        : "المالك: لم يحدّد قراره"}
+                    </Badge>
+                    <Badge variant={l.tenant?.decision === "leave" ? "destructive" : "outline"}>
+                      {l.tenant
+                        ? l.tenant.decision === "renew"
+                          ? "المستأجر: يرغب بالتجديد"
+                          : "المستأجر: يطلب المغادرة"
+                        : "المستأجر: لم يحدّد قراره"}
+                    </Badge>
+                  </div>
+                  {ownerLeaves ? (
+                    <p className="text-sm text-destructive">
+                      المالك لا يرغب بالتجديد — سجّل الإخلاء عند خروج المستأجر، أو اطلب من المالك
+                      تغيير قراره من لوحته.
+                    </p>
+                  ) : l.tenant?.decision === "leave" ? (
+                    <p className="text-sm text-muted-foreground">
+                      المستأجر طلب المغادرة — تأكد منه قبل التجديد.
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={ownerLeaves} onClick={() => setRenewing(l)}>
+                      <CalendarPlus className="size-4" />
+                      جدّد العقد
+                    </Button>
+                    <Button
+                      variant={days < 0 || ownerLeaves ? "destructive" : "outline"}
+                      onClick={() => setEnding(l)}
+                    >
+                      <LogOut className="size-4" />
+                      إنهاء العقد
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -220,6 +311,22 @@ function Renewals() {
             setRenewing(null);
             queryClient.invalidateQueries({ queryKey: ["renewals"] });
             queryClient.invalidateQueries({ queryKey: ["leases"] });
+          }}
+        />
+      ) : null}
+
+      {ending ? (
+        <EndLeaseDialog
+          lease={{
+            id: ending.id,
+            start_date: ending.start_date,
+            end_date: ending.end_date,
+            label: `${ending.units?.properties?.name ?? ""} · وحدة ${ending.units?.unit_number ?? "—"} — ${ending.tenants?.full_name ?? "—"}`,
+          }}
+          onClose={() => setEnding(null)}
+          onDone={() => {
+            setEnding(null);
+            setSelectedIds(new Set());
           }}
         />
       ) : null}
@@ -250,7 +357,7 @@ function RenewDialog({
   onDone: () => void;
 }) {
   const [startDate, setStartDate] = useState(addDays(lease.end_date, 1));
-  const [rent, setRent] = useState(String(lease.annual_rent));
+  const [rent, setRent] = useState(String(proposedRent(lease)));
   const [installments, setInstallments] = useState(String(lease.installments));
   const [termMonths, setTermMonths] = useState("12");
 
@@ -280,11 +387,14 @@ function RenewDialog({
 
   const renew = useMutation({
     mutationFn: async () => {
-      const annualRent = Number(rent || 0);
+      const annualRent = parseAmount(rent) ?? 0;
       const count = Number(installments || 1);
       const term = Number(termMonths);
       if (!Number.isFinite(annualRent) || annualRent <= 0)
         throw new Error("أدخل إيجارًا سنويًا صحيحًا");
+      if (Math.round(annualRent * 100) !== annualRent * 100) {
+        throw new Error("الإيجار بحد أقصى منزلتين عشريتين");
+      }
       if (!Number.isInteger(count) || count < 1 || count > 24) {
         throw new Error("عدد الدفعات يجب أن يكون بين 1 و24");
       }
@@ -329,6 +439,12 @@ function RenewDialog({
           <div className="space-y-1.5">
             <Label>الإيجار السنوي (ريال)</Label>
             <Input inputMode="decimal" value={rent} onChange={(e) => setRent(e.target.value)} />
+            {lease.owner?.decision === "renew_new_rent" && lease.owner.proposed_rent ? (
+              <p className="text-xs text-muted-foreground">
+                الإيجار الذي اقترحه المالك {sar(lease.owner.proposed_rent)} (الحالي{" "}
+                {sar(lease.annual_rent)})
+              </p>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -367,7 +483,8 @@ function RenewDialog({
             {termMonths === "12"
               ? "سيُنشأ عقد سنة كاملة مع جدول دفعاته"
               : `سيُنشأ عقد ${termMonths} أشهر بإيجار يعادل حصته من الإيجار السنوي المُدخل`}
-            ، ويُحوَّل العقد القديم إلى «منتهٍ»، ويصل إشعار للمالك والمستأجر.
+            ، ويُحوَّل العقد القديم إلى «مُجدَّد» وتنتقل وديعته للعقد الجديد (تبقى دفعاته غير
+            المسددة مستحقة)، ويصل إشعار للمالك والمستأجر.
           </p>
         </div>
 
@@ -401,13 +518,13 @@ function BulkRenewDialog({
         l.id,
         {
           startDate: addDays(l.end_date, 1),
-          rent: String(l.annual_rent),
+          rent: String(proposedRent(l)),
           installments: String(l.installments),
         },
       ]),
     ),
   );
-  const [results, setResults] = useState<Record<string, "ok" | "error"> | null>(null);
+  const [results, setResults] = useState<Record<string, true | string> | null>(null);
 
   const setRow = (id: string, patch: Partial<BulkRow>) =>
     setRows((prev) => ({ ...prev, [id]: { ...prev[id]!, ...patch } }));
@@ -416,13 +533,14 @@ function BulkRenewDialog({
     mutationFn: async () => {
       // كل عقد يُجدَّد عبر renew_lease الذرّية نفسها المستخدمة بالتجديد المفرد — لا RPC جماعية
       // جديدة، فتسلسل استدعاءات مستقلة يعني فشل عقد واحد ما يوقف تجديد البقية.
-      const outcome: Record<string, "ok" | "error"> = {};
+      // true = renewed; otherwise the reason it wasn't.
+      const outcome: Record<string, true | string> = {};
       for (const lease of leases) {
         const row = rows[lease.id]!;
-        const annualRent = Number(row.rent || 0);
+        const annualRent = parseAmount(row.rent) ?? 0;
         const count = Number(row.installments || 1);
-        if (!Number.isFinite(annualRent) || annualRent <= 0 || !Number.isInteger(count)) {
-          outcome[lease.id] = "error";
+        if (!annualRent || annualRent <= 0 || !Number.isInteger(count)) {
+          outcome[lease.id] = "إيجار أو عدد دفعات غير صحيح";
           continue;
         }
         // التجديد الجماعي دائمًا بعقد سنة كاملة — من يحتاج مدة أقصر لوحدة بعينها يستخدم "جدّد
@@ -434,13 +552,13 @@ function BulkRenewDialog({
           _installments: count,
           _term_months: 12,
         });
-        outcome[lease.id] = error ? "error" : "ok";
+        outcome[lease.id] = error ? userErrorMessage(error, "فشل") : true;
       }
       return outcome;
     },
     onSuccess: (outcome) => {
       setResults(outcome);
-      const okCount = Object.values(outcome).filter((v) => v === "ok").length;
+      const okCount = Object.values(outcome).filter((v) => v === true).length;
       const errCount = leases.length - okCount;
       if (errCount === 0) toast.success(`تم تجديد ${okCount} عقد بنجاح`);
       else toast.warning(`تم تجديد ${okCount} من ${leases.length} — راجع العقود اللي فشلت`);
@@ -471,11 +589,14 @@ function BulkRenewDialog({
                     {l.tenants?.full_name ?? "—"}
                   </p>
                   {status ? (
-                    <Badge variant={status === "ok" ? "default" : "destructive"}>
-                      {status === "ok" ? "تم التجديد" : "فشل"}
+                    <Badge variant={status === true ? "default" : "destructive"}>
+                      {status === true ? "تم التجديد" : "فشل"}
                     </Badge>
                   ) : null}
                 </div>
+                {typeof status === "string" ? (
+                  <p className="mt-1 text-xs text-destructive">{status}</p>
+                ) : null}
                 <div className="mt-2 grid gap-2 sm:grid-cols-3">
                   <Input
                     type="date"
@@ -715,6 +836,8 @@ function DepositsSection() {
           "id, deposit, deposit_status, deposit_note, status, end_date, tenants(full_name), units(unit_number, properties(name))",
         )
         .gt("deposit", 0)
+        // A renewed lease's deposit moved to the new lease, which is the one to settle.
+        .neq("deposit_status", "transferred")
         .order("end_date");
       if (error) throw error;
       return data as DepositLease[];

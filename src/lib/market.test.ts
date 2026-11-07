@@ -24,6 +24,7 @@ const row = (over: Partial<ListingRow> = {}): ListingRow => ({
   unit_type: "سكني",
   district: "النرجس",
   street: null,
+  city: "الرياض",
   floor_no: null,
   rooms: 3,
   halls: 1,
@@ -176,6 +177,9 @@ describe("titles and similar offers", () => {
       "سكني «الياسمين» للإيجار",
     );
     expect(listingLocation(L({ street: "شارع الأمير" }))).toBe("حي النرجس · شارع الأمير · الرياض");
+    // The unit's own city, never the office's (an office in Riyadh can list a unit in Jeddah).
+    expect(listingLocation(L({ city: "جدة" }))).toBe("حي النرجس · جدة");
+    expect(listingLocation(L({ city: null }))).toBe("حي النرجس");
   });
 
   it("prefers the same district, then the same type, never the offer itself", () => {

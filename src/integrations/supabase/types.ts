@@ -758,10 +758,15 @@ export type Database = {
           deposit_note: string | null;
           deposit_status: string;
           ejar_contract_no: string | null;
+          ejar_mismatch: Json | null;
           ejar_status: string;
           end_date: string;
+          end_note: string | null;
+          ended_at: string | null;
           id: string;
           installments: number;
+          moved_out_on: string | null;
+          owner_id: string | null;
           start_date: string;
           status: string;
           tenant_id: string;
@@ -776,10 +781,15 @@ export type Database = {
           deposit_note?: string | null;
           deposit_status?: string;
           ejar_contract_no?: string | null;
+          ejar_mismatch?: Json | null;
           ejar_status?: string;
           end_date: string;
+          end_note?: string | null;
+          ended_at?: string | null;
           id?: string;
           installments?: number;
+          moved_out_on?: string | null;
+          owner_id?: string | null;
           start_date: string;
           status?: string;
           tenant_id: string;
@@ -794,10 +804,15 @@ export type Database = {
           deposit_note?: string | null;
           deposit_status?: string;
           ejar_contract_no?: string | null;
+          ejar_mismatch?: Json | null;
           ejar_status?: string;
           end_date?: string;
+          end_note?: string | null;
+          ended_at?: string | null;
           id?: string;
           installments?: number;
+          moved_out_on?: string | null;
+          owner_id?: string | null;
           start_date?: string;
           status?: string;
           tenant_id?: string;
@@ -1022,8 +1037,11 @@ export type Database = {
           org_id: string | null;
           paid_at: string | null;
           period_days: number;
+          refund_reason: string | null;
+          refunded_at: string | null;
           status: string;
-          unit_id: string;
+          unit_id: string | null;
+          unit_label: string | null;
         };
         Insert: {
           amount_halalas?: number;
@@ -1037,8 +1055,11 @@ export type Database = {
           org_id?: string | null;
           paid_at?: string | null;
           period_days?: number;
+          refund_reason?: string | null;
+          refunded_at?: string | null;
           status?: string;
-          unit_id: string;
+          unit_id?: string | null;
+          unit_label?: string | null;
         };
         Update: {
           amount_halalas?: number;
@@ -1052,8 +1073,11 @@ export type Database = {
           org_id?: string | null;
           paid_at?: string | null;
           period_days?: number;
+          refund_reason?: string | null;
+          refunded_at?: string | null;
           status?: string;
-          unit_id?: string;
+          unit_id?: string | null;
+          unit_label?: string | null;
         };
         Relationships: [
           {
@@ -1440,6 +1464,7 @@ export type Database = {
           created_at: string;
           id: string;
           kind: string;
+          link: string | null;
           org_id: string | null;
           read_at: string | null;
           related_id: string | null;
@@ -1453,6 +1478,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           kind?: string;
+          link?: string | null;
           org_id?: string | null;
           read_at?: string | null;
           related_id?: string | null;
@@ -1466,6 +1492,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           kind?: string;
+          link?: string | null;
           org_id?: string | null;
           read_at?: string | null;
           related_id?: string | null;
@@ -1973,9 +2000,101 @@ export type Database = {
           },
         ];
       };
+      owner_rent_requests: {
+        Row: {
+          created_at: string;
+          current_rent: number;
+          handled_at: string | null;
+          handled_by: string | null;
+          id: string;
+          note: string | null;
+          org_id: string;
+          owner_id: string;
+          reply: string | null;
+          requested_rent: number;
+          status: string;
+          unit_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          current_rent: number;
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          note?: string | null;
+          org_id: string;
+          owner_id: string;
+          reply?: string | null;
+          requested_rent: number;
+          status?: string;
+          unit_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          current_rent?: number;
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          note?: string | null;
+          org_id?: string;
+          owner_id?: string;
+          reply?: string | null;
+          requested_rent?: number;
+          status?: string;
+          unit_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "owner_rent_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       payments: {
         Row: {
           amount: number;
+          amount_paid: number;
           collected_by: string | null;
           created_at: string;
           due_date: string;
@@ -1987,11 +2106,13 @@ export type Database = {
           reference: string | null;
           status: string;
           transfer_reference: string | null;
+          transfer_rejected_note: string | null;
           transfer_submitted_at: string | null;
           updated_at: string;
         };
         Insert: {
           amount?: number;
+          amount_paid?: number;
           collected_by?: string | null;
           created_at?: string;
           due_date: string;
@@ -2003,11 +2124,13 @@ export type Database = {
           reference?: string | null;
           status?: string;
           transfer_reference?: string | null;
+          transfer_rejected_note?: string | null;
           transfer_submitted_at?: string | null;
           updated_at?: string;
         };
         Update: {
           amount?: number;
+          amount_paid?: number;
           collected_by?: string | null;
           created_at?: string;
           due_date?: string;
@@ -2019,6 +2142,7 @@ export type Database = {
           reference?: string | null;
           status?: string;
           transfer_reference?: string | null;
+          transfer_rejected_note?: string | null;
           transfer_submitted_at?: string | null;
           updated_at?: string;
         };
@@ -2996,6 +3120,7 @@ export type Database = {
           market_listed: boolean;
           market_listed_at: string | null;
           market_note: string | null;
+          market_org_id: string | null;
           market_paid_until: string | null;
           notes: string | null;
           owner_id: string | null;
@@ -3039,6 +3164,7 @@ export type Database = {
           market_listed?: boolean;
           market_listed_at?: string | null;
           market_note?: string | null;
+          market_org_id?: string | null;
           market_paid_until?: string | null;
           notes?: string | null;
           owner_id?: string | null;
@@ -3082,6 +3208,7 @@ export type Database = {
           market_listed?: boolean;
           market_listed_at?: string | null;
           market_note?: string | null;
+          market_org_id?: string | null;
           market_paid_until?: string | null;
           notes?: string | null;
           owner_id?: string | null;
@@ -3101,6 +3228,34 @@ export type Database = {
           water_meter_no?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "units_market_org_id_fkey";
+            columns: ["market_org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "units_market_org_id_fkey";
+            columns: ["market_org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "units_market_org_id_fkey";
+            columns: ["market_org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "units_market_org_id_fkey";
+            columns: ["market_org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "units_property_id_fkey";
             columns: ["property_id"];
@@ -3456,6 +3611,7 @@ export type Database = {
           annual_rent: number | null;
           area: number | null;
           bathrooms: number | null;
+          city: string | null;
           company_name: string | null;
           contact_phone: string | null;
           contact_whatsapp: string | null;
@@ -3539,9 +3695,42 @@ export type Database = {
         Args: { _action: string; _max: number; _window_seconds: number };
         Returns: boolean;
       };
+      correct_lease: {
+        Args: {
+          _annual_rent: number;
+          _deposit: number;
+          _installments: number;
+          _lease_id: string;
+          _start_date: string;
+          _term_months: number;
+        };
+        Returns: undefined;
+      };
+      create_lease: {
+        Args: {
+          _annual_rent: number;
+          _deposit?: number;
+          _installments: number;
+          _new_tenant: Json;
+          _start_date: string;
+          _tenant_id: string;
+          _term_months: number;
+          _unit_id: string;
+        };
+        Returns: string;
+      };
       decay_vacant_unit_prices: { Args: never; Returns: number };
       decline_hq_invitation: { Args: { _id: string }; Returns: undefined };
       decline_invitation: { Args: { _id: string }; Returns: undefined };
+      deed_number_in_use: {
+        Args: {
+          _deed: string;
+          _kind: string;
+          _property_id?: string;
+          _unit_id?: string;
+        };
+        Returns: string;
+      };
       effective_maintenance_cap: {
         Args: { _org_id: string; _unit_id: string };
         Returns: number;
@@ -3552,6 +3741,16 @@ export type Database = {
           cap: number;
           unit_id: string;
         }[];
+      };
+      end_lapsed_management_agreements: { Args: never; Returns: number };
+      end_lease: {
+        Args: {
+          _lease_id: string;
+          _move_out: string;
+          _note?: string;
+          _reason: string;
+        };
+        Returns: undefined;
       };
       expire_paid_market_listings: { Args: never; Returns: number };
       has_role: {
@@ -3708,6 +3907,16 @@ export type Database = {
       my_referral_code: { Args: never; Returns: string };
       next_invoice_number: { Args: { _year: number }; Returns: string };
       notify_expiring_leases: { Args: { _days?: number }; Returns: number };
+      notify_lease_tenant: {
+        Args: {
+          _body: string;
+          _lease_id: string;
+          _link?: string;
+          _title: string;
+        };
+        Returns: undefined;
+      };
+      notify_overdue_lease_decisions: { Args: never; Returns: number };
       notify_unit: {
         Args: { _body: string; _kind: string; _title: string; _unit_id: string };
         Returns: undefined;
@@ -3728,6 +3937,7 @@ export type Database = {
           created_at: string;
           end_date: string;
           id: string;
+          live: boolean;
           maintenance_cap: number;
           notice_period_days: number;
           office_note: string;
@@ -3751,6 +3961,7 @@ export type Database = {
         Args: { _accept: boolean; _id: string };
         Returns: undefined;
       };
+      office_finance_summary: { Args: never; Returns: Json };
       office_invitations: {
         Args: never;
         Returns: {
@@ -3777,6 +3988,36 @@ export type Database = {
           user_id: string;
         }[];
       };
+      office_payments: {
+        Args: {
+          _from?: string;
+          _limit?: number;
+          _offset?: number;
+          _order?: string;
+          _search?: string;
+          _status?: string;
+          _to?: string;
+        };
+        Returns: {
+          amount: number;
+          amount_paid: number;
+          due_date: string;
+          id: string;
+          last_reminded_at: string;
+          lease_id: string;
+          method: string;
+          paid_date: string;
+          property_name: string;
+          status: string;
+          tenant_name: string;
+          tenant_phone: string;
+          tenant_user_id: string;
+          total_count: number;
+          transfer_reference: string;
+          transfer_submitted_at: string;
+          unit_number: string;
+        }[];
+      };
       office_people: {
         Args: never;
         Returns: {
@@ -3793,6 +4034,7 @@ export type Database = {
       office_respond_agreement: {
         Args: {
           _agreement_id: string;
+          _clear_maintenance_cap?: boolean;
           _commission_value?: number;
           _decision: string;
           _maintenance_cap?: number;
@@ -3831,6 +4073,14 @@ export type Database = {
       org_of: { Args: { _id: string; _table: string }; Returns: string };
       org_user_ids: { Args: { _org: string }; Returns: string[] };
       orgs_of_user: { Args: { _uid: string }; Returns: string[] };
+      owner_cancel_agreement_request: {
+        Args: { _agreement_id: string };
+        Returns: undefined;
+      };
+      owner_cancel_rent_request: {
+        Args: { _request_id: string };
+        Returns: undefined;
+      };
       owner_cashflow_forecast: {
         Args: never;
         Returns: {
@@ -3929,6 +4179,10 @@ export type Database = {
           tenant_decision: string;
         }[];
       };
+      owner_request_rent_change: {
+        Args: { _new_rent: number; _note?: string; _unit_id: string };
+        Returns: string;
+      };
       owner_submit_renewal_decision: {
         Args: {
           _decision: string;
@@ -3963,9 +4217,23 @@ export type Database = {
           peer_units: number;
           photos_count: number;
           publicly_listed: boolean;
+          rent_request_at: string;
+          rent_request_id: string;
+          rent_request_rent: number;
+          rent_request_reply: string;
+          rent_request_status: string;
           unit_id: string;
           vacant_since: string;
         }[];
+      };
+      record_payment: {
+        Args: {
+          _amount: number;
+          _method: string;
+          _paid_date: string;
+          _payment_id: string;
+        };
+        Returns: Json;
       };
       register_office: {
         Args: {
@@ -3976,6 +4244,10 @@ export type Database = {
           _phone: string;
         };
         Returns: string;
+      };
+      reject_transfer_notice: {
+        Args: { _payment_id: string; _reason: string };
+        Returns: undefined;
       };
       remove_hq_admin: { Args: { _user_id: string }; Returns: undefined };
       renew_lease: {
@@ -4011,7 +4283,15 @@ export type Database = {
         Args: { _kind: string; _office_code: string };
         Returns: string;
       };
+      request_payment_grace: {
+        Args: { _payment_id: string };
+        Returns: undefined;
+      };
       revoke_hq_invitation: { Args: { _id: string }; Returns: undefined };
+      revoke_listing_payment: {
+        Args: { _payment_id: string; _status: string };
+        Returns: boolean;
+      };
       set_legal_page: {
         Args: { _body: string; _slug: string; _title: string };
         Returns: undefined;
@@ -4034,6 +4314,10 @@ export type Database = {
         }[];
       };
       smart_payment_reminders: { Args: never; Returns: number };
+      staff_resolve_rent_request: {
+        Args: { _reply?: string; _request_id: string; _status: string };
+        Returns: undefined;
+      };
       start_direct_conversation: { Args: { _code: string }; Returns: string };
       submit_feedback: {
         Args: { _category: string; _message: string; _rating: number };
@@ -4048,10 +4332,22 @@ export type Database = {
         }[];
       };
       tenant_overdue_count: { Args: { _tenant_id: string }; Returns: number };
+      unit_management: {
+        Args: { _unit_ids: string[] };
+        Returns: {
+          leasing: boolean;
+          office_id: string;
+          office_name: string;
+          pricing: boolean;
+          registered: boolean;
+          unit_id: string;
+        }[];
+      };
       update_agreement_permissions: {
         Args: { _agreement_id: string; _permissions: string[] };
         Returns: undefined;
       };
+      void_lease: { Args: { _lease_id: string }; Returns: undefined };
     };
     Enums: {
       app_role: "admin" | "staff" | "owner" | "tenant" | "technician" | "super_admin";

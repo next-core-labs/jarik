@@ -242,7 +242,10 @@ export const submitOwnerRenewalDecision = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** المالك يطلب من المكتب تعديل الإيجار المطلوب لوحدة شاغرة (المكتب هو من يعدّل السعر فعليًا). */
+/**
+ * المالك يطلب من المكتب تعديل الإيجار المطلوب لوحدة شاغرة (المكتب هو من يعدّل السعر فعليًا).
+ * يُحفظ الطلب بحالته — طلب مفتوح واحد لكل وحدة — ويصل لموظفي مكتب الوحدة كإشعار.
+ */
 export const requestVacantRentChange = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { unitId: string; newRent: number; note?: string | undefined }) =>
@@ -256,22 +259,32 @@ export const requestVacantRentChange = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as ServerCtx;
-    // owner_units() lists exactly the caller's units (unit or property owner).
-    const { data: units, error } = await ctx.supabase.rpc("owner_units");
-    if (error) throw new Error("تعذّر التحقق من ملكية الوحدة");
-    const unit = (units ?? []).find((u) => u.unit_id === data.unitId);
-    if (!unit) throw new Error("هذه الوحدة ليست من وحداتك");
-    if (unit.status !== "vacant") throw new Error("الوحدة ليست شاغرة");
+    // Ownership, "still vacant", the managing office and "one open request per unit" are enforced
+    // by the SECURITY DEFINER function, called as the owner.
+    const { data: id, error } = await ctx.supabase.rpc("owner_request_rent_change", {
+      _unit_id: data.unitId,
+      _new_rent: data.newRent,
+      ...(data.note ? { _note: data.note } : {}),
+    });
+    if (error || !id) throw new Error(error?.message || "تعذّر إرسال الطلب");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { notifyStaff } = await import("@/lib/notify.server");
-    const { orgOf } = await import("@/lib/org.server");
-    await notifyStaff(supabaseAdmin, await orgOf(supabaseAdmin, "units", data.unitId), {
-      title: `طلب المالك تعديل إيجار ${unit.property_name} · وحدة ${unit.unit_number}`,
-      body: `من ${Number(unit.annual_rent)} إلى ${Math.round(data.newRent)} ر.س سنويًا${data.note ? ` — ${data.note}` : ""}`,
+    const { data: req } = await supabaseAdmin
+      .from("owner_rent_requests")
+      .select("org_id, current_rent, requested_rent, units(unit_number, properties(name))")
+      .eq("id", id)
+      .single();
+    if (!req) return { ok: true };
+    const where = req.units
+      ? `${req.units.properties?.name ?? ""} · وحدة ${req.units.unit_number}`
+      : "وحدة شاغرة";
+    await notifyStaff(supabaseAdmin, req.org_id, {
+      title: `طلب المالك تعديل إيجار ${where}`,
+      body: `من ${Number(req.current_rent)} إلى ${Number(req.requested_rent)} ر.س سنويًا${data.note ? ` — ${data.note}` : ""}`,
       kind: "unit",
-      related_table: "units",
-      related_id: data.unitId,
+      related_table: "owner_rent_requests",
+      related_id: id,
     });
     return { ok: true };
   });

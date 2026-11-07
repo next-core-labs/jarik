@@ -26,6 +26,8 @@ export type OwnerUnit = {
 export type RecentPayment = {
   id: string;
   amount: number;
+  /** Collected so far (migration 20261107120000); a 'partial' installment is part-paid. */
+  amount_paid?: number | null;
   due_date: string;
   paid_date: string | null;
   status: string;
@@ -118,6 +120,12 @@ export type VacancyRow = {
   photos_count: number;
   peer_avg_rent: number | null;
   peer_units: number;
+  // The unit's latest rent-change request (open, or answered in the last 30 days); null if none.
+  rent_request_id?: string | null;
+  rent_request_status?: string | null;
+  rent_request_rent?: number | null;
+  rent_request_at?: string | null;
+  rent_request_reply?: string | null;
 };
 
 export type OwnerDashboardData = {
@@ -182,7 +190,11 @@ export async function loadOwnerDashboard(): Promise<OwnerDashboardData> {
       collected_12m: Number(f.collected_12m ?? 0),
       expenses_12m: Number(f.expenses_12m ?? 0),
       months: (f.months ?? []).map((m) => ({ month: m.month, collected: Number(m.collected) })),
-      recent: f.recent ?? [],
+      recent: (f.recent ?? []).map((p) => ({
+        ...p,
+        amount: Number(p.amount),
+        amount_paid: p.amount_paid == null ? null : Number(p.amount_paid),
+      })),
     },
     approvals: (approvals.data ?? []) as unknown as Approval[],
     returns: (returns.data ?? []) as unknown as PropertyReturn[],
@@ -210,6 +222,7 @@ export async function loadOwnerDashboard(): Promise<OwnerDashboardData> {
           photos_count: Number(v.photos_count),
           peer_units: Number(v.peer_units),
           peer_avg_rent: v.peer_avg_rent === null ? null : Number(v.peer_avg_rent),
+          rent_request_rent: v.rent_request_rent === null ? null : Number(v.rent_request_rent),
         })),
     autoApproveLimit:
       prefs.data?.auto_approve_limit == null ? null : Number(prefs.data.auto_approve_limit),
@@ -315,6 +328,16 @@ export type VacancyInsight = {
   /** Asking vs peers, in %; positive = above. Null without a peer average. */
   deltaPct: number | null;
   advice: RentAdvice;
+  /** The owner's latest request to the office to change this unit's rent, if any. */
+  rentRequest: RentRequestStatus | null;
+};
+
+export type RentRequestStatus = {
+  id: string;
+  status: "open" | "handled" | "declined";
+  rent: number;
+  at: string;
+  reply: string | null;
 };
 
 /** Asking more than this far above similar units, vacant this long, is worth lowering. */
@@ -608,11 +631,36 @@ function vacancyInsights(units: OwnerUnit[], rows: VacancyRow[], today: string):
           peerUnits: v?.peer_units ?? 0,
           deltaPct: peerAvg && asking ? Math.round(((asking - peerAvg) / peerAvg) * 100) : null,
           advice: rentAdvice(asking, peerAvg, daysVacant),
+          rentRequest: rentRequestOf(v),
         };
       })
       // Longest-vacant first: that is where the money is being lost.
       .sort((a, b) => (b.daysVacant ?? -1) - (a.daysVacant ?? -1))
   );
+}
+
+function rentRequestOf(v: VacancyRow | undefined): RentRequestStatus | null {
+  const status = v?.rent_request_status;
+  if (!v?.rent_request_id || !v.rent_request_at) return null;
+  if (status !== "open" && status !== "handled" && status !== "declined") return null;
+  return {
+    id: v.rent_request_id,
+    status,
+    rent: Number(v.rent_request_rent ?? 0),
+    at: v.rent_request_at,
+    reply: v.rent_request_reply ?? null,
+  };
+}
+
+/**
+ * What has been paid on an installment and what is still owed. A paid installment owes nothing; an
+ * open one owes amount − amount_paid (rows from before amount_paid count as nothing paid).
+ */
+export function paymentBalance(p: Pick<RecentPayment, "amount" | "amount_paid" | "status">) {
+  const amount = Number(p.amount);
+  if (p.status === "paid") return { paid: amount, remaining: 0, partial: false };
+  const paid = Math.min(amount, Math.max(0, Number(p.amount_paid ?? 0)));
+  return { paid, remaining: amount - paid, partial: p.status === "partial" || paid > 0 };
 }
 
 /** "2026-10" plus n months → "2027-02". */

@@ -27,6 +27,13 @@ describe("marketState", () => {
     expect(marketState({ market_listed: true, market_paid_until: past }, now).kind).toBe("expired");
   });
 
+  it("does not count another office's paid days for the viewing office", () => {
+    const unit = { market_listed: true, market_paid_until: future, market_org_id: "office-a" };
+    expect(marketState(unit, now, "office-a").kind).toBe("paid");
+    expect(marketState(unit, now, "office-b").kind).toBe("unlisted");
+    expect(marketState(unit, now).kind).toBe("paid");
+  });
+
   it("asks for payment only outside a paid period or free listing", () => {
     expect(canListWithoutPaying({ kind: "paid", until: new Date(future) })).toBe(true);
     expect(canListWithoutPaying({ kind: "free" })).toBe(true);

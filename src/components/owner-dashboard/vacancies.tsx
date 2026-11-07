@@ -1,6 +1,18 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { DoorOpen, ExternalLink, EyeOff, ImageOff, TrendingDown, TrendingUp } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  CheckCircle2,
+  Clock,
+  DoorOpen,
+  ExternalLink,
+  EyeOff,
+  ImageOff,
+  TrendingDown,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,10 +25,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { arNum, arPct, daysLabel, sar } from "@/lib/format";
+import { supabase } from "@/integrations/supabase/client";
+import { userErrorMessage } from "@/lib/auth-errors";
+import { arNum, arPct, daysLabel, sar, shortDate } from "@/lib/format";
 import { toLatinDigits } from "@/lib/saudi-id";
 import { cn } from "@/lib/utils";
-import type { VacancyInsight } from "@/components/owner-dashboard/model";
+import type { RentRequestStatus, VacancyInsight } from "@/components/owner-dashboard/model";
 import { Panel } from "@/components/owner-dashboard/parts";
 
 export type RentRequest = { unitId: string; newRent: number; note?: string | undefined };
@@ -34,6 +48,20 @@ export function Vacancies({
   onRequestRent: (r: RentRequest) => Promise<unknown>;
 }) {
   const [dialog, setDialog] = useState<VacancyInsight | null>(null);
+  const queryClient = useQueryClient();
+  const withdraw = useMutation({
+    mutationFn: async (requestId: string) => {
+      const { error } = await supabase.rpc("owner_cancel_rent_request", {
+        _request_id: requestId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("سحبت طلب تعديل الإيجار");
+      queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر سحب الطلب")),
+  });
   if (vacancies.length === 0) return null;
 
   return (
@@ -51,7 +79,13 @@ export function Vacancies({
       </div>
       <ul className="mt-3 divide-y divide-border">
         {vacancies.map((v) => (
-          <VacancyRow key={v.unit.unit_id} v={v} onAsk={() => setDialog(v)} />
+          <VacancyRow
+            key={v.unit.unit_id}
+            v={v}
+            onAsk={() => setDialog(v)}
+            withdrawing={withdraw.isPending && withdraw.variables === v.rentRequest?.id}
+            onWithdraw={(id) => withdraw.mutate(id)}
+          />
         ))}
       </ul>
 
@@ -63,6 +97,8 @@ export function Vacancies({
           try {
             await onRequestRent(r);
             setDialog(null);
+            // Show the new request's status in the row.
+            queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
           } catch {
             // The page shows the error; keep the dialog so nothing typed is lost.
           }
@@ -72,8 +108,19 @@ export function Vacancies({
   );
 }
 
-function VacancyRow({ v, onAsk }: { v: VacancyInsight; onAsk: () => void }) {
+function VacancyRow({
+  v,
+  onAsk,
+  withdrawing,
+  onWithdraw,
+}: {
+  v: VacancyInsight;
+  onAsk: () => void;
+  withdrawing: boolean;
+  onWithdraw: (requestId: string) => void;
+}) {
   const u = v.unit;
+  const open = v.rentRequest?.status === "open";
   const asking = Number(u.annual_rent);
   return (
     <li className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_auto] md:items-center">
@@ -117,6 +164,7 @@ function VacancyRow({ v, onAsk }: { v: VacancyInsight; onAsk: () => void }) {
           ) : null}
         </p>
         <Advice v={v} />
+        {v.rentRequest ? <RequestStatus r={v.rentRequest} /> : null}
       </div>
 
       <div className="flex flex-wrap gap-2 md:justify-end">
@@ -141,7 +189,18 @@ function VacancyRow({ v, onAsk }: { v: VacancyInsight; onAsk: () => void }) {
                 : "غير معروضة للعموم"}
           </span>
         )}
-        {v.advice.kind === "lower" || v.advice.kind === "raise" ? (
+        {open ? (
+          // One open request per unit: the office answers it (or the owner withdraws it) first.
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            disabled={withdrawing}
+            onClick={() => onWithdraw(v.rentRequest!.id)}
+          >
+            {withdrawing ? "جارٍ السحب…" : "اسحب الطلب"}
+          </Button>
+        ) : v.advice.kind === "lower" || v.advice.kind === "raise" ? (
           <Button size="sm" onClick={onAsk}>
             اطلب التعديل
           </Button>
@@ -179,6 +238,24 @@ function Advice({ v }: { v: VacancyInsight }) {
         ? "سعرك ضمن نطاق الوحدات المماثلة."
         : "لا توجد وحدات مماثلة كافية في الحي للمقارنة."}
     </p>
+  );
+}
+
+/** Where the owner's request to change this unit's rent stands with the office. */
+function RequestStatus({ r }: { r: RentRequestStatus }) {
+  const Icon = r.status === "open" ? Clock : r.status === "handled" ? CheckCircle2 : XCircle;
+  return (
+    <div className="mt-1 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5">
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        {r.status === "open"
+          ? `طلبت ${sar(r.rent)} في ${shortDate(r.at)} — بانتظار رد المكتب`
+          : r.status === "handled"
+            ? `عالج المكتب طلبك تعديل الإيجار إلى ${sar(r.rent)}`
+            : `اعتذر المكتب عن طلبك تعديل الإيجار إلى ${sar(r.rent)}`}
+      </p>
+      {r.reply ? <p className="mt-0.5">رد المكتب: {r.reply}</p> : null}
+    </div>
   );
 }
 

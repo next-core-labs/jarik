@@ -7,7 +7,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { classifyMaintenancePriority } from "@/lib/maintenance-triage";
 import { getMyOrgId, requireStaff, type ServerCtx } from "@/lib/server-context";
 import { aiChatUrl, aiKey, aiModel } from "@/lib/ai.server";
-import { todayRiyadh } from "@/lib/dates";
+import { addDays, todayRiyadh } from "@/lib/dates";
 
 /** تشغيل التذكير الذكي الآن (يعمل تلقائيًا كل صباح 11 بتوقيت السعودية أيضًا). */
 export const runSmartReminders = createServerFn({ method: "POST" })
@@ -95,7 +95,7 @@ export const smartScheduleMaintenance = createServerFn({ method: "POST" })
 
     const { data: req, error } = await ctx.supabase
       .from("maintenance_requests")
-      .select("id, title, priority, status, unit_id, units(property_id)")
+      .select("id, title, priority, status, approval_status, unit_id, units(property_id)")
       .eq("id", data.requestId)
       .maybeSingle();
     if (error || !req) throw new Error("لم نجد طلب الصيانة");
@@ -141,7 +141,13 @@ export const smartScheduleMaintenance = createServerFn({ method: "POST" })
       .update({
         technician_id: techId,
         scheduled_at: scheduledAt,
-        status: req.status === "new" ? "in_progress" : req.status,
+        // Work can't start while the owner's approval is pending or was refused.
+        status:
+          req.status === "new" &&
+          req.approval_status !== "pending" &&
+          req.approval_status !== "rejected"
+            ? "in_progress"
+            : req.status,
       })
       .eq("id", data.requestId);
     if (upErr) throw upErr;
@@ -228,6 +234,8 @@ export const submitUnitRequest = createServerFn({ method: "POST" })
         notes: z.string().max(600).optional(),
         /** The office whose listing the visitor is looking at (defaults to the oldest listed office). */
         officeId: z.string().uuid().optional(),
+        /** The listing the visitor is looking at; when given, its office is resolved here, not sent. */
+        unitId: z.guid().optional(),
         /** Is the visitor renting or buying? */
         purpose: z.enum(["rent", "sale"]).default("rent"),
         /** Referral code of an existing owner/tenant, if the visitor was referred by one. */
@@ -240,8 +248,25 @@ export const submitUnitRequest = createServerFn({ method: "POST" })
     const { notifyStaff } = await import("@/lib/notify.server");
     const { resolvePublicOffice } = await import("@/lib/org.server");
 
-    // The request goes to the office being viewed (if it is publicly listed and verified).
-    const orgId = await resolvePublicOffice(supabaseAdmin, data.officeId ?? null);
+    // From a listing page the request goes to the office publishing that listing, read from the public
+    // view (never from the browser); otherwise to the office being viewed, if listed and verified.
+    let orgId: string | null;
+    let unitId: string | null = null;
+    if (data.unitId) {
+      const { data: listing, error: listingError } = await supabaseAdmin
+        .from("vacant_units_public")
+        .select("id, office_id")
+        .eq("id", data.unitId)
+        .maybeSingle();
+      if (listingError) throw new Error("تعذّر إرسال الطلب — حاول مرة أخرى");
+      if (!listing?.id || !listing.office_id) {
+        throw new Error("هذا العرض لم يعد متاحًا — تصفّح العروض الأخرى في السوق");
+      }
+      orgId = listing.office_id;
+      unitId = listing.id;
+    } else {
+      orgId = await resolvePublicOffice(supabaseAdmin, data.officeId ?? null);
+    }
     if (!orgId) throw new Error("لا توجد مكاتب متاحة لاستقبال الطلب حاليًا");
 
     // Every accepted request notifies all staff, so throttle repeat submissions from one number —
@@ -263,6 +288,7 @@ export const submitUnitRequest = createServerFn({ method: "POST" })
       .from("unit_requests")
       .insert({
         org_id: orgId,
+        unit_id: unitId,
         full_name: data.fullName,
         phone: data.phone,
         city: data.city ?? null,
@@ -375,6 +401,9 @@ export const trackSiteVisit = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** Renewal decisions open this many days before a lease ends (same as guard_renewal_request). */
+const RENEWAL_WINDOW_DAYS = 90;
+
 /** المستأجر يوافق على تجديد عقده أو يطلب المغادرة. */
 export const submitRenewalDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -391,11 +420,16 @@ export const submitRenewalDecision = createServerFn({ method: "POST" })
     const ctx = context as unknown as ServerCtx;
     const { data: lease, error } = await ctx.supabase
       .from("leases")
-      .select("id, tenant_id, unit_id, tenants!inner(user_id)")
+      .select("id, tenant_id, unit_id, status, end_date, tenants!inner(user_id)")
       .eq("id", data.leaseId)
       .maybeSingle();
     if (error || !lease || lease.tenants?.user_id !== ctx.userId) {
       throw new Error("هذا العقد ليس في حسابك");
+    }
+    // The database enforces both as well (guard_renewal_request); these give the clear message.
+    if (lease.status !== "active") throw new Error("هذا العقد ليس ساريًا");
+    if (lease.end_date.slice(0, 10) > addDays(todayRiyadh(), RENEWAL_WINDOW_DAYS)) {
+      throw new Error("خيار التجديد أو الإخلاء يُفتح قبل ٩٠ يومًا من نهاية العقد");
     }
 
     // One open request per lease: each request notifies all staff.
@@ -431,13 +465,15 @@ export const submitRenewalDecision = createServerFn({ method: "POST" })
 /** الموظف يسوّي وديعة التأمين عند خروج المستأجر (مرة واحدة فقط). */
 /**
  * A deposit is settled once the tenant is leaving: the lease ended or was terminated, or it is
- * still marked active but its end date has arrived. Never while the lease is running.
+ * still marked active but its end date has arrived. Never while the lease is running. A renewed
+ * lease's deposit was transferred to the new lease (deposit_status 'transferred'), so it is never
+ * 'held' here.
  */
 export function depositSettleable(
   lease: { status: string; end_date: string },
   today: string = todayRiyadh(),
 ): boolean {
-  if (lease.status === "expired" || lease.status === "terminated") return true;
+  if (["ended", "terminated", "expired"].includes(lease.status)) return true;
   return lease.status === "active" && lease.end_date.slice(0, 10) <= today;
 }
 
@@ -470,7 +506,7 @@ export const settleDeposit = createServerFn({ method: "POST" })
 
     const { data: lease, error } = await ctx.supabase
       .from("leases")
-      .select("id, unit_id, deposit, deposit_status, status, end_date")
+      .select("id, deposit, deposit_status, status, end_date")
       .eq("id", data.leaseId)
       .maybeSingle();
     if (error || !lease) throw new Error("لم نجد العقد");
@@ -496,18 +532,17 @@ export const settleDeposit = createServerFn({ method: "POST" })
     if (upErr) throw upErr;
     if (!settled || settled.length === 0) throw new Error("سبقت تسوية هذه الوديعة");
 
-    if (lease.unit_id) {
-      const { error: notifyErr } = await ctx.supabase.rpc("notify_unit_staff", {
-        _unit_id: lease.unit_id,
-        _title: data.status === "refunded" ? "تم استرداد وديعة التأمين" : "تم تسوية وديعة التأمين",
-        _body:
-          data.status === "refunded"
-            ? `الوديعة ${riyals(deposit)} — استُردت كاملة${note ? ` · ${note}` : ""}`
-            : `الوديعة ${riyals(deposit)} — ${note}`,
-        _kind: "lease",
-      });
-      if (notifyErr) console.error("[settleDeposit] notify_unit_staff failed:", notifyErr.message);
-    }
+    // The notice goes to this lease's tenant, not to whoever rents the unit now.
+    const { error: notifyErr } = await ctx.supabase.rpc("notify_lease_tenant", {
+      _lease_id: lease.id,
+      _title: data.status === "refunded" ? "تم استرداد وديعة التأمين" : "تم تسوية وديعة التأمين",
+      _body:
+        data.status === "refunded"
+          ? `الوديعة ${riyals(deposit)} — استُردت كاملة${note ? ` · ${note}` : ""}`
+          : `الوديعة ${riyals(deposit)} — ${note}`,
+      _link: "/tenant-dashboard#contract",
+    });
+    if (notifyErr) console.error("[settleDeposit] notify_lease_tenant failed:", notifyErr.message);
     return { ok: true };
   });
 

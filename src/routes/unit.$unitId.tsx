@@ -177,7 +177,7 @@ export const Route = createFileRoute("/unit/$unitId")({
       listingLocation(l) || null,
     ].filter(Boolean);
     const description = `${facts.join(" · ")}. ${l.office.name}.`;
-    // The address the page itself shows (listingLocation): street and district, and the city.
+    // The address the page itself shows (listingLocation): street and district, and the unit's city.
     const streetAddress = [l.street, l.district ? `حي ${l.district}` : null]
       .filter(Boolean)
       .join("، ");
@@ -213,12 +213,12 @@ export const Route = createFileRoute("/unit/$unitId")({
                 ? { floorSize: { "@type": "QuantitativeValue", value: l.area, unitCode: "MTK" } }
                 : {}),
               ...(image ? { image: mediaUrl(image) } : {}),
-              ...(streetAddress || l.office.city
+              ...(streetAddress || l.city
                 ? {
                     address: {
                       "@type": "PostalAddress",
                       ...(streetAddress ? { streetAddress } : {}),
-                      ...(l.office.city ? { addressLocality: l.office.city } : {}),
+                      ...(l.city ? { addressLocality: l.city } : {}),
                       addressCountry: "SA",
                     },
                   }
@@ -551,8 +551,9 @@ function UnitPublic() {
               <UnitRequestForm
                 unitType={l.unitType}
                 district={l.district}
-                city={l.office.city}
+                city={l.city}
                 officeId={l.office.id}
+                unitId={l.id}
                 officeName={l.office.name}
                 purpose={l.purpose}
                 locale={locale}
