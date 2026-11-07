@@ -45,6 +45,13 @@ export const Route = createFileRoute("/_authenticated/maintenance")({
   component: Maintenance,
 });
 
+/** An open job whose cost waits on the owner (or was refused) can't start or be finished — same
+ * rule as the database (guard_maintenance_columns). */
+const awaitsOwner = (m: { status: string; approval_status: string }) =>
+  m.status !== "done" &&
+  m.status !== "cancelled" &&
+  (m.approval_status === "pending" || m.approval_status === "rejected");
+
 const columns = [
   { key: "new", title: "جديد" },
   { key: "in_progress", title: "جاري" },
@@ -175,32 +182,47 @@ function Maintenance() {
       toast.error(userErrorMessage(e, "تعذّر التحديث — الصلاحية للموظف أو الفني المسند")),
   });
 
+  // Only the cost: the database derives approval from it (guard_maintenance_columns) — above the
+  // unit's cap it goes back to the owner, and an owner's approval or rejection is kept.
   const saveCost = useMutation({
-    mutationFn: async ({
-      id,
-      cost,
-      hasOwner,
-      cap,
-    }: {
-      id: string;
-      cost: number;
-      hasOwner: boolean;
-      cap: number;
-    }) => {
+    mutationFn: async ({ id, cost }: { id: string; cost: number }) => {
+      const { data: saved, error } = await supabase
+        .from("maintenance_requests")
+        .update({ cost })
+        .eq("id", id)
+        .select("approval_status")
+        .maybeSingle();
+      if (error) throw error;
+      if (!saved) throw new Error("لم يُحفظ شيء — حدّث الصفحة وحاول مجددًا");
+      return saved.approval_status;
+    },
+    onSuccess: (approval) => {
+      toast.success(
+        approval === "pending"
+          ? "حُفظت التكلفة — تجاوزت الحد فأُرسلت للمالك للموافقة"
+          : approval === "rejected"
+            ? "حُفظت التكلفة — ما زال الطلب مرفوضًا من المالك، اطلب موافقته مجددًا"
+            : "حُفظت التكلفة",
+      );
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ التكلفة")),
+  });
+
+  // After a rejection the office can ask the owner again (e.g. with a revised cost).
+  const askOwnerAgain = useMutation({
+    mutationFn: async (id: string) => {
       const { error } = await supabase
         .from("maintenance_requests")
-        .update({
-          cost,
-          approval_status: cost > cap && hasOwner ? "pending" : "not_required",
-        })
+        .update({ approval_status: "pending" })
         .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("حُفظت التكلفة — إن تجاوزت الحد فستُرسل للمالك للموافقة");
+      toast.success("أرسلنا الطلب للمالك ليوافق عليه مجددًا");
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
     },
-    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ التكلفة")),
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الطلب للمالك")),
   });
 
   const schedule = useMutation({
@@ -358,6 +380,11 @@ function Maintenance() {
                           {approvalLabel[m.approval_status] ?? m.approval_status}
                         </Badge>
                       ) : null}
+                      {m.approval_note && m.approval_status !== "not_required" ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          ملاحظة المالك: {m.approval_note}
+                        </p>
+                      ) : null}
                       {m.rating ? (
                         <p className="mt-2 text-xs text-brass">
                           تقييم المستأجر: {"★".repeat(m.rating)}
@@ -425,14 +452,7 @@ function Maintenance() {
                               }
                               setFieldError(`${m.id}-cost`, null);
                               if (v !== Number(m.cost)) {
-                                saveCost.mutate({
-                                  id: m.id,
-                                  cost: v,
-                                  // Same rule as private.unit_owner(): the unit's own owner, else
-                                  // the property's — most units are owned via their property.
-                                  hasOwner: !!(m.units?.owner_id ?? m.units?.properties?.owner_id),
-                                  cap: capFor(m.unit_id),
-                                });
+                                saveCost.mutate({ id: m.id, cost: v });
                               }
                             }}
                           />
@@ -506,7 +526,37 @@ function Maintenance() {
                           ) : null}
                         </div>
                       ) : null}
-                      {m.status !== "done" ? (
+                      {awaitsOwner(m) ? (
+                        // The database refuses to start or finish a job before the owner approves
+                        // its cost; say why instead of offering buttons that fail.
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            {m.approval_status === "pending"
+                              ? "بانتظار موافقة المالك على التكلفة — لا يبدأ العمل ولا يُنجز قبل موافقته."
+                              : "رفض المالك هذه التكلفة — عدّلها واطلب موافقته مجددًا، أو ألغِ الطلب."}
+                          </p>
+                          {m.approval_status === "rejected" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={askOwnerAgain.isPending}
+                                onClick={() => askOwnerAgain.mutate(m.id)}
+                              >
+                                اطلب موافقة المالك مجددًا
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={setStatus.isPending}
+                                onClick={() => setStatus.mutate({ id: m.id, status: "cancelled" })}
+                              >
+                                إلغاء الطلب
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : m.status !== "done" ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {m.status === "new" ? (
                             <Button

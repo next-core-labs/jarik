@@ -11,7 +11,8 @@ import { exportWorkbook } from "@/lib/export-excel";
 import { inviteTenant } from "@/lib/tenant-portal.functions";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app-shell";
-import { LeaseDetailsDialog, NewLeaseDialog } from "@/components/lease-dialog";
+import { EndLeaseDialog, LeaseDetailsDialog, NewLeaseDialog } from "@/components/lease-dialog";
+import { leaseStatusText } from "@/components/lease-schedule";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { arCount, arNum, leaseStatusLabel, monthsLabel, sar, shortDate } from "@/lib/format";
+import { arCount, arNum, daysUntil, monthsLabel, sar, shortDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/tenants")({
   staticData: { sitemap: false },
@@ -60,6 +61,12 @@ function Tenants() {
   } | null>(null);
   const [openLeaseId, setOpenLeaseId] = useState<string | null>(null);
   const [newLease, setNewLease] = useState(false);
+  const [endingLease, setEndingLease] = useState<{
+    id: string;
+    start_date: string;
+    end_date: string;
+    label: string;
+  } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["leases"],
@@ -112,7 +119,7 @@ function Tenants() {
           عدد_الدفعات: l.installments ?? "",
           الوديعة: Number(l.deposit ?? 0),
           رقم_إيجار: l.ejar_contract_no ?? "",
-          الحالة: leaseStatusLabel[l.status] ?? l.status,
+          الحالة: leaseStatusText(l.status),
         })),
       },
       {
@@ -140,9 +147,29 @@ function Tenants() {
   // unit-status badges: this is not the vacant/available mark either.
   const leaseBadge = (l: Lease) => (
     <Badge variant={l.status === "active" ? "secondary" : "outline"}>
-      {leaseStatusLabel[l.status] ?? l.status}
+      {leaseStatusText(l.status)}
     </Badge>
   );
+  // An active lease past its end date waits for a decision: renew it or record the move-out.
+  const endAction = (l: Lease, full: boolean) =>
+    l.status === "active" ? (
+      <Button
+        size="sm"
+        variant={daysUntil(l.end_date) < 0 ? "destructive" : "outline"}
+        className={full ? "w-full" : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          setEndingLease({
+            id: l.id,
+            start_date: l.start_date,
+            end_date: l.end_date,
+            label: `${l.units?.properties?.name ?? ""} · وحدة ${l.units?.unit_number ?? "—"}`,
+          });
+        }}
+      >
+        إنهاء العقد
+      </Button>
+    ) : null;
   const tenantAccount = (l: Lease, full: boolean) =>
     l.tenants?.user_id ? (
       <Badge variant="outline" className="self-start">
@@ -228,6 +255,7 @@ function Tenants() {
                     تفاصيل العقد
                   </Button>
                   {tenantAccount(l, true)}
+                  {endAction(l, true)}
                 </div>
               </li>
             ))}
@@ -244,6 +272,7 @@ function Tenants() {
                   <TableHead>إيجار</TableHead>
                   <TableHead>الحالة</TableHead>
                   <TableHead>حساب المستأجر</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -274,6 +303,7 @@ function Tenants() {
                     <TableCell>{ejarBadge(l)}</TableCell>
                     <TableCell>{leaseBadge(l)}</TableCell>
                     <TableCell>{tenantAccount(l, false)}</TableCell>
+                    <TableCell>{endAction(l, false)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -339,6 +369,13 @@ function Tenants() {
         <LeaseDetailsDialog leaseId={openLeaseId} onClose={() => setOpenLeaseId(null)} />
       ) : null}
       <NewLeaseDialog open={newLease} onOpenChange={setNewLease} />
+      {endingLease ? (
+        <EndLeaseDialog
+          lease={endingLease}
+          onClose={() => setEndingLease(null)}
+          onDone={() => setEndingLease(null)}
+        />
+      ) : null}
 
       {invitingLease ? (
         <InviteTenantDialog

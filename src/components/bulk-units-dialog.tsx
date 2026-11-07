@@ -28,6 +28,7 @@ import { parseAmount } from "@/lib/public-form";
 import { FURNISHING_LABEL, FURNISHING_OPTIONS, type Furnishing } from "@/lib/furniture";
 import { SINGLE_UNIT_TYPE_GROUPS } from "@/lib/property-types";
 import { planUnitNumbers, type Numbering } from "@/lib/unit-numbering";
+import { normalizeUnitNumber } from "@/lib/unit-duplicates";
 
 const MAX_UNITS = 300;
 
@@ -35,7 +36,8 @@ const floorLabel = (floor: number) => (floor === 0 ? "الأرضي" : String(flo
 
 /**
  * إضافة شقق العمارة دفعة واحدة بنفس المواصفات — ثم تعدّل كل شقة (رقم الصك، الأثاث، العدادات) لوحدها.
- * Numbers the building already has are skipped, so running it twice never duplicates an apartment.
+ * Numbers the building already has are skipped (compared as the database does: "١٠١" is 101), so
+ * running it twice never duplicates an apartment; the database refuses a duplicate either way.
  */
 export function BulkUnitsDialog({
   open,
@@ -90,7 +92,10 @@ export function BulkUnitsDialog({
   const area = parseAmount(form.area);
   const rent = parseAmount(form.annual_rent);
 
-  const existing = useMemo(() => new Set(existingNumbers.map((n) => n.trim())), [existingNumbers]);
+  const existing = useMemo(
+    () => new Set(existingNumbers.map((n) => normalizeUnitNumber(n))),
+    [existingNumbers],
+  );
   const planned =
     fromFloor != null &&
     toFloor != null &&
@@ -99,7 +104,7 @@ export function BulkUnitsDialog({
     toFloor >= fromFloor
       ? planUnitNumbers({ fromFloor, toFloor, perFloor, numbering: form.numbering, start })
       : [];
-  const fresh = planned.filter((p) => !existing.has(p.unit_number));
+  const fresh = planned.filter((p) => !existing.has(normalizeUnitNumber(p.unit_number)));
   const skipped = planned.length - fresh.length;
 
   const error =
@@ -148,6 +153,7 @@ export function BulkUnitsDialog({
       queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
       queryClient.invalidateQueries({ queryKey: ["owner-own-properties"] });
       queryClient.invalidateQueries({ queryKey: ["owner-agreements-properties"] });
+      queryClient.invalidateQueries({ queryKey: ["property-unit-numbers", propertyId] });
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت إضافة الوحدات")),

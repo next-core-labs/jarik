@@ -12,6 +12,8 @@ export type Listing = {
   unitType: string;
   district: string | null;
   street: string | null;
+  /** The property's own city (not the office's): the listing may be in another city. */
+  city: string | null;
   floorNo: string | null;
   rooms: number | null;
   halls: number;
@@ -62,6 +64,7 @@ export function toListing(row: ListingRow): Listing | null {
     unitType: row.unit_type ?? "",
     district: row.district,
     street: row.street,
+    city: row.city,
     floorNo: row.floor_no,
     rooms: row.rooms,
     halls: row.halls ?? 0,
@@ -156,6 +159,7 @@ function searchText(l: Listing): string {
     [
       l.district,
       l.street,
+      l.city,
       l.unitName,
       l.unitNumber,
       l.unitType,
@@ -210,9 +214,7 @@ export function listingTitle(l: Listing): string {
 }
 
 export function listingLocation(l: Listing): string {
-  return [l.district ? `حي ${l.district}` : null, l.street, l.office.city]
-    .filter(Boolean)
-    .join(" · ");
+  return [l.district ? `حي ${l.district}` : null, l.street, l.city].filter(Boolean).join(" · ");
 }
 
 /** Up to `limit` other offers, preferring the same district, then the same type. */

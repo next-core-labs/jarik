@@ -26,17 +26,30 @@ import {
 
 interface Payment {
   id: string;
+  lease_id: string;
   amount: number;
+  amount_paid: number;
   due_date: string;
   paid_date: string | null;
   status: string;
   transfer_reference: string | null;
+  transfer_rejected_note: string | null;
 }
 
-/** جدول دفعات عقد واحد لوحة المستأجر: حالة كل دفعة، إبلاغ عن تحويل، وإيصال PDF للمدفوعة. */
-export function PaymentsTable({ leaseId }: { leaseId: string }) {
+/**
+ * جدول دفعات عقد واحد لوحة المستأجر: حالة كل دفعة، إبلاغ عن تحويل، وإيصال PDF للمدفوعة.
+ * Unpaid installments still owed on `earlierLeaseIds` (the leases this one renewed) are listed
+ * above the table.
+ */
+export function PaymentsTable({
+  leaseId,
+  earlierLeaseIds = [],
+}: {
+  leaseId: string;
+  earlierLeaseIds?: string[];
+}) {
   const queryClient = useQueryClient();
-  const queryKey = ["tenant-payments-table", leaseId];
+  const queryKey = ["tenant-payments-table", leaseId, earlierLeaseIds];
   const [refs, setRefs] = useState<Record<string, string>>({});
   const receiptRef = useRef<HTMLDivElement>(null);
   const [receipt, setReceipt] = useState<Payment | null>(null);
@@ -45,13 +58,15 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
   // serializes them instead of letting a second click start before the first capture finishes.
   const [downloading, setDownloading] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data: all, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("payments")
-        .select("id, amount, due_date, paid_date, status, transfer_reference")
-        .eq("lease_id", leaseId)
+        .select(
+          "id, lease_id, amount, amount_paid, due_date, paid_date, status, transfer_reference, transfer_rejected_note",
+        )
+        .in("lease_id", [leaseId, ...earlierLeaseIds])
         .order("due_date");
       if (error) throw error;
       return data ?? [];
@@ -84,18 +99,21 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
     }
   };
 
-  if (isLoading || !data) return <Skeleton className="h-40" />;
+  if (isLoading || !all) return <Skeleton className="h-40" />;
 
-  const paidTotal = data.reduce((s, p) => (p.status === "paid" ? s + Number(p.amount) : s), 0);
+  const data = all.filter((p) => p.lease_id === leaseId);
+  const carried = all.filter((p) => p.lease_id !== leaseId && p.status !== "paid");
+  const paidTotal = data.reduce((s, p) => s + Number(p.amount_paid), 0);
   const totalAll = data.reduce((s, p) => s + Number(p.amount), 0);
 
-  type Row = (typeof data)[number];
+  type Row = (typeof all)[number];
   const isOverdue = (p: Row) => p.status !== "paid" && daysUntil(p.due_date) < 0;
   const statusBadge = (p: Row) => {
     const remaining = daysUntil(p.due_date);
     // "default" (الأحمر) محجوز للسعر/الإجراء الرئيسي/التوفر — لا يُستخدم لحالة كهذه.
     if (p.status === "paid") return <Badge variant="secondary">مدفوعة</Badge>;
     if (isOverdue(p)) return <Badge variant="destructive">متأخرة {daysLabel(remaining)}</Badge>;
+    if (p.status === "partial") return <Badge variant="outline">مسدّدة جزئيًا</Badge>;
     if (remaining === 0) return <Badge variant="outline">مستحقة اليوم</Badge>;
     return <Badge variant="outline">بعد {daysLabel(remaining)}</Badge>;
   };
@@ -119,11 +137,17 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
     if (p.transfer_reference) {
       return <p className="text-xs text-muted-foreground">أبلغت — بانتظار التأكيد</p>;
     }
+    const rejected = p.transfer_rejected_note ? (
+      <p className="text-xs text-destructive">
+        لم يعتمد المكتب إبلاغك السابق: {p.transfer_rejected_note}
+      </p>
+    ) : null;
     const reference = (refs[p.id] ?? "").trim();
     // The phone list and the desktop table both render this row, so the hint id says which one.
     const hintId = `transfer-ref-hint-${p.id}-${full ? "card" : "row"}`;
     return (
       <div className="space-y-1.5">
+        {rejected}
         <div className="flex flex-wrap gap-2">
           <Input
             className={full ? "h-9 min-w-0 flex-1" : "h-9 max-w-40"}
@@ -151,12 +175,34 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
     );
   };
 
+  const amountText = (p: Row) =>
+    p.status !== "paid" && Number(p.amount_paid) > 0
+      ? `${sar(p.amount)} · سدّدت ${sar(p.amount_paid)}`
+      : sar(p.amount);
+
   return (
     <Card className="shadow-deed">
       <CardHeader>
         <CardTitle className="text-base">جدول الدفعات</CardTitle>
       </CardHeader>
       <CardContent>
+        {carried.length > 0 ? (
+          <div className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-3">
+            <p className="text-sm font-medium">متبقٍ من العقد السابق</p>
+            {carried.map((p) => (
+              <div key={p.id} className="flex flex-col gap-2 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-muted-foreground">تستحق {shortDate(p.due_date)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-bold tabular-nums">{amountText(p)}</span>
+                    {statusBadge(p)}
+                  </span>
+                </div>
+                {paymentAction(p, true)}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {/* Phones: one card per payment — five columns don't fit a 390px screen. */}
         <ul className="divide-y divide-border md:hidden">
           {data.map((p, index) => (
@@ -171,7 +217,7 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <p className="font-bold tabular-nums">{sar(p.amount)}</p>
+                  <p className="font-bold tabular-nums">{amountText(p)}</p>
                   {statusBadge(p)}
                 </div>
               </div>
@@ -197,7 +243,7 @@ export function PaymentsTable({ leaseId }: { leaseId: string }) {
                     {arNum(index + 1)} من {arNum(data.length)}
                   </TableCell>
                   <TableCell>{shortDate(p.due_date)}</TableCell>
-                  <TableCell>{sar(p.amount)}</TableCell>
+                  <TableCell>{amountText(p)}</TableCell>
                   <TableCell>{statusBadge(p)}</TableCell>
                   <TableCell>{paymentAction(p, false) ?? "—"}</TableCell>
                 </TableRow>

@@ -18,16 +18,11 @@ const roleLabels: Record<string, string> = {
   unknown: "مشارك",
 };
 
-/** محادثة موحّدة لكل وحدة بين المكتب والمالك والمستأجر. */
-export function UnitChat({
-  unitId,
-  myRole,
-  myName,
-}: {
-  unitId: string;
-  myRole: string;
-  myName: string;
-}) {
+/**
+ * محادثة موحّدة لكل وحدة بين المكتب والمالك والمستأجر. اسم المرسل ودوره تحددهما قاعدة البيانات
+ * (a_fill_sender) من علاقته بالوحدة، لا المتصفح.
+ */
+export function UnitChat({ unitId }: { unitId: string }) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -63,10 +58,10 @@ export function UnitChat({
       const { error } = await supabase.from("unit_messages").insert({
         unit_id: unitId,
         sender_id: userId,
-        sender_name: myName,
-        sender_role: myRole,
         body: body.trim(),
       });
+      // RLS refusal: e.g. an office managing the unit by agreement without «التواصل مع المستأجر».
+      if (error?.code === "42501") throw new Error("لا تملك صلاحية المراسلة في محادثة هذه الوحدة");
       if (error) throw error;
     },
     onSuccess: () => {

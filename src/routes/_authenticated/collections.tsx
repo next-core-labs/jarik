@@ -1,15 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 import { BellRing, CalendarClock, Download, Search } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { remindPayments } from "@/lib/whatsapp-out.functions";
 import { runSmartReminders } from "@/lib/office-tools.functions";
 import { exportWorkbook } from "@/lib/export-excel";
+import { parseAmount } from "@/lib/public-form";
 
 import { PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -41,7 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addDays, effectiveStatus, monthRange, todayRiyadh } from "@/lib/dates";
+import { effectiveStatus, monthRange, todayRiyadh } from "@/lib/dates";
 import { arCount, arNum, sar, shortDate, paymentStatusLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/collections")({
@@ -58,9 +61,21 @@ export const Route = createFileRoute("/_authenticated/collections")({
 });
 
 const PAYMENT_METHODS = ["تحويل بنكي", "مدى", "نقدًا", "شيك"];
+const PAGE_SIZE = 50;
+/** remindPayments accepts up to 100 payments per call. */
+const REMIND_BATCH = 100;
 
 type StatusFilter = "all" | "overdue" | "due" | "paid";
 type PeriodFilter = "all" | "this-month" | "last-month" | "next-month" | "this-year";
+type OfficePayment = Database["public"]["Functions"]["office_payments"]["Returns"][number];
+type FinanceSummary = {
+  collected: number;
+  outstanding: number;
+  overdue_count: number;
+  remind_count: number;
+  payments_count: number;
+  expenses_total: number;
+};
 
 /** Due-date bounds for a period filter (inclusive, YYYY-MM-DD), or null for no bound. */
 function periodBounds(period: PeriodFilter): { start: string; end: string } | null {
@@ -74,17 +89,59 @@ function periodBounds(period: PeriodFilter): { start: string; end: string } | nu
   return null;
 }
 
+/** One page of the office's payments, filtered and ordered in the database. */
+async function fetchPayments(args: {
+  status: string;
+  from?: string | null;
+  to?: string | null;
+  search?: string | null;
+  order?: "due" | "amount";
+  limit: number;
+  offset: number;
+}) {
+  const { data, error } = await supabase.rpc("office_payments", {
+    _status: args.status,
+    ...(args.from ? { _from: args.from } : {}),
+    ...(args.to ? { _to: args.to } : {}),
+    ...(args.search ? { _search: args.search } : {}),
+    _order: args.order ?? "due",
+    _limit: args.limit,
+    _offset: args.offset,
+  });
+  if (error) throw error;
+  const rows = data ?? [];
+  return { rows, total: Number(rows[0]?.total_count ?? 0) };
+}
+
+/** What is still owed on an installment (partial payments reduce it). */
+const remainingOf = (p: { amount: number; amount_paid: number }) =>
+  Math.round((Number(p.amount) - Number(p.amount_paid)) * 100) / 100;
+
 function Collections() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [expensePage, setExpensePage] = useState(0);
   // The payment waiting for the "record payment" confirmation, with the form for it.
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<OfficePayment | null>(null);
   const [method, setMethod] = useState(PAYMENT_METHODS[0]!);
   const [paidDate, setPaidDate] = useState(todayRiyadh());
+  const [amountText, setAmountText] = useState("");
+  const [rejecting, setRejecting] = useState<OfficePayment | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [exporting, setExporting] = useState(false);
   const sendReminders = useServerFn(remindPayments);
   const runSmart = useServerFn(runSmartReminders);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+  // A new filter starts from the first page.
+  useEffect(() => setPage(0), [statusFilter, period, debouncedSearch]);
 
   const smartRemind = useMutation({
     mutationFn: () => runSmart(),
@@ -99,61 +156,127 @@ function Collections() {
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تشغيل التذكير الذكي")),
   });
 
-  const exportExcel = () => {
-    if (!data) return;
-    exportWorkbook("التحصيل-والمصروفات.xlsx", [
-      {
-        name: "الدفعات",
-        rows: data.payments.map((p) => ({
-          المستأجر: p.leases?.tenants?.full_name ?? "",
-          العقار: p.leases?.units?.properties?.name ?? "",
-          الوحدة: p.leases?.units?.unit_number ?? "",
-          الاستحقاق: p.due_date ?? "",
-          تاريخ_السداد: p.paid_date ?? "",
-          المبلغ: Number(p.amount),
-          الحالة: paymentStatusLabel[p.status] ?? p.status,
-          مرجع_التحويل: p.transfer_reference ?? "",
-        })),
-      },
-      {
-        name: "المصروفات",
-        rows: data.expenses.map((e) => ({
-          البيان: e.title ?? "",
-          التصنيف: e.category ?? "",
-          العقار: e.properties?.name ?? "",
-          التاريخ: e.expense_date ?? "",
-          المبلغ: Number(e.amount),
-        })),
-      },
-    ]);
-    toast.success("نزل ملف الإكسل — جاهز للمحاسب");
-  };
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["collections"],
+  const summary = useQuery({
+    queryKey: ["collections", "summary"],
     queryFn: async () => {
-      const [payments, expenses] = await Promise.all([
-        supabase
-          .from("payments")
-          .select(
-            "id, amount, due_date, paid_date, status, method, last_reminded_at, transfer_reference, transfer_submitted_at, leases(tenants(full_name, user_id, phone), units(unit_number, properties(name)))",
-          )
-          .order("due_date"),
-        supabase
-          .from("expenses")
-          .select("id, title, category, amount, expense_date, properties(name)")
-          .order("expense_date", { ascending: false }),
-      ]);
-      if (payments.error) throw payments.error;
-      return { payments: payments.data ?? [], expenses: expenses.data ?? [] };
+      const { data, error } = await supabase.rpc("office_finance_summary");
+      if (error) throw error;
+      return data as unknown as FinanceSummary;
     },
   });
 
+  const bounds = periodBounds(period);
+  const statusArg = statusFilter === "all" ? "all" : statusFilter;
+  const filtered = statusFilter !== "all" || period !== "all" || debouncedSearch !== "";
+  const list = useQuery({
+    queryKey: ["collections", "payments", statusArg, period, debouncedSearch, page],
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      fetchPayments({
+        status: statusArg,
+        from: bounds?.start ?? null,
+        to: bounds?.end ?? null,
+        search: debouncedSearch || null,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      }),
+  });
+
+  // Largest overdue balances first; the full list is one filter away.
+  // A page past the end (rows paid or filtered away since it was opened) has no total_count to page
+  // by, so go back to the first page instead of leaving the user on an empty page with no pager.
+  useEffect(() => {
+    if (page > 0 && list.data && list.data.rows.length === 0) setPage(0);
+  }, [page, list.data]);
+
+  const overdue = useQuery({
+    queryKey: ["collections", "overdue"],
+    queryFn: () => fetchPayments({ status: "overdue", order: "amount", limit: 20, offset: 0 }),
+  });
+
+  const expenses = useQuery({
+    queryKey: ["collections", "expenses", expensePage],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const { data, error, count } = await supabase
+        .from("expenses")
+        .select("id, title, category, amount, expense_date, properties(name)", { count: "exact" })
+        .order("expense_date", { ascending: false })
+        .range(expensePage * PAGE_SIZE, expensePage * PAGE_SIZE + PAGE_SIZE - 1);
+      if (error) throw error;
+      return { rows: data ?? [], total: count ?? 0 };
+    },
+  });
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      // Every row, a thousand at a time: the export is the accountant's full ledger.
+      const payments: OfficePayment[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { rows } = await fetchPayments({ status: "all", limit: 1000, offset });
+        payments.push(...rows);
+        if (rows.length < 1000) break;
+      }
+      const expenseRows: {
+        title: string | null;
+        category: string | null;
+        amount: number;
+        expense_date: string | null;
+        properties: { name: string } | null;
+      }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("expenses")
+          .select("title, category, amount, expense_date, properties(name)")
+          .order("expense_date", { ascending: false })
+          .range(from, from + 999);
+        if (error) throw error;
+        expenseRows.push(...(data ?? []));
+        if ((data ?? []).length < 1000) break;
+      }
+      exportWorkbook("التحصيل-والمصروفات.xlsx", [
+        {
+          name: "الدفعات",
+          rows: payments.map((p) => ({
+            المستأجر: p.tenant_name ?? "",
+            العقار: p.property_name ?? "",
+            الوحدة: p.unit_number ?? "",
+            الاستحقاق: p.due_date ?? "",
+            تاريخ_السداد: p.paid_date ?? "",
+            المبلغ: Number(p.amount),
+            المسدد: Number(p.amount_paid),
+            الحالة: paymentStatusLabel[p.status] ?? p.status,
+            مرجع_التحويل: p.transfer_reference ?? "",
+          })),
+        },
+        {
+          name: "المصروفات",
+          rows: expenseRows.map((e) => ({
+            البيان: e.title ?? "",
+            التصنيف: e.category ?? "",
+            العقار: e.properties?.name ?? "",
+            التاريخ: e.expense_date ?? "",
+            المبلغ: Number(e.amount),
+          })),
+        },
+      ]);
+      toast.success("نزل ملف الإكسل — جاهز للمحاسب");
+    } catch (e) {
+      toast.error(userErrorMessage(e, "تعذّر تجهيز ملف الإكسل"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const remind = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const targets = (data?.payments ?? [])
-        .filter((p) => ids.includes(p.id) && p.status !== "paid")
-        .map((p) => p.id);
+    mutationFn: async (ids: string[] | null) => {
+      // null = today's reminders: overdue and due within 7 days, oldest first.
+      const targets =
+        ids ??
+        (await fetchPayments({ status: "remind", limit: REMIND_BATCH, offset: 0 })).rows.map(
+          (p) => p.id,
+        );
       if (targets.length === 0) return { notified: 0, whatsapped: 0, total: 0 };
       return sendReminders({ data: { paymentIds: targets } });
     },
@@ -169,33 +292,46 @@ function Collections() {
   });
 
   const markPaid = useMutation({
-    mutationFn: async (v: { id: string; method: string; paidDate: string }) => {
-      const { data: auth } = await supabase.auth.getUser();
-      const { data: updated, error } = await supabase
-        .from("payments")
-        .update({
-          status: "paid",
-          paid_date: v.paidDate,
-          method: v.method,
-          collected_by: auth.user?.id ?? null,
-        })
-        .eq("id", v.id)
-        // Re-marking an already-paid payment would overwrite who collected it and when.
-        .neq("status", "paid")
-        .select("id");
+    mutationFn: async (v: { id: string; amount: number; method: string; paidDate: string }) => {
+      const { data, error } = await supabase.rpc("record_payment", {
+        _payment_id: v.id,
+        _amount: v.amount,
+        _paid_date: v.paidDate,
+        _method: v.method,
+      });
       if (error) throw error;
-      if (!updated?.length) throw new Error("سبق تسجيل سداد هذه الدفعة");
+      return data as unknown as { status: string; remaining: number };
     },
-    onSuccess: () => {
-      setConfirmId(null);
-      toast.success("تم تسجيل السداد");
+    onSuccess: (res) => {
+      setConfirming(null);
+      toast.success(
+        res.status === "paid"
+          ? "تم تسجيل السداد"
+          : `سُجّلت دفعة جزئية — المتبقي ${sar(res.remaining)}`,
+      );
       queryClient.invalidateQueries({ queryKey: ["collections"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (e) => toast.error(userErrorMessage(e, "تعذّر تسجيل السداد")),
   });
 
-  if (isLoading || !data) {
+  const rejectTransfer = useMutation({
+    mutationFn: async (v: { id: string; reason: string }) => {
+      const { error } = await supabase.rpc("reject_transfer_notice", {
+        _payment_id: v.id,
+        _reason: v.reason,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setRejecting(null);
+      toast.success("رُفض الإبلاغ وأُبلغ المستأجر بالسبب");
+      queryClient.invalidateQueries({ queryKey: ["collections"] });
+    },
+    onError: (e) => toast.error(userErrorMessage(e, "تعذّر رفض الإبلاغ")),
+  });
+
+  if (summary.isLoading || list.isLoading || !summary.data || !list.data) {
     return (
       <>
         <PageHeader title="التحصيل والمصروفات" />
@@ -204,55 +340,34 @@ function Collections() {
     );
   }
 
-  const collected = data.payments
-    .filter((p) => p.status === "paid")
-    .reduce((s, p) => s + Number(p.amount), 0);
-  const outstanding = data.payments
-    .filter((p) => p.status !== "paid")
-    .reduce((s, p) => s + Number(p.amount), 0);
-  const expensesTotal = data.expenses.reduce((s, e) => s + Number(e.amount), 0);
-
   const today = todayRiyadh();
-  const in7Days = addDays(today, 7);
-  const overdueList = data.payments
-    .filter((p) => p.status !== "paid" && p.due_date < today)
-    .sort((a, b) => Number(b.amount) - Number(a.amount));
-  const dueSoonList = data.payments.filter(
-    (p) => p.status !== "paid" && p.due_date >= today && p.due_date <= in7Days,
-  );
-  const reminderTargets = [...overdueList, ...dueSoonList].map((p) => p.id);
+  const totals = summary.data;
+  const overdueList = overdue.data?.rows ?? [];
+  const overdueTotal = overdue.data?.total ?? 0;
+  const visiblePayments = list.data.rows;
+  const matching = list.data.total;
+  const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
 
-  const bounds = periodBounds(period);
-  const query = search.trim().toLowerCase();
-  const visiblePayments = data.payments.filter((p) => {
-    const status = effectiveStatus(p, today);
-    if (statusFilter === "paid" && status !== "paid") return false;
-    if (statusFilter === "overdue" && status !== "overdue") return false;
-    if (statusFilter === "due" && (status === "paid" || status === "overdue")) return false;
-    if (bounds && (p.due_date < bounds.start || p.due_date > bounds.end)) return false;
-    if (query) {
-      const haystack = [
-        p.leases?.tenants?.full_name,
-        p.leases?.units?.unit_number,
-        p.leases?.units?.properties?.name,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
-  const filtered = statusFilter !== "all" || period !== "all" || query !== "";
-
-  const confirming = data.payments.find((p) => p.id === confirmId) ?? null;
+  const confirmRemaining = confirming ? remainingOf(confirming) : 0;
+  const amountValue = parseAmount(amountText);
+  const amountError =
+    amountValue === undefined
+      ? "أدخل المبلغ المستلم"
+      : amountValue === null || amountValue <= 0
+        ? "أدخل مبلغًا صحيحًا بالريال"
+        : Math.round(amountValue * 100) !== amountValue * 100
+          ? "المبلغ بحد أقصى منزلتين عشريتين"
+          : amountValue > confirmRemaining
+            ? `المبلغ أكبر من المتبقي (${sar(confirmRemaining)})`
+            : null;
   const paidDateError = !paidDate
     ? "اختر تاريخ السداد"
     : paidDate > today
       ? "تاريخ السداد لا يكون في المستقبل"
       : null;
+  const rejectError = rejectReason.trim().length < 3 ? "اكتب سبب الرفض ليصل للمستأجر" : null;
 
-  type Payment = (typeof data.payments)[number];
+  type Payment = OfficePayment;
   const paymentBadge = (p: Payment) => (
     <Badge
       variant={
@@ -266,10 +381,31 @@ function Collections() {
       {paymentStatusLabel[effectiveStatus(p)] ?? p.status}
     </Badge>
   );
+  const amountCell = (p: Payment) => (
+    <>
+      {sar(p.amount)}
+      {p.status !== "paid" && Number(p.amount_paid) > 0 ? (
+        <span className="block text-xs text-muted-foreground">
+          سُدد {sar(p.amount_paid)} · المتبقي {sar(remainingOf(p))}
+        </span>
+      ) : null}
+    </>
+  );
   const transferNote = (p: Payment) =>
     p.transfer_reference && p.status !== "paid" ? (
-      <span className="mt-1 block text-xs text-brass">
+      <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-brass">
         المستأجر أبلغ عن تحويل: {p.transfer_reference}
+        <Button
+          size="sm"
+          variant="link"
+          className="h-auto px-0 text-xs"
+          onClick={() => {
+            setRejectReason("");
+            setRejecting(p);
+          }}
+        >
+          رفض الإبلاغ
+        </Button>
       </span>
     ) : null;
   /** `full` stretches the button across a phone card. */
@@ -283,7 +419,8 @@ function Collections() {
         onClick={() => {
           setMethod(p.transfer_reference ? "تحويل بنكي" : PAYMENT_METHODS[0]!);
           setPaidDate(todayRiyadh());
-          setConfirmId(p.id);
+          setAmountText(String(remainingOf(p)));
+          setConfirming(p);
         }}
       >
         تسجيل السداد
@@ -299,9 +436,9 @@ function Collections() {
         subtitle="الدفعات والمتأخرات والمصروفات — والنظام يذكّر المستأجرين نيابةً عنك."
         action={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={exportExcel}>
+            <Button variant="outline" disabled={exporting} onClick={exportExcel}>
               <Download className="size-4" />
-              تصدير Excel
+              {exporting ? "جارٍ التجهيز…" : "تصدير Excel"}
             </Button>
             <Button
               variant="outline"
@@ -312,11 +449,16 @@ function Collections() {
               تذكير ذكي قبل الاستحقاق
             </Button>
             <Button
-              disabled={reminderTargets.length === 0 || remind.isPending}
-              onClick={() => remind.mutate(reminderTargets)}
+              disabled={totals.remind_count === 0 || remind.isPending}
+              onClick={() => remind.mutate(null)}
+              title={
+                totals.remind_count > REMIND_BATCH
+                  ? `يُرسل لأقدم ${arNum(REMIND_BATCH)} دفعة في كل مرة`
+                  : undefined
+              }
             >
               <BellRing className="size-4" />
-              تذكيرات اليوم ({arNum(reminderTargets.length)})
+              تذكيرات اليوم ({arNum(totals.remind_count)})
             </Button>
           </div>
         }
@@ -324,9 +466,9 @@ function Collections() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: "المحصّل", value: sar(collected) },
-          { label: "المستحق", value: sar(outstanding) },
-          { label: "المصروفات", value: sar(expensesTotal) },
+          { label: "المحصّل", value: sar(totals.collected) },
+          { label: "المستحق", value: sar(totals.outstanding) },
+          { label: "المصروفات", value: sar(totals.expenses_total) },
         ].map((s) => (
           <Card key={s.label} className="shadow-deed">
             <CardContent className="pt-6">
@@ -341,7 +483,7 @@ function Collections() {
         <Card className="mt-6 border-destructive/40 shadow-deed">
           <CardHeader>
             <CardTitle className="text-base text-destructive">
-              المتأخرات — مرتبة من الأعلى مبلغًا ({arNum(overdueList.length)})
+              المتأخرات — مرتبة من الأعلى مبلغًا ({arNum(overdueTotal)})
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -351,28 +493,27 @@ function Collections() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm"
               >
                 <div>
-                  <p className="font-medium">{p.leases?.tenants?.full_name ?? "—"}</p>
+                  <p className="font-medium">{p.tenant_name ?? "—"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {p.leases?.units?.properties?.name} · وحدة {p.leases?.units?.unit_number} ·
-                    استحقت {shortDate(p.due_date)}
+                    {p.property_name} · وحدة {p.unit_number} · استحقت {shortDate(p.due_date)}
                     {p.last_reminded_at
                       ? ` · آخر تذكير ${shortDate(p.last_reminded_at)}`
                       : " · لم يُذكَّر بعد"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-destructive">{sar(p.amount)}</span>
-                  {p.leases?.tenants?.phone ? (
+                  <span className="font-bold text-destructive">{sar(remainingOf(p))}</span>
+                  {p.tenant_phone ? (
                     <Button asChild size="sm" variant="outline">
-                      <a href={`tel:${p.leases.tenants.phone}`}>اتصال</a>
+                      <a href={`tel:${p.tenant_phone}`}>اتصال</a>
                     </Button>
                   ) : null}
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={remind.isPending || !p.leases?.tenants?.user_id}
+                    disabled={remind.isPending || !p.tenant_user_id}
                     title={
-                      p.leases?.tenants?.user_id
+                      p.tenant_user_id
                         ? "إرسال تذكير داخل المنصة"
                         : "لا يوجد حساب مرتبط بهذا المستأجر"
                     }
@@ -384,6 +525,15 @@ function Collections() {
                 </div>
               </div>
             ))}
+            {overdueTotal > overdueList.length ? (
+              <Button
+                variant="link"
+                className="h-auto px-0"
+                onClick={() => setStatusFilter("overdue")}
+              >
+                عرض كل المتأخرات ({arNum(overdueTotal)}) في جدول الدفعات
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -394,7 +544,7 @@ function Collections() {
             الدفعات
             {filtered ? (
               <span className="ms-2 text-sm font-normal text-muted-foreground">
-                ({arNum(visiblePayments.length)} من {arNum(data.payments.length)})
+                ({arNum(matching)} من {arNum(totals.payments_count)})
               </span>
             ) : null}
           </CardTitle>
@@ -451,14 +601,13 @@ function Collections() {
               <li key={p.id} className="flex flex-col gap-2 py-4 first:pt-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium">{p.leases?.tenants?.full_name ?? "—"}</p>
+                    <p className="font-medium">{p.tenant_name ?? "—"}</p>
                     <p className="text-sm text-muted-foreground">
-                      {p.leases?.units?.properties?.name} · {p.leases?.units?.unit_number} · تستحق{" "}
-                      {shortDate(p.due_date)}
+                      {p.property_name} · {p.unit_number} · تستحق {shortDate(p.due_date)}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <p className="font-bold tabular-nums">{sar(p.amount)}</p>
+                    <p className="text-end font-bold tabular-nums">{amountCell(p)}</p>
                     {paymentBadge(p)}
                   </div>
                 </div>
@@ -482,15 +631,13 @@ function Collections() {
               <TableBody>
                 {visiblePayments.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-medium">
-                      {p.leases?.tenants?.full_name ?? "—"}
-                    </TableCell>
+                    <TableCell className="font-medium">{p.tenant_name ?? "—"}</TableCell>
                     <TableCell>
-                      {p.leases?.units?.properties?.name} · {p.leases?.units?.unit_number}
+                      {p.property_name} · {p.unit_number}
                     </TableCell>
                     <TableCell>{shortDate(p.due_date)}</TableCell>
                     <TableCell>
-                      {sar(p.amount)}
+                      {amountCell(p)}
                       {transferNote(p)}
                     </TableCell>
                     <TableCell>{paymentBadge(p)}</TableCell>
@@ -500,6 +647,7 @@ function Collections() {
               </TableBody>
             </Table>
           </div>
+          <Pager page={page} pages={pages} busy={list.isFetching} onPage={setPage} />
         </CardContent>
       </Card>
 
@@ -508,8 +656,11 @@ function Collections() {
           <CardTitle className="text-base">المصروفات</CardTitle>
         </CardHeader>
         <CardContent>
+          {expenses.data && expenses.data.rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">لا توجد مصروفات بعد.</p>
+          ) : null}
           <ul className="divide-y divide-border md:hidden">
-            {data.expenses.map((e) => (
+            {(expenses.data?.rows ?? []).map((e) => (
               <li key={e.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                 <div className="min-w-0">
                   <p className="font-medium">{e.title}</p>
@@ -523,7 +674,9 @@ function Collections() {
               </li>
             ))}
           </ul>
-          <div className="hidden overflow-x-auto md:block">
+          <div
+            className={expenses.data?.rows.length ? "hidden overflow-x-auto md:block" : "hidden"}
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -535,7 +688,7 @@ function Collections() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.expenses.map((e) => (
+                {(expenses.data?.rows ?? []).map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="font-medium">{e.title}</TableCell>
                     <TableCell>{e.category}</TableCell>
@@ -547,38 +700,69 @@ function Collections() {
               </TableBody>
             </Table>
           </div>
+          <Pager
+            page={expensePage}
+            pages={Math.max(1, Math.ceil((expenses.data?.total ?? 0) / PAGE_SIZE))}
+            busy={expenses.isFetching}
+            onPage={setExpensePage}
+          />
         </CardContent>
       </Card>
 
-      <Dialog open={!!confirming} onOpenChange={(open) => !open && setConfirmId(null)}>
+      <Dialog open={!!confirming} onOpenChange={(open) => !open && setConfirming(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>تأكيد تسجيل السداد</DialogTitle>
+            <DialogTitle>تسجيل السداد</DialogTitle>
             <DialogDescription>
-              ستُسجَّل الدفعة كاملة كمدفوعة. راجع البيانات قبل التأكيد.
+              سجّل المبلغ المستلم فعلًا. أقل من المتبقي يُسجَّل دفعة جزئية وتبقى الدفعة مفتوحة.
             </DialogDescription>
           </DialogHeader>
           {confirming ? (
             <div className="space-y-4 text-sm">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/50 p-3">
                 <dt className="text-muted-foreground">المستأجر</dt>
-                <dd className="font-medium">{confirming.leases?.tenants?.full_name ?? "—"}</dd>
+                <dd className="font-medium">{confirming.tenant_name ?? "—"}</dd>
                 <dt className="text-muted-foreground">الوحدة</dt>
                 <dd>
-                  {confirming.leases?.units?.properties?.name} ·{" "}
-                  {confirming.leases?.units?.unit_number ?? "—"}
+                  {confirming.property_name} · {confirming.unit_number ?? "—"}
                 </dd>
                 <dt className="text-muted-foreground">تاريخ الاستحقاق</dt>
                 <dd>{shortDate(confirming.due_date)}</dd>
-                <dt className="text-muted-foreground">المبلغ</dt>
+                <dt className="text-muted-foreground">مبلغ الدفعة</dt>
                 <dd className="font-bold">{sar(confirming.amount)}</dd>
+                {Number(confirming.amount_paid) > 0 ? (
+                  <>
+                    <dt className="text-muted-foreground">سُدد منها</dt>
+                    <dd>
+                      {sar(confirming.amount_paid)} · المتبقي {sar(confirmRemaining)}
+                    </dd>
+                  </>
+                ) : null}
               </dl>
               {confirming.transfer_reference ? (
                 <p className="text-xs text-brass">
                   المستأجر أبلغ عن تحويل: {confirming.transfer_reference}
                 </p>
               ) : null}
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <Label htmlFor="pay-amount">المبلغ المستلم</Label>
+                  <Input
+                    id="pay-amount"
+                    dir="ltr"
+                    inputMode="decimal"
+                    value={amountText}
+                    onChange={(e) => setAmountText(e.target.value)}
+                    aria-invalid={!!amountError}
+                  />
+                  {amountError ? (
+                    <p className="text-xs text-destructive">{amountError}</p>
+                  ) : amountValue != null && amountValue < confirmRemaining ? (
+                    <p className="text-xs text-muted-foreground">
+                      دفعة جزئية — يبقى {sar(confirmRemaining - amountValue)}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="space-y-1">
                   <Label htmlFor="pay-method">طريقة السداد</Label>
                   <Select value={method} onValueChange={setMethod}>
@@ -613,18 +797,101 @@ function Collections() {
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmId(null)}>
+            <Button variant="outline" onClick={() => setConfirming(null)}>
               إلغاء
             </Button>
             <Button
-              disabled={!confirming || !!paidDateError || markPaid.isPending}
-              onClick={() => confirming && markPaid.mutate({ id: confirming.id, method, paidDate })}
+              disabled={!confirming || !!paidDateError || !!amountError || markPaid.isPending}
+              onClick={() =>
+                confirming &&
+                amountValue != null &&
+                markPaid.mutate({ id: confirming.id, amount: amountValue, method, paidDate })
+              }
             >
               {markPaid.isPending ? "جارٍ التسجيل…" : "تأكيد السداد"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!rejecting} onOpenChange={(open) => !open && setRejecting(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>رفض إبلاغ التحويل</DialogTitle>
+            <DialogDescription>
+              {rejecting?.tenant_name ?? "—"} · مرجع {rejecting?.transfer_reference} — يُمسح الإبلاغ
+              ويصل السبب للمستأجر ليعيد التحويل أو يصحّح المرجع.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1">
+            <Label htmlFor="reject-reason">سبب الرفض</Label>
+            <Textarea
+              id="reject-reason"
+              rows={2}
+              maxLength={300}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="لم يصل المبلغ إلى حساب المكتب، المرجع غير صحيح…"
+            />
+            {rejectReason && rejectError ? (
+              <p className="text-xs text-destructive">{rejectError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejecting(null)}>
+              تراجع
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!rejecting || !!rejectError || rejectTransfer.isPending}
+              onClick={() =>
+                rejecting &&
+                rejectTransfer.mutate({ id: rejecting.id, reason: rejectReason.trim() })
+              }
+            >
+              {rejectTransfer.isPending ? "جارٍ الرفض…" : "رفض الإبلاغ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+/** Previous/next for a server-paged list; hidden when everything fits on one page. */
+function Pager({
+  page,
+  pages,
+  busy,
+  onPage,
+}: {
+  page: number;
+  pages: number;
+  busy: boolean;
+  onPage: (page: number) => void;
+}) {
+  if (pages <= 1) return null;
+  return (
+    <div className="mt-4 flex items-center justify-between gap-2 text-sm">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || page === 0}
+        onClick={() => onPage(page - 1)}
+      >
+        السابق
+      </Button>
+      <span className="text-muted-foreground">
+        صفحة {arNum(page + 1)} من {arNum(pages)}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || page >= pages - 1}
+        onClick={() => onPage(page + 1)}
+      >
+        التالي
+      </Button>
+    </div>
   );
 }

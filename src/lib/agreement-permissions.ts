@@ -2,9 +2,9 @@
 // والمكتب (agreements.tsx) بدل تكرارها — القيم مطابقة لـ enum التحقق في
 // 20260924160000_management_agreements_foundation.sql (agreement_permissions.permission).
 //
-// 'collection' و'tenant_comms' و'sale' مقبولة بالـ enum والـ RPCs لكن بلا أي إنفاذ RLS/Trigger
-// فعلي بعد (20260924170000_wire_agreement_permissions_into_rls.sql لا تتحقق منها إطلاقًا) —
-// UNENFORCED_PERMISSIONS تُستخدم لعرض "قريبًا" بدل الإيحاء بأثر فعلي غير موجود.
+// 'sale' مقبولة بالـ enum والـ RPCs لكن بلا إنفاذ فعلي بعد — UNENFORCED_PERMISSIONS تُستخدم لعرض
+// "قريبًا" بدل الإيحاء بأثر غير موجود. 'collection' و'tenant_comms' تُنفَّذ منذ
+// 20261107110000_owner_logic_office_scope.sql (الدفعات والفواتير والعدادات، ومحادثة الوحدة).
 export const PERMISSION_LABEL: Record<string, string> = {
   leasing: "التأجير وإدارة العقود",
   pricing: "تسعير الوحدات",
@@ -16,4 +16,4 @@ export const PERMISSION_LABEL: Record<string, string> = {
   sale: "البيع",
 };
 export const PERMISSION_OPTIONS = Object.keys(PERMISSION_LABEL);
-export const UNENFORCED_PERMISSIONS = new Set(["collection", "tenant_comms", "sale"]);
+export const UNENFORCED_PERMISSIONS = new Set(["sale"]);

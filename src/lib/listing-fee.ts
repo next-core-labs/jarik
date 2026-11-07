@@ -7,16 +7,22 @@ export const LISTING_FEE_LABEL = `${LISTING_FEE_SAR} ريال لكل ${LISTING_P
 
 export type MarketState =
   | { kind: "paid"; until: Date }
-  /** Listed before publishing was paid; free while it stays listed. */
+  /** Listed before publishing was paid (none left since 2026-11-07: they got 30 paid days). */
   | { kind: "free" }
   | { kind: "expired"; until: Date }
   | { kind: "unlisted" };
 
-/** Where a unit stands on the website, from its stored market fields. */
+/**
+ * Where a unit stands on the website, from its stored market fields. Paid days belong to the office
+ * that paid (market_org_id): pass the viewing office's id and another office's period counts as unlisted.
+ */
 export function marketState(
-  unit: { market_listed: boolean; market_paid_until: string | null },
+  unit: { market_listed: boolean; market_paid_until: string | null; market_org_id?: string | null },
   now: Date = new Date(),
+  officeId?: string | null,
 ): MarketState {
+  if (officeId && unit.market_org_id && unit.market_org_id !== officeId)
+    return { kind: "unlisted" };
   const until = unit.market_paid_until ? new Date(unit.market_paid_until) : null;
   if (until && until > now) return { kind: "paid", until };
   if (unit.market_listed && !until) return { kind: "free" };

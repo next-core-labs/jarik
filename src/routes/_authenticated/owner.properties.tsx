@@ -5,6 +5,7 @@ import {
   Building2,
   Copy,
   FileText,
+  Globe,
   Handshake,
   Home,
   Layers,
@@ -33,6 +34,7 @@ import {
   emptyUnit,
   unitFormFromRow,
   type UnitFormValues,
+  type UnitLocks,
 } from "@/components/unit-dialog";
 import { BulkUnitsDialog } from "@/components/bulk-units-dialog";
 import { RequestAgreementDialog } from "@/components/request-agreement-dialog";
@@ -41,8 +43,10 @@ import {
   unitSpecsLine,
   UnitFurnishingLine,
 } from "@/components/unit-specs-summary";
-import { sar, unitStatusLabel } from "@/lib/format";
-import { activeAgreementUnitIds, useOwnerUnitGroups } from "@/lib/owner-units";
+import { sar, shortDate, unitStatusLabel } from "@/lib/format";
+import { useOwnerUnitGroups } from "@/lib/owner-units";
+import { agreementPhase, heldAgreementUnitIds } from "@/lib/agreement-live";
+import { useUnitManagement, type UnitManagement } from "@/lib/unit-management";
 import { useMyRoles } from "@/lib/use-role";
 
 export const Route = createFileRoute("/_authenticated/owner/properties")({
@@ -60,7 +64,29 @@ export const Route = createFileRoute("/_authenticated/owner/properties")({
 });
 
 type Management =
-  { kind: "active"; office: string } | { kind: "pending"; office: string } | { kind: "none" };
+  | { kind: "active"; office: string; rights: UnitManagement }
+  | { kind: "upcoming"; office: string; start: string }
+  | { kind: "pending"; office: string }
+  | { kind: "none" };
+
+/**
+ * While an office manages the unit under a live agreement, what it granted is the office's to change
+ * (guard_owner_unit_write refuses the owner the same).
+ */
+function ownerLocks(m: UnitManagement): UnitLocks | undefined {
+  if (m.registered || !(m.pricing || m.leasing)) return undefined;
+  const parts = [
+    m.pricing ? "الإيجار وسعر البيع" : null,
+    m.leasing ? "وصف الإعلان والمزايا والملاحظات" : null,
+  ]
+    .filter(Boolean)
+    .join(" و");
+  return {
+    rent: m.pricing,
+    advert: m.leasing,
+    note: `يديرها ${m.officeName} — ${parts} يحدّدها المكتب حسب اتفاقية الإدارة.`,
+  };
+}
 
 function OwnerProperties() {
   const queryClient = useQueryClient();
@@ -73,6 +99,7 @@ function OwnerProperties() {
     propertyId: string;
     propertyName: string;
     values: UnitFormValues;
+    locks?: UnitLocks;
   } | null>(null);
   const [bulk, setBulk] = useState<{
     propertyId: string;
@@ -90,7 +117,7 @@ function OwnerProperties() {
       const { data, error } = await supabase
         .from("properties")
         .select(
-          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor)",
+          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed)",
         )
         .eq("owner_id", userId!)
         .order("created_at");
@@ -106,7 +133,7 @@ function OwnerProperties() {
       const { data, error } = await supabase
         .from("management_agreements")
         .select(
-          "id, status, org_id, notice_period_days, termination_requested_at, agreement_units(unit_id)",
+          "id, status, org_id, start_date, end_date, notice_period_days, termination_requested_at, agreement_units(unit_id)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -125,20 +152,31 @@ function OwnerProperties() {
   });
   const groups = useOwnerUnitGroups();
 
-  const activeUnits = useMemo(
-    () => activeAgreementUnitIds(agreements.data ?? []),
-    [agreements.data],
-  );
+  // Who manages each unit now, as the database decides it: the office that registered the property,
+  // else the office of a live agreement.
+  const management = useUnitManagement([
+    ...(own.data ?? []).flatMap((p) => (p.units ?? []).map((u) => u.id)),
+    ...(groups.data ?? []).flatMap((g) => (g.units ?? []).map((u) => u.id)),
+  ]);
+  // Units that can't go to another office: held by a signed agreement (in force or yet to start), or
+  // registered by an office.
+  const managedUnits = useMemo(() => {
+    const ids = heldAgreementUnitIds(agreements.data ?? []);
+    for (const id of management.data?.keys() ?? []) ids.add(id);
+    return ids;
+  }, [agreements.data, management.data]);
   const managementOf = (unitId: string): Management => {
     const office = (orgId: string) => officeNames.data?.[orgId] ?? "مكتب";
     const list = agreements.data ?? [];
-    const active = list.find(
+    const rights = management.data?.get(unitId);
+    if (rights) return { kind: "active", office: rights.officeName, rights };
+    const upcoming = list.find(
       (a) =>
-        a.status === "active" &&
-        activeUnits.has(unitId) &&
-        a.agreement_units.some((au) => au.unit_id === unitId),
+        agreementPhase(a) === "upcoming" && a.agreement_units.some((au) => au.unit_id === unitId),
     );
-    if (active) return { kind: "active", office: office(active.org_id) };
+    if (upcoming) {
+      return { kind: "upcoming", office: office(upcoming.org_id), start: upcoming.start_date };
+    }
     const pending = list.find(
       (a) =>
         (a.status === "sent" || a.status === "office_modified") &&
@@ -151,12 +189,15 @@ function OwnerProperties() {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["owner-own-properties"] });
     queryClient.invalidateQueries({ queryKey: ["owner-agreements-properties"] });
+    queryClient.invalidateQueries({ queryKey: ["unit-management"] });
   };
 
+  // Every write checks it touched a row: RLS skips rows silently, which must not read as success.
   const deleteUnit = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("units").delete().eq("id", id);
+      const { data, error } = await supabase.from("units").delete().eq("id", id).select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("لم تُحذف الوحدة — ليست لديك صلاحية حذفها");
     },
     onSuccess: () => {
       toast.success("حُذفت الوحدة");
@@ -166,14 +207,49 @@ function OwnerProperties() {
   });
   const deleteProperty = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("properties").delete().eq("id", id);
+      const { data, error } = await supabase.from("properties").delete().eq("id", id).select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("لم يُحذف العقار — ليست لديك صلاحية حذفه");
     },
     onSuccess: () => {
       toast.success("حُذف العقار ووحداته");
       refresh();
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حذف العقار")),
+  });
+  // With no office managing the unit any more, the owner can take it off the website and stop the
+  // automatic price cuts an office had switched on (guard_owner_unit_write allows only switching off).
+  const switchOff = useMutation({
+    mutationFn: async ({
+      id,
+      column,
+    }: {
+      id: string;
+      column: "market_listed" | "auto_price_decay";
+    }) => {
+      const { data, error } = await supabase
+        .from("units")
+        .update(column === "market_listed" ? { market_listed: false } : { auto_price_decay: false })
+        .eq("id", id)
+        .select("market_listed, auto_price_decay");
+      if (error) throw error;
+      // The database keeps the value when an office manages the unit; 0 rows when RLS skips it.
+      const row = data?.[0];
+      if (!row || row[column]) {
+        throw new Error("لم يُحفظ التغيير — الوحدة يديرها مكتب حاليًا");
+      }
+      return column;
+    },
+    onSuccess: (column) => {
+      toast.success(
+        column === "market_listed"
+          ? "أُوقف إعلان الوحدة في سوق العروض"
+          : "أُوقف التخفيض التلقائي للإيجار",
+      );
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["market"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ التغيير")),
   });
 
   const continueAfterCreate = (c: CreatedProperty) => {
@@ -257,7 +333,9 @@ function OwnerProperties() {
             );
             const single = p.structure === "single";
             const canAddUnits = editable && (!single || units.length === 0);
-            const unmanaged = units.filter((u) => managementOf(u.id).kind === "none");
+            const unmanaged = units.filter(
+              (u) => !managedUnits.has(u.id) && managementOf(u.id).kind === "none",
+            );
             const specs = buildingSpecsLine(p);
             return (
               <Card key={p.id} className="shadow-deed">
@@ -370,6 +448,7 @@ function OwnerProperties() {
                               year_built: p.year_built,
                               elevators: p.elevators,
                               parking_spaces: p.parking_spaces,
+                              unitsCount: units.length,
                             })
                           }
                         >
@@ -450,24 +529,72 @@ function OwnerProperties() {
                                 <Handshake className="size-3.5 text-brass" />
                                 {m.kind === "active"
                                   ? `يديرها ${m.office}`
-                                  : m.kind === "pending"
-                                    ? `طلب إدارة بانتظار ردّ ${m.office}`
-                                    : "بدون مكتب إدارة"}
+                                  : m.kind === "upcoming"
+                                    ? `يديرها ${m.office} ابتداءً من ${shortDate(m.start)}`
+                                    : m.kind === "pending"
+                                      ? `طلب إدارة بانتظار ردّ ${m.office}`
+                                      : "بدون مكتب إدارة"}
                               </p>
+                              {u.market_listed ? (
+                                <p className="flex items-center gap-1.5">
+                                  <Globe className="size-3.5 text-brass" />
+                                  معروضة في سوق العروض
+                                </p>
+                              ) : null}
                             </div>
+                            {editable &&
+                            m.kind !== "active" &&
+                            (u.market_listed || u.auto_price_decay) ? (
+                              <div className="mt-3 flex flex-wrap gap-1">
+                                {u.market_listed ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={switchOff.isPending}
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(
+                                          "إيقاف إعلان الوحدة في سوق العروض؟ إعادة نشرها لاحقًا تتم عبر مكتب يديرها وبرسوم نشر جديدة.",
+                                        )
+                                      ) {
+                                        switchOff.mutate({ id: u.id, column: "market_listed" });
+                                      }
+                                    }}
+                                  >
+                                    <Globe className="size-4" />
+                                    إيقاف الإعلان
+                                  </Button>
+                                ) : null}
+                                {u.auto_price_decay ? (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={switchOff.isPending}
+                                    onClick={() =>
+                                      switchOff.mutate({ id: u.id, column: "auto_price_decay" })
+                                    }
+                                  >
+                                    إيقاف التخفيض التلقائي
+                                  </Button>
+                                ) : null}
+                              </div>
+                            ) : null}
                             {editable ? (
                               <div className="mt-3 flex items-center gap-1">
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   className="flex-1"
-                                  onClick={() =>
+                                  onClick={() => {
+                                    const locks =
+                                      m.kind === "active" ? ownerLocks(m.rights) : undefined;
                                     setUnitDialog({
                                       propertyId: p.id,
                                       propertyName: p.name,
                                       values: unitFormFromRow(u),
-                                    })
-                                  }
+                                      ...(locks ? { locks } : {}),
+                                    });
+                                  }}
                                 >
                                   <Pencil className="size-4" />
                                   تعديل المواصفات
@@ -565,6 +692,7 @@ function OwnerProperties() {
           initial={unitDialog.values}
           canManage
           mode="owner"
+          {...(unitDialog.locks ? { locks: unitDialog.locks } : {})}
         />
       ) : null}
       {bulk ? (
@@ -579,13 +707,14 @@ function OwnerProperties() {
       {requestFor ? (
         <RequestAgreementDialog
           properties={groups.data ?? []}
-          excludedUnitIds={activeUnits}
+          excludedUnitIds={managedUnits}
           initialUnitIds={requestFor}
           onClose={() => setRequestFor(null)}
           onDone={() => {
             setRequestFor(null);
             queryClient.invalidateQueries({ queryKey: ["owner-agreements-by-unit"] });
             queryClient.invalidateQueries({ queryKey: ["owner-agreements"] });
+            queryClient.invalidateQueries({ queryKey: ["unit-management"] });
           }}
         />
       ) : null}

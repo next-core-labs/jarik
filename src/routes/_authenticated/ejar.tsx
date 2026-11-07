@@ -23,9 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { todayRiyadh } from "@/lib/dates";
-import { shortDate, leaseStatusLabel } from "@/lib/format";
+import { sar, shortDate } from "@/lib/format";
 import { myOrgId } from "@/lib/use-org-branding";
-import { getEjarConnectionStatus, syncEjar } from "@/lib/ejar.functions";
+import { getEjarConnectionStatus, syncEjar, type EjarMismatch } from "@/lib/ejar.functions";
+import { CorrectLeaseDialog } from "@/components/lease-dialog";
+import { LEASE_TERMS, leaseEndDate, leaseStatusText } from "@/components/lease-schedule";
 import { toLatinDigits } from "@/lib/saudi-id";
 
 /**
@@ -87,6 +89,7 @@ function EjarSection() {
   const [brokerId, setBrokerId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [contracts, setContracts] = useState<Record<string, string>>({});
+  const [applying, setApplying] = useState<EjarLease | null>(null);
 
   const org = useQuery({
     queryKey: ["org-ejar"],
@@ -109,7 +112,7 @@ function EjarSection() {
       const { data, error } = await supabase
         .from("leases")
         .select(
-          "id, start_date, end_date, status, ejar_contract_no, ejar_status, tenants(full_name), units(unit_number, properties(name))",
+          "id, start_date, end_date, status, annual_rent, term_months, installments, deposit, deposit_status, ejar_contract_no, ejar_status, ejar_mismatch, tenants(full_name), units(unit_number, properties(name))",
         )
         .order("start_date", { ascending: false });
       if (error) throw error;
@@ -156,12 +159,35 @@ function EjarSection() {
       if (result.unmatched.length > 0) {
         toast.warning(`عقود لم يُعرف ما يقابلها في المنصة: ${result.unmatched.join(", ")}`);
       }
+      if (result.needsReview.length > 0) {
+        toast.warning(
+          `بيانات عقود في «إيجار» تختلف عن المنصة ولم تُطبَّق — راجعها أدناه: ${result.needsReview.join(", ")}`,
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["ejar-leases"] });
       queryClient.invalidateQueries({ queryKey: ["org-ejar"] });
       queryClient.invalidateQueries({ queryKey: ["meter-readings"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت المزامنة")),
+  });
+
+  // Ejar's terms were looked at and ours are right: drop the flag.
+  const dismissMismatch = useMutation({
+    mutationFn: async (leaseId: string) => {
+      const { data, error } = await supabase
+        .from("leases")
+        .update({ ejar_mismatch: null })
+        .eq("id", leaseId)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("صلاحيتك لا تشمل إدارة إيجار لهذا العقد");
+    },
+    onSuccess: () => {
+      toast.success("أُبقيت بيانات العقد كما هي في المنصة");
+      queryClient.invalidateQueries({ queryKey: ["ejar-leases"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الحفظ")),
   });
 
   const saveContract = useMutation({
@@ -285,8 +311,17 @@ function EjarSection() {
                       {shortDate(l.start_date)} — {shortDate(l.end_date)}
                     </p>
                     <Badge variant="outline" className="mt-2">
-                      {leaseStatusLabel[l.status] ?? l.status}
+                      {leaseStatusText(l.status)}
                     </Badge>
+                    {mismatchOf(l) ? (
+                      <MismatchNote
+                        lease={l}
+                        mismatch={mismatchOf(l)!}
+                        busy={dismissMismatch.isPending}
+                        onApply={() => setApplying(l)}
+                        onDismiss={() => dismissMismatch.mutate(l.id)}
+                      />
+                    ) : null}
                   </div>
                   <div className="flex items-start gap-2">
                     <div>
@@ -321,6 +356,96 @@ function EjarSection() {
           )}
         </CardContent>
       </Card>
+
+      {applying && mismatchOf(applying) ? (
+        <CorrectLeaseDialog
+          lease={{
+            ...applying,
+            label: `${applying.units?.properties?.name ?? ""} · وحدة ${applying.units?.unit_number ?? "—"}`,
+          }}
+          initial={ejarTerms(applying, mismatchOf(applying)!)}
+          onClose={() => setApplying(null)}
+          onDone={() => {
+            setApplying(null);
+            queryClient.invalidateQueries({ queryKey: ["ejar-leases"] });
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+type EjarLease = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  annual_rent: number;
+  term_months: number;
+  installments: number;
+  deposit: number;
+  deposit_status: string;
+  ejar_mismatch: unknown;
+  units: { unit_number: string; properties: { name: string } | null } | null;
+};
+
+const mismatchOf = (l: { ejar_mismatch: unknown }) =>
+  (l.ejar_mismatch as EjarMismatch | null) ?? null;
+
+/** Ejar's terms as a correction: its start and rent, and its term when it is one we offer. */
+function ejarTerms(lease: EjarLease, m: EjarMismatch) {
+  const startDate = m.start_date ?? lease.start_date;
+  const termMonths = m.end_date
+    ? LEASE_TERMS.find((t) => leaseEndDate(startDate, t) === m.end_date)
+    : undefined;
+  return {
+    startDate,
+    ...(termMonths ? { termMonths } : {}),
+    ...(m.annual_rent ? { annualRent: Number(m.annual_rent) } : {}),
+  };
+}
+
+/** Ejar's terms next to ours, with the two ways out: apply them (correct the lease) or keep ours. */
+function MismatchNote({
+  lease,
+  mismatch,
+  busy,
+  onApply,
+  onDismiss,
+}: {
+  lease: EjarLease;
+  mismatch: EjarMismatch;
+  busy: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="mt-3 space-y-2 rounded-md border border-brass/40 bg-muted/40 p-3 text-xs">
+      <p className="font-medium text-foreground">بيانات «إيجار» تختلف عن المنصة — لم تُطبَّق</p>
+      <p className="text-muted-foreground">
+        في إيجار: {mismatch.start_date ? shortDate(mismatch.start_date) : "—"} —{" "}
+        {mismatch.end_date ? shortDate(mismatch.end_date) : "—"}
+        {mismatch.annual_rent !== null ? ` · ${sar(mismatch.annual_rent)} سنويًا` : ""}
+      </p>
+      <p className="text-muted-foreground">
+        في المنصة: {shortDate(lease.start_date)} — {shortDate(lease.end_date)} ·{" "}
+        {sar(lease.annual_rent)} سنويًا
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {lease.status === "active" ? (
+          <Button size="sm" variant="outline" onClick={onApply}>
+            اعتماد بيانات إيجار
+          </Button>
+        ) : null}
+        <Button size="sm" variant="ghost" disabled={busy} onClick={onDismiss}>
+          إبقاء بيانات المنصة
+        </Button>
+      </div>
+      {lease.status === "active" ? (
+        <p className="text-muted-foreground">
+          الاعتماد يعيد إنشاء جدول الدفعات، ويُتاح فقط لعقد لم يُسدَّد منه شيء.
+        </p>
+      ) : null}
     </div>
   );
 }

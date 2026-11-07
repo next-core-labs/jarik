@@ -838,6 +838,11 @@ export const platformSystemHealth = createServerFn({ method: "POST" })
           label: "تذكير الدفعات الذكي",
           lastRun: lastRunOf("smart-payment-reminders"),
         },
+        {
+          jobName: "end-lapsed-agreements",
+          label: "إنهاء اتفاقيات الإدارة المنتهية",
+          lastRun: lastRunOf("end-lapsed-agreements"),
+        },
       ],
       seo: {
         totalListings: listings.length,

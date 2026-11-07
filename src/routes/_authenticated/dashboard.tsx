@@ -13,12 +13,13 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
+import { OwnerRentRequests } from "@/components/owner-rent-requests";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isOverdue } from "@/lib/dates";
+import { addDays, todayRiyadh } from "@/lib/dates";
 import {
   arCount,
   arNum,
@@ -44,16 +45,42 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+type OfficeTotals = {
+  collected: number;
+  outstanding: number;
+  overdue_count: number;
+  expenses_total: number;
+  units_total: number;
+  units_occupied: number;
+  units_vacant: number;
+};
+
 function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
-      const [units, payments, maintenance, leases, expenses, readings] = await Promise.all([
-        supabase.from("units").select("id, status, annual_rent"),
-        supabase.from("payments").select("id, amount, status, due_date"),
-        supabase.from("maintenance_requests").select("id, title, status, priority, created_at"),
-        supabase.from("leases").select("id, end_date, status, annual_rent"),
-        supabase.from("expenses").select("amount, expense_date"),
+      // Totals are summed in the database and the lists are bounded, so nothing here depends on
+      // how many payments or units the office has (PostgREST returns at most 1000 rows).
+      const today = todayRiyadh();
+      const [totals, overdue, maintenance, openMaintenance, leases, readings] = await Promise.all([
+        supabase.rpc("office_finance_summary"),
+        supabase.rpc("office_payments", { _status: "overdue", _limit: 10 }),
+        supabase
+          .from("maintenance_requests")
+          .select("id, title, status, priority, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabase
+          .from("maintenance_requests")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "done"),
+        supabase
+          .from("leases")
+          .select("id, end_date, status, annual_rent")
+          .eq("status", "active")
+          .lte("end_date", addDays(today, 90))
+          .order("end_date")
+          .limit(50),
         supabase
           .from("meter_readings")
           .select(
@@ -62,12 +89,13 @@ function useDashboard() {
           .order("reading_date", { ascending: false })
           .limit(400),
       ]);
+      if (totals.error) throw totals.error;
       return {
-        units: units.data ?? [],
-        payments: payments.data ?? [],
+        totals: totals.data as unknown as OfficeTotals,
+        overdue: overdue.data ?? [],
         maintenance: maintenance.data ?? [],
+        openMaintenance: openMaintenance.count ?? 0,
         leases: leases.data ?? [],
-        expenses: expenses.data ?? [],
         readings: readings.data ?? [],
       };
     },
@@ -92,26 +120,18 @@ function Dashboard() {
   }
 
   // A sold unit has left the rental pool: it must not be counted as vacant, and it must not
-  // silently deflate the occupancy rate as more units sell over time.
-  const rentableUnits = data.units.filter((u) => u.status !== "sold");
-  const total = rentableUnits.length;
-  const occupied = rentableUnits.filter((u) => u.status === "occupied").length;
-  const vacant = rentableUnits.filter((u) => u.status === "vacant").length;
+  // silently deflate the occupancy rate as more units sell over time (units_total excludes it).
+  const total = Number(data.totals.units_total);
+  const occupied = Number(data.totals.units_occupied);
+  const vacant = Number(data.totals.units_vacant);
   const occupancy = total ? Math.round((occupied / total) * 100) : 0;
 
-  const collected = data.payments
-    .filter((p) => p.status === "paid")
-    .reduce((s, p) => s + Number(p.amount), 0);
-  const outstanding = data.payments
-    .filter((p) => p.status !== "paid")
-    .reduce((s, p) => s + Number(p.amount), 0);
-  // Nothing ever sets status = "overdue", so derive it from the due date.
-  const overdue = data.payments.filter((p) => isOverdue(p));
-  const expensesTotal = data.expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const openMaintenance = data.maintenance.filter((m) => m.status !== "done");
-  const expiringSoon = data.leases
-    .filter((l) => l.status === "active" && daysUntil(l.end_date) <= 90)
-    .sort((a, b) => a.end_date.localeCompare(b.end_date));
+  const collected = Number(data.totals.collected);
+  const outstanding = Number(data.totals.outstanding);
+  const overdueCount = Number(data.totals.overdue_count);
+  const overdue = data.overdue;
+  const expensesTotal = Number(data.totals.expenses_total);
+  const expiringSoon = data.leases;
 
   type Reading = (typeof data.readings)[number];
   const byUnitMeter = new Map<string, Reading[]>();
@@ -213,8 +233,8 @@ function Dashboard() {
           label="المستحق غير المحصّل"
           value={sar(outstanding)}
           hint={
-            overdue.length
-              ? arCount(overdue.length, {
+            overdueCount
+              ? arCount(overdueCount, {
                   one: "دفعة متأخرة واحدة",
                   two: "دفعتان متأخرتان",
                   few: "دفعات متأخرة",
@@ -232,7 +252,7 @@ function Dashboard() {
         <StatCard
           icon={Wrench}
           label="الصيانة المفتوحة"
-          value={openMaintenance.length}
+          value={data.openMaintenance}
           hint="طلبات لم تُنجز"
         />
         <StatCard
@@ -242,6 +262,10 @@ function Dashboard() {
           hint={electricity.hint}
         />
         <StatCard icon={Droplets} label="استهلاك المياه" value={water.value} hint={water.hint} />
+      </div>
+
+      <div className="mt-6">
+        <OwnerRentRequests />
       </div>
 
       <Card className="mt-6 shadow-deed">
@@ -333,7 +357,7 @@ function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent className="space-y-3">
-            {data.maintenance.slice(0, 5).map((m) => (
+            {data.maintenance.map((m) => (
               <div
                 key={m.id}
                 className="flex items-center justify-between border-b border-border pb-2 last:border-0"
@@ -354,7 +378,12 @@ function Dashboard() {
 
         <Card className="shadow-deed">
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-base">المتأخرات</CardTitle>
+            <CardTitle className="text-base">
+              المتأخرات
+              {overdueCount > overdue.length
+                ? ` (أقدم ${arNum(overdue.length)} من ${arNum(overdueCount)})`
+                : ""}
+            </CardTitle>
             <Link
               to="/collections"
               className="text-sm text-foreground underline underline-offset-4 hover:text-red-text"
@@ -372,7 +401,9 @@ function Dashboard() {
                   className="flex items-center justify-between border-b border-border pb-2 last:border-0"
                 >
                   <p className="text-sm">استحقاق {shortDate(p.due_date)}</p>
-                  <span className="text-sm font-medium text-destructive">{sar(p.amount)}</span>
+                  <span className="text-sm font-medium text-destructive">
+                    {sar(Number(p.amount) - Number(p.amount_paid))}
+                  </span>
                 </div>
               ))
             )}

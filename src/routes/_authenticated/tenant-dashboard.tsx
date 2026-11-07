@@ -131,6 +131,18 @@ function TenantDashboard() {
     null;
   const unitId = currentLease?.units?.id ?? null;
   const propertyId = currentLease?.units?.property_id ?? null;
+  // A renewal starts a new lease while the one it renewed may still have an unpaid installment:
+  // those earlier leases on the same unit stay on the payment cards until they are settled.
+  const earlierLeaseIds = currentLease
+    ? data.leases
+        .filter(
+          (l) =>
+            l.id !== currentLease.id &&
+            l.units?.id === unitId &&
+            l.start_date < currentLease.start_date,
+        )
+        .map((l) => l.id)
+    : [];
   const firstName = (data.tenant?.full_name ?? "").split(" ")[0] || "";
 
   return (
@@ -180,14 +192,14 @@ function TenantDashboard() {
         </Card>
       ) : (
         <div className="space-y-6">
-          <NextPaymentCard leaseId={currentLease.id} unitId={unitId!} />
+          <NextPaymentCard leaseId={currentLease.id} earlierLeaseIds={earlierLeaseIds} />
 
           <div id="contract">
             <ContractCard leaseId={currentLease.id} />
           </div>
 
           <div id="payments">
-            <PaymentsTable leaseId={currentLease.id} />
+            <PaymentsTable leaseId={currentLease.id} earlierLeaseIds={earlierLeaseIds} />
           </div>
 
           <div id="maintenance" className="space-y-6">

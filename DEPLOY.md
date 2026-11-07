@@ -142,8 +142,8 @@ After adding secrets, deploy again (B2) so the Worker picks them up.
 
 **Paid publishing (Moyasar).** An office pays 50 SAR (VAT included) to publish a unit on the website
 for 30 days, on a Moyasar hosted invoice. In the Moyasar dashboard → **Webhooks**, add a second
-webhook (usil keeps its own) to `https://jarak-ksa.com/api/public/moyasar/webhook`, event
-`payment_paid`, with the same shared secret as `MOYASAR_WEBHOOK_SECRET`. Without it a payment is
+webhook (usil keeps its own) to `https://jarak-ksa.com/api/public/moyasar/webhook`, events
+`payment_paid`, `payment_refunded` and `payment_voided` (a refund or void takes the listing down again), with the same shared secret as `MOYASAR_WEBHOOK_SECRET`. Without it a payment is
 still confirmed when the office returns from Moyasar, or when they press «نشر في الموقع» again.
 
 **System administrator (مدير النظام).** One account runs the platform from `/hq`: `superadmin@jarak.com`,

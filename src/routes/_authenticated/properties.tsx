@@ -54,6 +54,7 @@ import {
   emptyUnit,
   unitFormFromRow,
   type UnitFormValues,
+  type UnitLocks,
 } from "@/components/unit-dialog";
 import { BulkUnitsDialog } from "@/components/bulk-units-dialog";
 import { buildingSpecsLine, UnitFurnishingLine } from "@/components/unit-specs-summary";
@@ -70,6 +71,7 @@ import {
 import { isMoyasarCheckoutUrl } from "@/lib/moyasar-url";
 import { useMyRoles } from "@/lib/use-role";
 import { myOrgId } from "@/lib/use-org-branding";
+import { useUnitManagement, type UnitManagement } from "@/lib/unit-management";
 
 export const Route = createFileRoute("/_authenticated/properties")({
   staticData: { sitemap: false },
@@ -86,6 +88,24 @@ export const Route = createFileRoute("/_authenticated/properties")({
   }),
   component: Properties,
 });
+
+/**
+ * What an office may change on an owner's unit it manages under an agreement (the database refuses
+ * the rest: guard_unit_agreement_columns). The deed and furniture stay the owner's.
+ */
+function agreementLocks(m: UnitManagement): UnitLocks {
+  return {
+    rent: !m.pricing,
+    advert: !m.leasing,
+    details: !m.leasing,
+    deed: true,
+    note: m.leasing
+      ? m.pricing
+        ? "وحدة مالك باتفاقية إدارة — رقم الصك والأثاث يعدّلهما المالك فقط."
+        : "وحدة مالك باتفاقية إدارة لا تشمل التسعير — الإيجار ورقم الصك والأثاث يعدّلها المالك."
+      : "صلاحيتك في اتفاقية الإدارة تشمل التسعير فقط — تعدّل الإيجار وحده.",
+  };
+}
 
 /** 101, 102 … 110 — numeric-aware, so a building reads floor by floor. */
 function sortUnits<T extends { unit_number: string | null }>(units: T[]): T[] {
@@ -113,6 +133,7 @@ function Properties() {
     propertyName: string;
     values: UnitFormValues;
     leaseTenant: string | null;
+    locks?: UnitLocks;
   } | null>(null);
   const [newProperty, setNewProperty] = useState(false);
   const [bulk, setBulk] = useState<{
@@ -174,13 +195,13 @@ function Properties() {
       .catch((e: Error) => toast.error(userErrorMessage(e, "تعذّر التحقق من الدفع")));
   }, [confirmPayment, queryClient]);
 
-  const { data, isLoading } = useQuery({
+  const { data: fetched, isLoading } = useQuery({
     queryKey: ["properties-with-units"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("properties")
         .select(
-          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, leases(status, tenants(full_name)))",
+          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, owner_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, market_org_id, leases(status, tenants(full_name)))",
         )
         .order("created_at");
       if (error) throw error;
@@ -188,7 +209,16 @@ function Properties() {
     },
   });
 
-  type Unit = NonNullable<typeof data>[number]["units"][number];
+  // An account that is staff and also an owner gets its own office-less properties back from RLS;
+  // those are managed from «عقاراتي» (/owner/properties), not here.
+  const data = (fetched ?? []).filter(
+    (p) => !(p.org_id == null && me?.userId && p.owner_id === me.userId),
+  );
+  type Unit = (typeof data)[number]["units"][number];
+  // Owners' units seen through a management agreement: what the agreement lets this office edit.
+  const management = useUnitManagement(
+    data.filter((p) => p.org_id == null).flatMap((p) => (p.units ?? []).map((u) => u.id)),
+  );
   // The tenant is whoever holds the unit's active lease — the same lease that makes it "مشغولة".
   const leaseTenant = (u: Unit) =>
     (u.leases ?? []).find((l) => l.status === "active")?.tenants?.full_name ?? null;
@@ -201,7 +231,7 @@ function Properties() {
         (v ?? "").toLowerCase().includes(query),
       ));
   const filtering = Boolean(query) || statusFilter !== "all";
-  const visible = (data ?? [])
+  const visible = data
     .map((p) => {
       const propertyHit =
         Boolean(query) &&
@@ -285,7 +315,7 @@ function Properties() {
           <Skeleton className="h-48" />
           <Skeleton className="h-48" />
         </div>
-      ) : (data ?? []).length === 0 ? (
+      ) : data.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
             <p className="font-medium">لا توجد عقارات بعد</p>
@@ -383,6 +413,7 @@ function Properties() {
                                 year_built: p.year_built,
                                 elevators: p.elevators,
                                 parking_spaces: p.parking_spaces,
+                                unitsCount: all.length,
                               })
                             }
                           >
@@ -436,155 +467,172 @@ function Properties() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {units.map((u) => (
-                      <div key={u.id} className="rounded-md border border-border bg-background p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">
-                            وحدة {u.unit_number}
-                            {u.unit_name ? ` · ${u.unit_name}` : ""} · {u.unit_type}
-                          </p>
-                          {/* "default" (red) marks vacant/available only — occupied is neither the
+                    {units.map((u) => {
+                      const rights = ownerManaged ? management.data?.get(u.id) : undefined;
+                      // An owner's unit opens for editing only when the agreement grants pricing or
+                      // leasing; with view/maintenance alone every save would be refused.
+                      const canEdit = !ownerManaged || Boolean(rights?.pricing || rights?.leasing);
+                      const canPublish = !ownerManaged || Boolean(rights?.leasing);
+                      return (
+                        <div
+                          key={u.id}
+                          className="rounded-md border border-border bg-background p-4"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium">
+                              وحدة {u.unit_number}
+                              {u.unit_name ? ` · ${u.unit_name}` : ""} · {u.unit_type}
+                            </p>
+                            {/* "default" (red) marks vacant/available only — occupied is neither the
                               price, the primary action, nor "available". */}
-                          <Badge variant={u.status === "vacant" ? "default" : "secondary"}>
-                            {unitStatusLabel[u.status] ?? u.status}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {u.rooms != null ? `${u.rooms} غرف · ` : ""}
-                          {u.halls != null ? `${u.halls} صالة · ` : ""}
-                          {u.bathrooms != null ? `${u.bathrooms} حمام · ` : ""}
-                          {u.area != null ? `${u.area} م² · ` : ""}
-                          {u.listing_purpose === "sale"
-                            ? `${sar(u.sale_price)} · للبيع`
-                            : `${sar(u.annual_rent)} سنويًا`}
-                        </p>
-                        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                          {u.district || u.street || u.floor_no ? (
-                            <p className="flex items-center gap-1.5">
-                              <MapPin className="size-3.5 text-brass" />
-                              {[u.district, u.street, u.floor_no ? `الدور ${u.floor_no}` : null]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </p>
-                          ) : null}
-                          <UnitFurnishingLine
-                            furnishing={u.furnishing}
-                            furniture={u.furniture}
-                            icon={<Sofa className="size-3.5 shrink-0 text-brass" />}
-                          />
-                          {u.deed_number ? (
-                            <p className="flex items-center gap-1.5">
-                              <FileText className="size-3.5 text-brass" />
-                              صك الوحدة: <span dir="ltr">{u.deed_number}</span>
-                            </p>
-                          ) : null}
-                          <p className="flex items-center gap-1.5">
-                            <Zap className="size-3.5 text-brass" />
-                            عداد الكهرباء: <span dir="ltr">{u.electricity_meter_no ?? "—"}</span>
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <Droplets className="size-3.5 text-brass" />
-                            عداد المياه: <span dir="ltr">{u.water_meter_no ?? "—"}</span>
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <UserCheck className="size-3.5 text-brass" />
-                            المالك:{" "}
-                            {ownerManaged
-                              ? (p.owner_name ?? "المالك المتعاقد")
-                              : (clientName(u.owner_id) ?? "غير مسند")}
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <UserCheck className="size-3.5 text-brass" />
-                            المستأجر: {leaseTenant(u) ?? "بدون مستأجر"}
-                          </p>
-                        </div>
-                        {isStaff ? (
-                          <div className="mt-3 space-y-2">
-                            {u.status === "vacant" ? (
-                              <Button
-                                variant="outline"
-                                className="w-full"
-                                onClick={() => {
-                                  setAd({
-                                    unitId: u.id,
-                                    label: `${u.unit_type} رقم ${u.unit_number}`,
-                                  });
-                                  adMut.mutate(u.id);
-                                }}
-                              >
-                                <Megaphone className="size-4" />
-                                إعلان جاهز
-                              </Button>
-                            ) : null}
-                            <UnitMarketStatus
-                              unit={u}
-                              publishing={publish.isPending && publish.variables === u.id}
-                              onPublish={() => publish.mutate(u.id)}
-                            />
-                            {ownerManaged ? null : (
-                              <Select
-                                value={u.owner_id ?? "none"}
-                                onValueChange={(v) =>
-                                  assignOwner.mutate({
-                                    unitId: u.id,
-                                    ownerId: v === "none" ? null : v,
-                                  })
-                                }
-                              >
-                                <SelectTrigger aria-label="إسناد الوحدة لمالك">
-                                  <SelectValue placeholder="إسناد الوحدة لمالك" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">بدون مالك</SelectItem>
-                                  {/* Owner accounts only (not staff, tenants or technicians); a unit
-                                    already assigned to someone else keeps that option visible. */}
-                                  {(clients.data ?? [])
-                                    .filter((c) => c.roles.includes("owner") || c.id === u.owner_id)
-                                    .map((c) => (
-                                      <SelectItem key={c.id} value={c.id}>
-                                        {c.fullName || c.email}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <Button
-                              variant="outline"
-                              className="w-full"
-                              onClick={() =>
-                                setDialog({
-                                  propertyId: p.id,
-                                  propertyName: p.name,
-                                  values: unitFormFromRow(u),
-                                  leaseTenant: leaseTenant(u),
-                                })
-                              }
-                            >
-                              <Pencil className="size-4" />
-                              تعديل وفواتير الإصلاح
-                            </Button>
-                            {canAddUnits ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full"
-                                onClick={() =>
-                                  setDialog({
-                                    propertyId: p.id,
-                                    propertyName: p.name,
-                                    values: unitFormFromRow(u, true),
-                                    leaseTenant: null,
-                                  })
-                                }
-                              >
-                                <Copy className="size-4" />
-                                نسخ كوحدة جديدة
-                              </Button>
-                            ) : null}
+                            <Badge variant={u.status === "vacant" ? "default" : "secondary"}>
+                              {unitStatusLabel[u.status] ?? u.status}
+                            </Badge>
                           </div>
-                        ) : null}
-                      </div>
-                    ))}
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {u.rooms != null ? `${u.rooms} غرف · ` : ""}
+                            {u.halls != null ? `${u.halls} صالة · ` : ""}
+                            {u.bathrooms != null ? `${u.bathrooms} حمام · ` : ""}
+                            {u.area != null ? `${u.area} م² · ` : ""}
+                            {u.listing_purpose === "sale"
+                              ? `${sar(u.sale_price)} · للبيع`
+                              : `${sar(u.annual_rent)} سنويًا`}
+                          </p>
+                          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                            {u.district || u.street || u.floor_no ? (
+                              <p className="flex items-center gap-1.5">
+                                <MapPin className="size-3.5 text-brass" />
+                                {[u.district, u.street, u.floor_no ? `الدور ${u.floor_no}` : null]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            ) : null}
+                            <UnitFurnishingLine
+                              furnishing={u.furnishing}
+                              furniture={u.furniture}
+                              icon={<Sofa className="size-3.5 shrink-0 text-brass" />}
+                            />
+                            {u.deed_number ? (
+                              <p className="flex items-center gap-1.5">
+                                <FileText className="size-3.5 text-brass" />
+                                صك الوحدة: <span dir="ltr">{u.deed_number}</span>
+                              </p>
+                            ) : null}
+                            <p className="flex items-center gap-1.5">
+                              <Zap className="size-3.5 text-brass" />
+                              عداد الكهرباء: <span dir="ltr">{u.electricity_meter_no ?? "—"}</span>
+                            </p>
+                            <p className="flex items-center gap-1.5">
+                              <Droplets className="size-3.5 text-brass" />
+                              عداد المياه: <span dir="ltr">{u.water_meter_no ?? "—"}</span>
+                            </p>
+                            <p className="flex items-center gap-1.5">
+                              <UserCheck className="size-3.5 text-brass" />
+                              المالك:{" "}
+                              {ownerManaged
+                                ? (p.owner_name ?? "المالك المتعاقد")
+                                : (clientName(u.owner_id) ?? "غير مسند")}
+                            </p>
+                            <p className="flex items-center gap-1.5">
+                              <UserCheck className="size-3.5 text-brass" />
+                              المستأجر: {leaseTenant(u) ?? "بدون مستأجر"}
+                            </p>
+                          </div>
+                          {isStaff ? (
+                            <div className="mt-3 space-y-2">
+                              {u.status === "vacant" ? (
+                                <Button
+                                  variant="outline"
+                                  className="w-full"
+                                  onClick={() => {
+                                    setAd({
+                                      unitId: u.id,
+                                      label: `${u.unit_type} رقم ${u.unit_number}`,
+                                    });
+                                    adMut.mutate(u.id);
+                                  }}
+                                >
+                                  <Megaphone className="size-4" />
+                                  إعلان جاهز
+                                </Button>
+                              ) : null}
+                              <UnitMarketStatus
+                                unit={u}
+                                officeId={myOffice.data ?? null}
+                                canPublish={canPublish}
+                                publishing={publish.isPending && publish.variables === u.id}
+                                onPublish={() => publish.mutate(u.id)}
+                              />
+                              {ownerManaged ? null : (
+                                <Select
+                                  value={u.owner_id ?? "none"}
+                                  onValueChange={(v) =>
+                                    assignOwner.mutate({
+                                      unitId: u.id,
+                                      ownerId: v === "none" ? null : v,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger aria-label="إسناد الوحدة لمالك">
+                                    <SelectValue placeholder="إسناد الوحدة لمالك" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">بدون مالك</SelectItem>
+                                    {/* Owner accounts only (not staff, tenants or technicians); a unit
+                                    already assigned to someone else keeps that option visible. */}
+                                    {(clients.data ?? [])
+                                      .filter(
+                                        (c) => c.roles.includes("owner") || c.id === u.owner_id,
+                                      )
+                                      .map((c) => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                          {c.fullName || c.email}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                              {canEdit ? (
+                                <Button
+                                  variant="outline"
+                                  className="w-full"
+                                  onClick={() =>
+                                    setDialog({
+                                      propertyId: p.id,
+                                      propertyName: p.name,
+                                      values: unitFormFromRow(u),
+                                      leaseTenant: leaseTenant(u),
+                                      ...(rights ? { locks: agreementLocks(rights) } : {}),
+                                    })
+                                  }
+                                >
+                                  <Pencil className="size-4" />
+                                  {ownerManaged ? "تعديل" : "تعديل وفواتير الإصلاح"}
+                                </Button>
+                              ) : null}
+                              {canAddUnits ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() =>
+                                    setDialog({
+                                      propertyId: p.id,
+                                      propertyName: p.name,
+                                      values: unitFormFromRow(u, true),
+                                      leaseTenant: null,
+                                    })
+                                  }
+                                >
+                                  <Copy className="size-4" />
+                                  نسخ كوحدة جديدة
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                     {units.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         {all.length === 0 ? "لا توجد وحدات مسجّلة." : "لا توجد وحدات تطابق البحث."}
@@ -595,7 +643,7 @@ function Properties() {
               </Card>
             );
           })}
-          {(data ?? []).length === 0 ? (
+          {data.length === 0 ? (
             <p className="text-sm text-muted-foreground">لا توجد عقارات مرتبطة بحسابك.</p>
           ) : null}
         </div>
@@ -634,6 +682,7 @@ function Properties() {
           initial={dialog.values}
           canManage={isStaff}
           leaseTenant={dialog.leaseTenant}
+          {...(dialog.locks ? { locks: dialog.locks } : {})}
         />
       ) : null}
 
@@ -693,14 +742,25 @@ function Properties() {
 /** Whether the unit is on the website and until when, with the paid publish / extend button. */
 function UnitMarketStatus({
   unit,
+  officeId,
+  canPublish,
   publishing,
   onPublish,
 }: {
-  unit: { status: string; market_listed: boolean; market_paid_until: string | null };
+  unit: {
+    status: string;
+    market_listed: boolean;
+    market_paid_until: string | null;
+    market_org_id: string | null;
+  };
+  /** The viewing office: another office's leftover paid days are not this office's. */
+  officeId: string | null;
+  /** An owner's unit is published only by an office whose agreement grants leasing. */
+  canPublish: boolean;
   publishing: boolean;
   onPublish: () => void;
 }) {
-  const market = marketState(unit);
+  const market = marketState(unit, undefined, officeId);
   const line =
     market.kind === "paid"
       ? unit.market_listed
@@ -712,7 +772,7 @@ function UnitMarketStatus({
           ? `انتهى النشر في ${shortDate(market.until.toISOString())}`
           : "غير منشورة في الموقع";
   // An occupied unit never shows on the website, and a free legacy listing has nothing to pay.
-  const canPay = unit.status === "vacant" && market.kind !== "free";
+  const canPay = canPublish && unit.status === "vacant" && market.kind !== "free";
   return (
     <>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

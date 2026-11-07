@@ -1,14 +1,15 @@
-import { AlertOctagon, CheckCircle2, Clock } from "lucide-react";
+import { AlertOctagon, CheckCircle2, CircleDashed, Clock } from "lucide-react";
 
 import { effectiveStatus } from "@/lib/dates";
 import { paymentStatusLabel, sar, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Panel } from "@/components/owner-dashboard/parts";
-import type { RecentPayment } from "@/components/owner-dashboard/model";
+import { paymentBalance, type RecentPayment } from "@/components/owner-dashboard/model";
 
 const STATUS_STYLE: Record<string, { icon: typeof Clock; className: string }> = {
   paid: { icon: CheckCircle2, className: "text-success" },
   overdue: { icon: AlertOctagon, className: "text-destructive" },
+  partial: { icon: CircleDashed, className: "text-brass" },
   due: { icon: Clock, className: "text-muted-foreground" },
 };
 
@@ -27,6 +28,7 @@ export function RecentPayments({ payments, today }: { payments: RecentPayment[];
           {payments.map((p) => {
             const status = effectiveStatus(p, today || undefined);
             const s = STATUS_STYLE[status] ?? STATUS_STYLE["due"]!;
+            const balance = paymentBalance(p);
             return (
               <li key={p.id} className="flex items-center gap-3 px-5 py-3">
                 <s.icon className={cn("size-4 shrink-0", s.className)} aria-hidden />
@@ -39,11 +41,23 @@ export function RecentPayments({ payments, today }: { payments: RecentPayment[];
                       ? `سُدّدت ${shortDate(p.paid_date)}`
                       : `استحقت ${shortDate(p.due_date)}`}
                   </p>
+                  {balance.partial ? (
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      سُدد {sar(balance.paid)} · المتبقي {sar(balance.remaining)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="shrink-0 text-end">
-                  <p className="text-sm font-semibold tabular-nums">{sar(p.amount)}</p>
+                  {/* An open installment shows what is still owed on it. */}
+                  <p className="text-sm font-semibold tabular-nums">
+                    {sar(status === "paid" ? p.amount : balance.remaining)}
+                  </p>
                   <p className={cn("text-xs font-medium", s.className)}>
-                    {paymentStatusLabel[status] ?? status}
+                    {balance.partial
+                      ? status === "overdue"
+                        ? "جزئية · متأخرة"
+                        : paymentStatusLabel["partial"]
+                      : (paymentStatusLabel[status] ?? status)}
                   </p>
                 </div>
               </li>

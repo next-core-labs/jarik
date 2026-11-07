@@ -17,6 +17,7 @@ const depositLabel: Record<string, string> = {
   held: "محجوزة",
   refunded: "مستردة",
   deducted: "مخصومة",
+  transferred: "منقولة للعقد المجدَّد",
 };
 
 /** بطاقة المستأجر: قرار التجديد قبل انتهاء العقد + حالة وديعة التأمين. */
@@ -46,6 +47,8 @@ export function RenewalDecision() {
             .from("renewal_requests")
             .select("id, lease_id, decision, status")
             .in("lease_id", leaseIds)
+            // Newest first: the card shows the tenant's latest decision for each lease.
+            .order("created_at", { ascending: false })
         : { data: [] };
       return {
         leases: (leases.data ?? []) as unknown as {

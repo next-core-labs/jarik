@@ -17,19 +17,32 @@ export const LISTING_METADATA_SOURCE = "jarak_listing";
 /** A row whose invoice never got attached (the worker died mid-request) blocks the unit this long. */
 const STALE_OPEN_ROW_MS = 2 * 60_000;
 
+/** An unpaid payment link is cancelled and replaced after a day, so a weeks-old link can't be paid. */
+const INVOICE_TTL_MS = 24 * 60 * 60_000;
+
 type ListingPaymentRow = {
   id: string;
-  unit_id: string;
+  /** NULL once the unit was deleted; the row stays so a late payment is still recorded. */
+  unit_id: string | null;
   status: string;
   amount_halalas: number;
   currency: string;
   moyasar_invoice_id: string | null;
+  moyasar_payment_id: string | null;
   invoice_url: string | null;
+  refund_reason: string | null;
   created_at: string;
 };
 
 const ROW_COLUMNS =
-  "id, unit_id, status, amount_halalas, currency, moyasar_invoice_id, invoice_url, created_at";
+  "id, unit_id, status, amount_halalas, currency, moyasar_invoice_id, moyasar_payment_id, invoice_url, refund_reason, created_at";
+
+/** Money taken for a unit that could no longer be published (settle_listing_payment: needs_refund). */
+function notPublishedError(reason: string | null): Error {
+  return new Error(
+    `تم استلام الدفع لكن لم تُنشر الوحدة${reason ? `: ${reason}` : ""}. أبلغنا إدارة جارك وستعيد المبلغ.`,
+  );
+}
 
 /** Moyasar only redirects to https; anything else (local dev) returns to the live site. */
 function siteOrigin(): string {
@@ -42,7 +55,10 @@ function siteOrigin(): string {
   return SITE_URL;
 }
 
-/** Marks the row paid and extends the unit's publication. Idempotent; returns the new end date. */
+/**
+ * Marks the row paid and extends the unit's publication. Idempotent; returns the new end date, or null
+ * when the unit could no longer be published (the row is then needs_refund and the platform is told).
+ */
 export async function settleListingPayment(
   paymentId: string,
   moyasarPaymentId: string,
@@ -55,9 +71,26 @@ export async function settleListingPayment(
   return data;
 }
 
-/** Asks Moyasar whether the row's invoice is paid, at the stored amount, and settles it if so. */
+/** Moyasar refunded or voided the payment: takes its paid days back. Idempotent. */
+export async function revokeListingPayment(
+  paymentId: string,
+  status: "refunded" | "voided",
+): Promise<void> {
+  const { error } = await supabaseAdmin.rpc("revoke_listing_payment", {
+    _payment_id: paymentId,
+    _status: status,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Asks Moyasar whether the row's invoice is paid, at the stored amount, and settles it if so. Throws
+ * when the money arrived but the unit could no longer be published.
+ */
 export async function settleIfInvoicePaid(row: ListingPaymentRow): Promise<string | null> {
-  // A cancelled row is still checked: money Moyasar took for it must still publish the unit.
+  if (row.status === "needs_refund") throw notPublishedError(row.refund_reason);
+  if (row.status === "refunded" || row.status === "voided") return null;
+  // A cancelled row is still checked: money Moyasar took for it must still be settled.
   if (!row.moyasar_invoice_id) return null;
   if (row.status === "paid") return settleListingPayment(row.id, "");
   const invoice = await fetchMoyasarInvoice(row.moyasar_invoice_id);
@@ -71,7 +104,11 @@ export async function settleIfInvoicePaid(row: ListingPaymentRow): Promise<strin
     );
     return null;
   }
-  return settleListingPayment(row.id, invoice.paymentIds[0] ?? "");
+  const paidUntil = await settleListingPayment(row.id, invoice.paymentIds[0] ?? "");
+  if (paidUntil) return paidUntil;
+  const settled = await findListingPayment({ id: row.id });
+  if (settled?.status === "needs_refund") throw notPublishedError(settled.refund_reason);
+  return null;
 }
 
 export async function findListingPayment(
@@ -116,10 +153,12 @@ export async function openListingInvoice(input: {
       if (invoice?.status === "paid") {
         return { status: "paid", paidUntil: await settleIfInvoicePaid(open) };
       }
-      if (invoice?.status === "initiated" && open.invoice_url) {
+      const fresh = Date.now() - new Date(open.created_at).getTime() < INVOICE_TTL_MS;
+      if (invoice?.status === "initiated" && open.invoice_url && fresh) {
         return { status: "pending", url: open.invoice_url };
       }
-      // Expired, cancelled or failed at Moyasar: close it and raise a fresh one.
+      // Expired, cancelled or failed at Moyasar, or over a day old: close it and raise a fresh one.
+      if (invoice?.status === "initiated") await cancelMoyasarInvoice(open.moyasar_invoice_id);
       await cancelRow(open.id);
     } else if (Date.now() - new Date(open.created_at).getTime() > STALE_OPEN_ROW_MS) {
       await cancelRow(open.id);
@@ -135,6 +174,7 @@ export async function openListingInvoice(input: {
       org_id: input.orgId,
       created_by: input.userId,
       amount_halalas: LISTING_FEE_HALALAS,
+      unit_label: input.unitLabel,
     })
     .select("id")
     .single();

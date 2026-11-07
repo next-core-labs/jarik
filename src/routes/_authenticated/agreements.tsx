@@ -30,7 +30,10 @@ import {
   PERMISSION_OPTIONS,
   UNENFORCED_PERMISSIONS,
 } from "@/lib/agreement-permissions";
-import { sar, shortDate } from "@/lib/format";
+import { daysLabel, sar, shortDate } from "@/lib/format";
+import { parseAmount } from "@/lib/public-form";
+import { accessEndsAt, agreementPhase } from "@/lib/agreement-live";
+import { todayRiyadh } from "@/lib/dates";
 import { isStaffRole, useMyRoles } from "@/lib/use-role";
 
 export const Route = createFileRoute("/_authenticated/agreements")({
@@ -63,6 +66,8 @@ type AgreementRequest = {
   created_at: string;
   owner_note: string | null;
   office_note: string | null;
+  /** In force today (private.agreement_live). */
+  live: boolean;
 };
 
 /** One unit the owner asks the office to manage, as office_agreement_requests() describes it. */
@@ -208,9 +213,16 @@ function OfficeAgreements() {
   }
 
   const list = requests.data ?? [];
-  const incoming = list.filter((a) => a.status === "sent" || a.status === "office_modified");
-  const active = list.filter((a) => a.status === "active");
-  const rejected = list.filter((a) => a.status === "rejected");
+  const incoming = list.filter((a) => agreementPhase(a) === "pending");
+  // Signed and not run out — in force today or starting later. Ended ones move to «سابقة».
+  const active = list.filter((a) => {
+    const phase = agreementPhase(a);
+    return phase === "live" || phase === "upcoming";
+  });
+  const past = list.filter((a) => {
+    const phase = agreementPhase(a);
+    return phase === "over" || a.status === "rejected";
+  });
   const pendingChanges = changeRequests.data ?? [];
 
   return (
@@ -262,7 +274,7 @@ function OfficeAgreements() {
                       {" · "}
                       {shortDate(a.start_date)} —{" "}
                       {a.end_date ? shortDate(a.end_date) : "بلا انتهاء"}
-                      {" · "}فترة إشعار {a.notice_period_days} يوم
+                      {" · "}فترة إشعار {daysLabel(a.notice_period_days)}
                     </p>
                     {a.owner_note ? (
                       <p className="mt-2 rounded-md bg-muted/40 px-3 py-2 text-sm">
@@ -378,8 +390,16 @@ function OfficeAgreements() {
                   <div key={a.id} className="rounded-md border border-border bg-background p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-medium">{a.owner_name || a.owner_email}</p>
-                      <Badge>سارية</Badge>
+                      {agreementPhase(a) === "upcoming" ? (
+                        <Badge variant="secondary">تبدأ {shortDate(a.start_date)}</Badge>
+                      ) : (
+                        <Badge>سارية</Badge>
+                      )}
                     </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {shortDate(a.start_date)} —{" "}
+                      {a.end_date ? shortDate(a.end_date) : "بلا انتهاء"}
+                    </p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {a.units
                         .map((u) => `${u.property_name ?? ""} · وحدة ${u.unit_number}`)
@@ -396,8 +416,8 @@ function OfficeAgreements() {
                       {a.termination_requested_at ? (
                         <p className="text-xs text-muted-foreground">
                           طلب إنهاء مسجّل (
-                          {a.termination_requested_by === "office" ? "منك" : "من المالك"}) — يسري
-                          بعد فترة الإشعار.
+                          {a.termination_requested_by === "office" ? "منك" : "من المالك"}) — ينقطع
+                          وصولكم في {shortDate(accessEndsAt(a)?.toISOString())}.
                         </p>
                       ) : (
                         <Button
@@ -408,7 +428,7 @@ function OfficeAgreements() {
                           onClick={() => {
                             if (
                               window.confirm(
-                                `طلب إنهاء الاتفاقية مع ${a.owner_name || a.owner_email}؟ تبقى سارية لفترة الإشعار (${a.notice_period_days} يوم) قبل أن ينقطع وصولكم فعليًا.`,
+                                `طلب إنهاء الاتفاقية مع ${a.owner_name || a.owner_email}؟ تبقى سارية لفترة الإشعار (${daysLabel(a.notice_period_days)}) قبل أن ينقطع وصولكم فعليًا.`,
                               )
                             ) {
                               terminate.mutate(a.id);
@@ -425,13 +445,13 @@ function OfficeAgreements() {
             </CardContent>
           </Card>
 
-          {rejected.length > 0 ? (
+          {past.length > 0 ? (
             <Card className="shadow-deed">
               <CardHeader>
-                <CardTitle className="text-base">طلبات مرفوضة</CardTitle>
+                <CardTitle className="text-base">طلبات مرفوضة واتفاقيات منتهية</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {rejected.map((a) => (
+                {past.map((a) => (
                   <div
                     key={a.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background p-4"
@@ -440,10 +460,18 @@ function OfficeAgreements() {
                       <p className="font-medium">{a.owner_name || a.owner_email}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {a.units_count} وحدة
-                        {a.office_note ? ` · السبب: ${a.office_note}` : ""}
+                        {a.status === "rejected"
+                          ? a.office_note
+                            ? ` · السبب: ${a.office_note}`
+                            : ""
+                          : ` · ${shortDate(a.start_date)} — ${a.end_date ? shortDate(a.end_date) : "بلا انتهاء"}`}
                       </p>
                     </div>
-                    <Badge variant="destructive">مرفوضة</Badge>
+                    {a.status === "rejected" ? (
+                      <Badge variant="destructive">مرفوضة</Badge>
+                    ) : (
+                      <Badge variant="outline">منتهية</Badge>
+                    )}
                   </div>
                 ))}
               </CardContent>
@@ -504,21 +532,23 @@ function CounterDialog({
 
   const send = useMutation({
     mutationFn: async () => {
-      const value = Number(commissionValue || 0);
-      if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل قيمة عمولة صحيحة");
-      const days = Number(noticeDays || 0);
-      if (!Number.isInteger(days) || days < 0)
+      const value = parseAmount(commissionValue);
+      if (value == null || value <= 0) throw new Error("أدخل قيمة عمولة صحيحة");
+      if (agreement.commission_type === "percent" && value > 100)
+        throw new Error("نسبة العمولة لا تتجاوز ١٠٠٪");
+      const days = parseAmount(noticeDays);
+      if (days == null || !Number.isInteger(days))
         throw new Error("فترة الإشعار يجب أن تكون رقمًا صحيحًا");
-      // exactOptionalPropertyTypes: _maintenance_cap ماله قيمة تُحذف من الكائن كليًا، لا تُمرَّر
-      // undefined صراحةً — RPC الفعلية تتعامل مع غيابها كـ "أبقِ القيمة الحالية" (DEFAULT NULL).
-      const cap = maintenanceCap.trim() ? Number(maintenanceCap) : undefined;
+      const cap = parseAmount(maintenanceCap);
+      if (cap === null) throw new Error("سقف الصيانة يجب أن يكون مبلغًا بالأرقام، أو اتركه فارغًا");
+      // Empty = no cap of its own: the office's threshold is frozen into the agreement on acceptance.
       const { error } = await supabase.rpc("office_respond_agreement", {
         _agreement_id: agreement.id,
         _decision: "counter",
         _commission_value: value,
         _notice_period_days: days,
         _permissions: Array.from(permissions),
-        ...(cap !== undefined ? { _maintenance_cap: cap } : {}),
+        ...(cap !== undefined ? { _maintenance_cap: cap } : { _clear_maintenance_cap: true }),
         ...(note.trim() ? { _note: note.trim() } : {}),
       });
       if (error) throw error;
@@ -558,7 +588,7 @@ function CounterDialog({
             />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>سقف صيانة بلا موافقة المالك (اختياري)</Label>
+            <Label>سقف صيانة بلا موافقة المالك (فارغ = حدّ مكتبك الحالي)</Label>
             <Input
               inputMode="decimal"
               value={maintenanceCap}
@@ -691,7 +721,9 @@ function DecisionDialog({
           </DialogTitle>
           <DialogDescription>
             {accept
-              ? `تصبح الاتفاقية مع ${owner} سارية فورًا على ${agreement.units_count} وحدة، وتظهر وحداته في «الأملاك والوحدات».`
+              ? agreement.start_date > todayRiyadh()
+                ? `تبدأ الاتفاقية مع ${owner} في ${shortDate(agreement.start_date)} على ${agreement.units_count} وحدة، وتظهر وحداته في «الأملاك والوحدات» من ذلك اليوم.`
+                : `تصبح الاتفاقية مع ${owner} سارية فورًا على ${agreement.units_count} وحدة، وتظهر وحداته في «الأملاك والوحدات».`
               : `يصل ${owner} إشعار بالاعتذار، ويستطيع إرسال طلبه لمكتب آخر.`}
           </DialogDescription>
         </DialogHeader>

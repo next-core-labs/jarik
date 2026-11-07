@@ -34,6 +34,7 @@ import {
 } from "@/lib/agreement-permissions";
 import { todayRiyadh } from "@/lib/dates";
 import { toLatinDigits } from "@/lib/saudi-id";
+import { useUnitManagement } from "@/lib/unit-management";
 
 /** A number typed on either keyboard: Arabic-Indic digits, "٫" as the decimal point, and "٬" or ","
  * as thousands separators. Anything else gives NaN, so "abc" is rejected instead of becoming null. */
@@ -147,6 +148,10 @@ export function RequestAgreementDialog({
       (o.district ?? "").includes(term),
   );
 
+  // A unit an office manages — the one that registered its property, or a live agreement's — can't
+  // be put under another office (the database refuses it too).
+  const management = useUnitManagement(properties.flatMap((p) => (p.units ?? []).map((u) => u.id)));
+
   const toggleUnit = (id: string) =>
     setSelectedUnits((s) => {
       const next = new Set(s);
@@ -166,6 +171,12 @@ export function RequestAgreementDialog({
     mutationFn: async () => {
       if (!selectedOffice) throw new Error("اختر مكتبًا أولًا");
       if (selectedUnits.size === 0) throw new Error("اختر وحدة واحدة على الأقل");
+      const managed = [...selectedUnits]
+        .map((id) => management.data?.get(id))
+        .find((m) => m !== undefined);
+      if (managed) {
+        throw new Error(`إحدى الوحدات المختارة يديرها ${managed.officeName} — أزلها من الطلب`);
+      }
       const value = parseAmount(commissionValue || "0");
       if (!Number.isFinite(value) || value <= 0) throw new Error("أدخل قيمة عمولة صحيحة");
       if (commissionType === "percent" && value > 100)
@@ -219,13 +230,25 @@ export function RequestAgreementDialog({
 
         {step === "units" ? (
           <div className="space-y-3">
+            {(() => {
+              const all = properties.flatMap((p) => p.units ?? []);
+              const blocked = all.filter(
+                (u) => excludedUnitIds.has(u.id) || Boolean(management.data?.get(u.id)),
+              );
+              return all.length > 0 && blocked.length === all.length ? (
+                <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  كل وحداتك يديرها مكتب أو لها اتفاقية سارية — لا توجد وحدة متاحة لطلب إدارة جديد.
+                </p>
+              ) : null;
+            })()}
             <div className="max-h-72 space-y-3 overflow-y-auto rounded-md border border-border p-3">
               {properties.map((p) => (
                 <div key={p.id}>
                   <p className="text-sm font-medium">{p.name}</p>
                   <div className="mt-1 space-y-1 ps-2">
                     {(p.units ?? []).map((u) => {
-                      const disabled = excludedUnitIds.has(u.id);
+                      const managedBy = management.data?.get(u.id);
+                      const disabled = excludedUnitIds.has(u.id) || Boolean(managedBy);
                       return (
                         <label
                           key={u.id}
@@ -237,7 +260,11 @@ export function RequestAgreementDialog({
                             onCheckedChange={() => toggleUnit(u.id)}
                           />
                           وحدة {u.unit_number} ({u.unit_type})
-                          {disabled ? " — لها اتفاقية سارية بالفعل" : ""}
+                          {managedBy
+                            ? ` — يديرها ${managedBy.officeName}`
+                            : disabled
+                              ? " — لها اتفاقية سارية بالفعل"
+                              : ""}
                         </label>
                       );
                     })}

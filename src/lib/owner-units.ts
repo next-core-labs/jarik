@@ -38,32 +38,3 @@ export function useOwnerUnitGroups() {
     },
   });
 }
-
-/**
- * Units under an agreement that still holds — the same rule as request_management_agreement:
- * status 'active' and no termination, or its notice period not over yet. `status` stays 'active'
- * after the notice period ends (it is computed live, not stored), so status alone would keep such a
- * unit excluded forever after the server already accepts a new request for it.
- */
-export function activeAgreementUnitIds(
-  agreements: {
-    status: string;
-    termination_requested_at: string | null;
-    notice_period_days: number;
-    agreement_units: { unit_id: string }[];
-  }[],
-  now = Date.now(),
-): Set<string> {
-  const s = new Set<string>();
-  for (const a of agreements) {
-    if (a.status !== "active") continue;
-    if (
-      a.termination_requested_at &&
-      now >= new Date(a.termination_requested_at).getTime() + a.notice_period_days * 86400000
-    ) {
-      continue;
-    }
-    for (const au of a.agreement_units) s.add(au.unit_id);
-  }
-  return s;
-}

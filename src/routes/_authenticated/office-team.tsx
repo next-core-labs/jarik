@@ -208,7 +208,7 @@ function OfficeTeam() {
   });
 
   const decideLinkRequest = useMutation({
-    mutationFn: async (v: { id: string; accept: boolean }) => {
+    mutationFn: async (v: { id: string; userId: string; accept: boolean }) => {
       const { error } = await supabase.rpc("office_decide_link_request", {
         _id: v.id,
         _accept: v.accept,
@@ -217,7 +217,17 @@ function OfficeTeam() {
       return v;
     },
     onSuccess: (v) => {
-      toast.success(v.accept ? "ارتبط الحساب بمكتبك" : "رُفض الطلب");
+      // An old request from someone who has since joined the team is closed without changing them.
+      const onTeam = (people.data ?? []).some(
+        (p) => p.user_id === v.userId && p.relation === "member",
+      );
+      toast.success(
+        !v.accept
+          ? "رُفض الطلب"
+          : onTeam
+            ? "الحساب من فريق المكتب أصلًا — أُغلق الطلب دون تغيير"
+            : "ارتبط الحساب بمكتبك",
+      );
       refresh();
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تنفيذ القرار")),
@@ -431,7 +441,9 @@ function OfficeTeam() {
                         <Button
                           size="sm"
                           disabled={decideLinkRequest.isPending}
-                          onClick={() => decideLinkRequest.mutate({ id: r.id, accept: true })}
+                          onClick={() =>
+                            decideLinkRequest.mutate({ id: r.id, userId: r.user_id, accept: true })
+                          }
                         >
                           <Check className="size-4" />
                           قبول
@@ -440,7 +452,9 @@ function OfficeTeam() {
                           size="sm"
                           variant="outline"
                           disabled={decideLinkRequest.isPending}
-                          onClick={() => decideLinkRequest.mutate({ id: r.id, accept: false })}
+                          onClick={() =>
+                            decideLinkRequest.mutate({ id: r.id, userId: r.user_id, accept: false })
+                          }
                         >
                           <X className="size-4" />
                           رفض
@@ -545,7 +559,11 @@ function OfficeTeam() {
                     className="text-destructive"
                     disabled={unlinkClient.isPending}
                     onClick={() => {
-                      if (window.confirm(`إلغاء ربط ${p.full_name || p.email} بمكتبك؟`)) {
+                      if (
+                        window.confirm(
+                          `إلغاء ربط ${p.full_name || p.email} بمكتبك؟ لا يمكن إلغاء ربط مالك له أملاك مسجّلة في مكتبك أو اتفاقية إدارة سارية معه، ولا مستأجر له عقد ساري.`,
+                        )
+                      ) {
                         unlinkClient.mutate(p.user_id);
                       }
                     }}

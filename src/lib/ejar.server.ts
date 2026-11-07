@@ -46,6 +46,9 @@ export type EjarContract = {
   endDate: string | null;
   annualRent: number | null;
   unitNumber: string | null;
+  /** The building in Ejar — used with the unit number so "unit 1" never matches another building. */
+  propertyName: string | null;
+  deedNumber: string | null;
   tenantNationalId: string | null;
   tenantName: string | null;
   electricityMeterNo: string | null;
@@ -71,6 +74,7 @@ function normalizeContract(raw: RawRecord): EjarContract | null {
   if (!contractNumber) return null;
   const unit = (raw["unit"] ?? {}) as RawRecord;
   const tenant = (raw["tenant"] ?? {}) as RawRecord;
+  const prop = (raw["property"] ?? {}) as RawRecord;
   return {
     contractNumber,
     status: str(raw["status"]) ?? str(raw["contractStatus"]),
@@ -82,6 +86,8 @@ function normalizeContract(raw: RawRecord): EjarContract | null {
       str(raw["unit_number"]) ??
       str(unit["unitNumber"]) ??
       str(unit["number"]),
+    propertyName: str(raw["propertyName"]) ?? str(prop["name"]),
+    deedNumber: str(raw["deedNumber"]) ?? str(prop["deedNumber"]),
     tenantNationalId:
       str(raw["tenantNationalId"]) ?? str(tenant["nationalId"]) ?? str(tenant["identityNumber"]),
     tenantName: str(tenant["name"]) ?? str(raw["tenantName"]),

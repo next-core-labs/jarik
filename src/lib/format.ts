@@ -98,6 +98,8 @@ export const dealStageLabel: Record<string, string> = {
 export const leaseStatusLabel: Record<string, string> = {
   active: "ساري",
   expired: "منتهي",
+  ended: "منتهي",
+  renewed: "مُجدَّد",
   terminated: "مفسوخ",
   draft: "مسودة",
 };

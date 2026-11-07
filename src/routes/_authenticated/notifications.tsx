@@ -97,7 +97,7 @@ function Notifications() {
       // `limit(100)` used to drop the staff member's own notifications behind other people's.
       const { data, error } = await supabase
         .from("notifications")
-        .select("id, title, body, kind, source, read_at, created_at, user_id")
+        .select("id, title, body, kind, source, read_at, created_at, user_id, link")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -178,6 +178,15 @@ function Notifications() {
                         <Wrench className="size-4" />
                         عرض طلبات الصيانة
                       </Link>
+                    </Button>
+                  ) : null}
+                  {/^\/[^/\\]/.test(n.link ?? "") &&
+                  !(n.kind === "maintenance" && jobLink) &&
+                  !(n.kind === "agreement" && agreementLink) ? (
+                    <Button variant="link" size="sm" className="h-auto px-0" asChild>
+                      {/* In-app path only (the column is constrained to start with /); a plain anchor
+                          because the target is data, not a typed route. */}
+                      <a href={n.link ?? undefined}>عرض التفاصيل</a>
                     </Button>
                   ) : null}
                   {n.kind === "agreement" && agreementLink ? (

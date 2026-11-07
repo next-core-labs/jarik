@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +35,7 @@ import {
   groupOfType,
   type PropertyStructure,
 } from "@/lib/property-types";
+import { deedFormatError, normalizeDeed } from "@/lib/unit-duplicates";
 
 const empty = {
   structure: "single" as PropertyStructure,
@@ -72,6 +74,8 @@ export type EditableProperty = {
   year_built: number | null;
   elevators: number | null;
   parking_spaces: number | null;
+  /** How many units it has: a property with more than one can't become a single unit. */
+  unitsCount?: number;
 };
 
 /** What the screen needs to continue straight into the new property's units. */
@@ -146,6 +150,8 @@ export function PropertyDialog({
   }, [open, property]);
 
   const single = form.structure === "single";
+  // A building with several units can't be turned into one standalone unit.
+  const multiUnit = (property?.unitsCount ?? 0) > 1;
   const location = form.location.trim() ? parseLocation(form.location) : null;
   const locationError = !form.location.trim()
     ? null
@@ -165,36 +171,92 @@ export function PropertyDialog({
     elevators: elevators === null ? "عدد المصاعد رقم صحيح" : null,
     parking_spaces: parking === null ? "عدد المواقف رقم صحيح" : null,
   };
-  const formError = locationError ?? Object.values(errors).find((e) => e !== null) ?? null;
+
+  // A deed registered on another property is refused (guard_property_deed_duplicate); say so first.
+  const deedNorm = normalizeDeed(form.deed_number);
+  const deedFormat =
+    form.deed_number !== (property?.deed_number ?? "") ? deedFormatError(form.deed_number) : null;
+  const [deedToCheck, setDeedToCheck] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDeedToCheck(deedFormat ? "" : deedNorm), 400);
+    return () => clearTimeout(t);
+  }, [deedNorm, deedFormat]);
+  const checkDeed =
+    open && deedToCheck !== "" && deedToCheck !== normalizeDeed(property?.deed_number);
+  const deedUse = useQuery({
+    queryKey: ["deed-in-use", "property", deedToCheck, property?.id ?? null],
+    enabled: checkDeed,
+    retry: false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("deed_number_in_use", {
+        _kind: "property",
+        _deed: deedToCheck,
+        ...(property ? { _property_id: property.id } : {}),
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const deedError =
+    deedFormat ??
+    (checkDeed && deedToCheck === deedNorm && deedUse.data === "other_property"
+      ? "رقم الصك مسجّل لعقار آخر على جارك — تأكد من الرقم، ولا تسجّل العقار مرتين"
+      : null);
+
+  const formError =
+    locationError ?? deedError ?? Object.values(errors).find((e) => e !== null) ?? null;
+
+  // The property's columns as this form would write them — also applied to the saved property, so
+  // an edit sends only what changed.
+  const toValues = (f: Form) => {
+    const isSingle = f.structure === "single";
+    const loc = f.location.trim() ? parseLocation(f.location) : null;
+    return {
+      name: f.name.trim(),
+      structure: f.structure,
+      // A new property's broad class follows its unit/building type; an edit keeps the saved one
+      // (the office changes it from «التصنيف»).
+      property_type: isEdit
+        ? f.property_type
+        : groupOfType(isSingle ? f.unit_type : f.building_type),
+      building_type: isSingle ? null : f.building_type,
+      city: f.city.trim() || null,
+      district: f.district.trim() || null,
+      address: f.address.trim() || null,
+      deed_number: f.deed_number.trim() || null,
+      lat: loc?.lat ?? null,
+      lng: loc?.lng ?? null,
+      floors_count: wholeIn(f.floors_count, 0, 300) ?? null,
+      year_built: wholeIn(f.year_built, 1900, 2100) ?? null,
+      elevators: isSingle ? null : (wholeIn(f.elevators, 0, 100) ?? null),
+      parking_spaces: wholeIn(f.parking_spaces, 0, 10000) ?? null,
+      ...(isOwner ? {} : { owner_name: f.owner_name.trim() || null }),
+    };
+  };
 
   const save = useMutation({
     mutationFn: async (): Promise<CreatedProperty | null> => {
       if (formError) throw new Error(formError);
-      const values = {
-        name: form.name.trim(),
-        structure: form.structure,
-        // The broad class follows the chosen unit/building type unless the office set its own.
-        property_type: single
-          ? groupOfType(form.unit_type)
-          : isEdit
-            ? form.property_type
-            : groupOfType(form.building_type),
-        building_type: single ? null : form.building_type,
-        city: form.city.trim() || null,
-        district: form.district.trim() || null,
-        address: form.address.trim() || null,
-        deed_number: form.deed_number.trim() || null,
-        lat: location?.lat ?? null,
-        lng: location?.lng ?? null,
-        floors_count: floors ?? null,
-        year_built: yearBuilt ?? null,
-        elevators: single ? null : (elevators ?? null),
-        parking_spaces: parking ?? null,
-        ...(isOwner ? {} : { owner_name: form.owner_name.trim() || null }),
-      };
+      const values = toValues(form);
       if (property) {
-        const { error } = await supabase.from("properties").update(values).eq("id", property.id);
+        const before = toValues(formFrom(property));
+        const changes: TablesUpdate<"properties"> = {};
+        for (const [column, value] of Object.entries(values)) {
+          if (JSON.stringify(value) !== JSON.stringify(before[column as keyof typeof before])) {
+            (changes as Record<string, unknown>)[column] = value;
+          }
+        }
+        if (Object.keys(changes).length === 0) return null;
+        const { data, error } = await supabase
+          .from("properties")
+          .update(changes)
+          .eq("id", property.id)
+          .select("id");
         if (error) throw error;
+        if (!data?.length) {
+          throw new Error("لم تُحفظ التعديلات — ليست لديك صلاحية تعديل هذا العقار");
+        }
         return null;
       }
       // An office's property gets its org_id from the staff member's office (a_fill_org trigger);
@@ -267,7 +329,8 @@ export function PropertyDialog({
             onSelect={() => set("structure", "single")}
             icon={<Home className="size-5" />}
             title="وحدة مستقلة"
-            hint="شقة، فيلا، دور، استراحة…"
+            hint={multiUnit ? "غير متاح — في العقار أكثر من وحدة" : "شقة، فيلا، دور، استراحة…"}
+            disabled={multiUnit && !single}
           />
           <StructureOption
             selected={!single}
@@ -358,11 +421,12 @@ export function PropertyDialog({
           <Field label="العنوان / الشارع">
             <Input value={form.address} onChange={(e) => set("address", e.target.value)} />
           </Field>
-          <Field label={single ? "رقم الصك" : "رقم صك العمارة"}>
+          <Field label={single ? "رقم الصك" : "رقم صك العمارة"} error={deedError}>
             <Input
               dir="ltr"
               value={form.deed_number}
               onChange={(e) => set("deed_number", e.target.value)}
+              aria-invalid={Boolean(deedError)}
             />
           </Field>
           {isOwner ? null : (
@@ -453,20 +517,23 @@ function StructureOption({
   icon,
   title,
   hint,
+  disabled = false,
 }: {
   selected: boolean;
   onSelect: () => void;
   icon: React.ReactNode;
   title: string;
   hint: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="radio"
       aria-checked={selected}
+      disabled={disabled}
       onClick={onSelect}
-      className={`flex items-start gap-3 border p-3 text-start transition-colors ${
+      className={`flex items-start gap-3 border p-3 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         selected ? "border-foreground bg-muted/60" : "border-input hover:bg-muted/40"
       }`}
     >
