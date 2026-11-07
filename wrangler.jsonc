@@ -4,6 +4,9 @@
 // add them in the dashboard as *Secrets* or with `npx wrangler secret put NAME` (see DEPLOY.md).
 {
   "name": "jarak",
+  // The Cloudflare account that owns the jarak-ksa.com zone. Pinned so `npm run deploy` fails
+  // instead of quietly creating a second "jarak" Worker in whatever account wrangler is logged into.
+  "account_id": "09d6e447f7dfd259a51e262cc671da7c",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   // Keep any plain variables set in the dashboard when deploying from this config.
