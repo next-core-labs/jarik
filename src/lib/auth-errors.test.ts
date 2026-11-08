@@ -38,3 +38,32 @@ describe("emailProblem", () => {
     expect(emailProblem("a@b.co")).toBeNull();
   });
 });
+
+describe("authErrorMessage", () => {
+  it("names Supabase Auth's actionable password and session errors in Arabic", async () => {
+    const { authErrorMessage } = await import("./auth-errors");
+    expect(
+      authErrorMessage(
+        {
+          name: "AuthWeakPasswordError",
+          code: "weak_password",
+          message: "Password is known to be weak",
+        },
+        "x",
+      ),
+    ).toMatch(/كلمة المرور ضعيفة/);
+    expect(
+      authErrorMessage(
+        {
+          code: "same_password",
+          message: "New password should be different from the old password.",
+        },
+        "x",
+      ),
+    ).toMatch(/كلمة مرورك الحالية/);
+    expect(
+      authErrorMessage({ name: "AuthSessionMissingError", message: "Auth session missing!" }, "x"),
+    ).toMatch(/انتهت صلاحية/);
+    expect(authErrorMessage(new Error("Invalid login credentials"), "fallback")).toBe("fallback");
+  });
+});

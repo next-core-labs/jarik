@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Building2, Home } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
@@ -26,7 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { isInSaudi, parseLocation } from "@/lib/location-input";
+import { isInSaudi, isShortMapLink, parseLocation } from "@/lib/location-input";
+import { resolveMapLink } from "@/lib/map-link.functions";
 import { parseAmount } from "@/lib/public-form";
 import {
   BUILDING_TYPES,
@@ -153,13 +155,37 @@ export function PropertyDialog({
   // A building with several units can't be turned into one standalone unit.
   const multiUnit = (property?.unitsCount ?? 0) > 1;
   const location = form.location.trim() ? parseLocation(form.location) : null;
+
+  // A short share link (maps.app.goo.gl/…) carries no coordinates: open it on the server and put
+  // the coordinates it points to into the field.
+  const resolveLink = useServerFn(resolveMapLink);
+  const shortLink = open && isShortMapLink(form.location) ? form.location.trim() : "";
+  const resolved = useQuery({
+    queryKey: ["resolve-map-link", shortLink],
+    enabled: shortLink !== "",
+    retry: false,
+    staleTime: Infinity,
+    queryFn: () => resolveLink({ data: { url: shortLink } }),
+  });
+  useEffect(() => {
+    const point = resolved.data;
+    if (!point || !shortLink) return;
+    setForm((f) =>
+      f.location.trim() === shortLink ? { ...f, location: `${point.lat}, ${point.lng}` } : f,
+    );
+  }, [resolved.data, shortLink]);
+
   const locationError = !form.location.trim()
     ? null
-    : !location
-      ? "الصق الإحداثيات (24.81, 46.61) أو رابط خرائط جوجل الكامل — الروابط المختصرة لا تحمل الموقع"
-      : !isInSaudi(location)
-        ? "الموقع خارج المملكة — تأكد من ترتيب خط العرض ثم خط الطول"
-        : null;
+    : shortLink && (resolved.isPending || resolved.data)
+      ? "جارٍ قراءة الموقع من الرابط…"
+      : !location
+        ? shortLink
+          ? "تعذّر قراءة الموقع من الرابط المختصر — افتح الرابط في خرائط جوجل وانسخ الإحداثيات أو الرابط الكامل"
+          : "الصق الإحداثيات (24.81, 46.61) أو رابط خرائط جوجل"
+        : !isInSaudi(location)
+          ? "الموقع خارج المملكة — تأكد من ترتيب خط العرض ثم خط الطول"
+          : null;
 
   const floors = wholeIn(form.floors_count, 0, 300);
   const yearBuilt = wholeIn(form.year_built, 1900, 2100);
@@ -478,7 +504,7 @@ export function PropertyDialog({
                 dir="ltr"
                 value={form.location}
                 onChange={(e) => set("location", e.target.value)}
-                placeholder="24.8073, 46.6129  أو  https://www.google.com/maps/…"
+                placeholder="24.8073, 46.6129  أو  رابط خرائط جوجل"
                 aria-invalid={Boolean(locationError)}
               />
               {locationError ? null : (

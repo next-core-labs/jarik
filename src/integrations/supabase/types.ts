@@ -2461,6 +2461,7 @@ export type Database = {
           expires_at: string | null;
           file_path: string | null;
           id: string;
+          issued_at: string | null;
           kind: string;
           notes: string | null;
           property_id: string;
@@ -2473,6 +2474,7 @@ export type Database = {
           expires_at?: string | null;
           file_path?: string | null;
           id?: string;
+          issued_at?: string | null;
           kind?: string;
           notes?: string | null;
           property_id: string;
@@ -2485,6 +2487,7 @@ export type Database = {
           expires_at?: string | null;
           file_path?: string | null;
           id?: string;
+          issued_at?: string | null;
           kind?: string;
           notes?: string | null;
           property_id?: string;

@@ -14,7 +14,7 @@ import type { AppRole } from "@/lib/use-role";
 export const Route = createFileRoute("/tenant/activate")({
   staticData: { sitemap: false },
   head: () => ({
-    meta: [{ title: "تفعيل حساب المستأجر — جارك" }, { name: "robots", content: "noindex" }],
+    meta: [{ title: "تفعيل حسابك — جارك" }, { name: "robots", content: "noindex" }],
   }),
   component: ActivateTenant,
 });
@@ -77,7 +77,8 @@ function ActivateTenant() {
     setLoading(true);
     try {
       const { error: pwError } = await supabase.auth.updateUser({ password });
-      if (pwError) throw pwError;
+      // A retry after a later step failed: the password is already this one, so carry on.
+      if (pwError && pwError.code !== "same_password") throw pwError;
 
       await completeTenantActivation();
 

@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { FileText, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { FileText, Paperclip, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
+import { openStorageFile } from "@/lib/open-file";
 import { PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,9 @@ const kinds = [
 
 const kindLabel: Record<string, string> = Object.fromEntries(kinds.map((k) => [k.value, k.label]));
 
+/** A title deed has an issue date and never expires; every other document has an expiry date. */
+const hasIssueDate = (kind: string) => kind === "deed";
+
 function Documents() {
   const queryClient = useQueryClient();
   const { data: me } = useMyRoles();
@@ -81,7 +85,8 @@ function Documents() {
   const [kind, setKind] = useState<string>("deed");
   const [title, setTitle] = useState("");
   const [docNumber, setDocNumber] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
+  // The form's one date: the deed's issue date, or the expiry date of any other document.
+  const [docDate, setDocDate] = useState("");
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -93,7 +98,7 @@ function Documents() {
         supabase
           .from("property_documents")
           .select(
-            "id, kind, title, doc_number, file_path, expires_at, notes, created_at, properties(name)",
+            "id, property_id, kind, title, doc_number, file_path, expires_at, issued_at, notes, created_at, properties(name)",
           )
           .order("expires_at", { ascending: true, nullsFirst: false }),
         supabase.from("properties").select("id, name").order("name"),
@@ -106,21 +111,16 @@ function Documents() {
   const save = useMutation({
     mutationFn: async () => {
       setSaving(true);
-      let path: string | null = null;
-      if (file && !isPdfOrImage(file)) throw new Error("الملف يجب أن يكون PDF أو صورة");
-      if (file) {
-        const ext = file.name.split(".").pop() ?? "pdf";
-        path = `${propertyId}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage.from("documents").upload(path, file);
-        if (error) throw error;
-      }
+      const path = file ? await uploadDocumentFile(propertyId, file) : null;
+      const deed = hasIssueDate(kind);
       const { error } = await supabase.from("property_documents").insert({
         property_id: propertyId,
         kind,
         title,
         doc_number: docNumber || null,
         file_path: path,
-        expires_at: expiresAt || null,
+        expires_at: deed ? null : docDate || null,
+        issued_at: deed ? docDate || null : null,
         notes: notes || null,
       });
       if (error) throw error;
@@ -129,7 +129,7 @@ function Documents() {
       toast.success("حُفظت الوثيقة");
       setTitle("");
       setDocNumber("");
-      setExpiresAt("");
+      setDocDate("");
       setNotes("");
       setFile(null);
       queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -138,16 +138,34 @@ function Documents() {
     onSettled: () => setSaving(false),
   });
 
-  const openFile = async (path: string) => {
-    const { data: signed, error } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(path, 300);
-    if (error || !signed) {
-      toast.error("تعذّر فتح الملف");
-      return;
-    }
-    window.open(signed.signedUrl, "_blank", "noopener");
-  };
+  const openFile = (path: string) => void openStorageFile("documents", path);
+
+  // «إرفاق ملف» on a document saved without one.
+  const attachInput = useRef<HTMLInputElement>(null);
+  const [attachTo, setAttachTo] = useState<{ id: string; propertyId: string } | null>(null);
+  const attach = useMutation({
+    mutationFn: async ({
+      doc,
+      picked,
+    }: {
+      doc: { id: string; propertyId: string };
+      picked: File;
+    }) => {
+      const path = await uploadDocumentFile(doc.propertyId, picked);
+      const { data: rows, error } = await supabase
+        .from("property_documents")
+        .update({ file_path: path })
+        .eq("id", doc.id)
+        .select("id");
+      if (error) throw error;
+      if (!rows?.length) throw new Error("ليست لديك صلاحية تعديل هذه الوثيقة");
+    },
+    onSuccess: () => {
+      toast.success("أُرفق الملف بالوثيقة");
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+    onError: (e) => toast.error(userErrorMessage(e, "تعذّر إرفاق الملف")),
+  });
 
   if (isLoading || !data) {
     return (
@@ -255,8 +273,17 @@ function Documents() {
               <Input value={docNumber} onChange={(e) => setDocNumber(e.target.value)} dir="ltr" />
             </div>
             <div className="space-y-2">
-              <Label>تاريخ الانتهاء</Label>
-              <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              <Label htmlFor="doc-date">
+                {hasIssueDate(kind) ? "تاريخ إصدار الصك" : "تاريخ الانتهاء"}
+              </Label>
+              <Input
+                id="doc-date"
+                type="date"
+                dir="ltr"
+                value={docDate}
+                max={hasIssueDate(kind) ? today : undefined}
+                onChange={(e) => setDocDate(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>الملف (PDF أو صورة)</Label>
@@ -309,6 +336,7 @@ function Documents() {
                 <p className="text-xs text-muted-foreground">
                   {kindLabel[d.kind] ?? d.kind} · {d.properties?.name ?? "—"}
                   {d.doc_number ? ` · رقم ${d.doc_number}` : ""}
+                  {d.issued_at ? ` · صدر ${shortDate(d.issued_at)}` : ""}
                   {d.expires_at ? ` · تنتهي ${shortDate(d.expires_at)}` : ""}
                 </p>
                 {d.notes ? <p className="mt-1 text-xs text-muted-foreground">{d.notes}</p> : null}
@@ -318,16 +346,53 @@ function Documents() {
                   <FileText className="size-4" />
                   فتح الملف
                 </Button>
-              ) : null}
+              ) : staff ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={attach.isPending}
+                  onClick={() => {
+                    setAttachTo({ id: d.id, propertyId: d.property_id });
+                    attachInput.current?.click();
+                  }}
+                >
+                  <Paperclip className="size-4" />
+                  إرفاق ملف
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">بدون ملف مرفق</span>
+              )}
             </div>
           ))}
           {data.docs.length === 0 ? (
             <p className="text-sm text-muted-foreground">لا توجد وثائق محفوظة بعد.</p>
           ) : null}
+          <input
+            ref={attachInput}
+            type="file"
+            accept="application/pdf,image/*"
+            className="hidden"
+            aria-label="ملف الوثيقة"
+            onChange={(e) => {
+              const picked = e.target.files?.[0];
+              e.target.value = "";
+              if (picked && attachTo) attach.mutate({ doc: attachTo, picked });
+            }}
+          />
         </CardContent>
       </Card>
     </>
   );
+}
+
+/** Uploads a document's file into its property's folder of the private `documents` bucket. */
+async function uploadDocumentFile(propertyId: string, file: File): Promise<string> {
+  if (!isPdfOrImage(file)) throw new Error("الملف يجب أن يكون PDF أو صورة");
+  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+  const path = `${propertyId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("documents").upload(path, file);
+  if (error) throw error;
+  return path;
 }
 
 function isPdfOrImage(file: File) {

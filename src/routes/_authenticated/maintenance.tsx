@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
+import { openStorageFile } from "@/lib/open-file";
 import { smartScheduleMaintenance } from "@/lib/office-tools.functions";
 import { PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -252,13 +253,8 @@ function Maintenance() {
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّرت الجدولة الذكية")),
   });
 
-  const openMedia = async (path: string) => {
-    const { data: url } = await supabase.storage
-      .from("maintenance-media")
-      .createSignedUrl(path, 300);
-    if (url?.signedUrl) window.open(url.signedUrl, "_blank");
-    else toast.error("تعذّر فتح المرفق");
-  };
+  const openMedia = (path: string) =>
+    void openStorageFile("maintenance-media", path, "تعذّر فتح المرفق");
 
   if (isLoading || !data) {
     return (

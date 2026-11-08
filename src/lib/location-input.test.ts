@@ -38,3 +38,23 @@ describe("isInSaudi", () => {
     expect(isInSaudi({ lat: 46.67, lng: 24.71 })).toBe(false);
   });
 });
+
+describe("short links and shared pins", () => {
+  it("recognises Google Maps share links", async () => {
+    const { isShortMapLink } = await import("./location-input");
+    expect(isShortMapLink("https://maps.app.goo.gl/6bVaHZvEyPWzst64")).toBe(true);
+    expect(isShortMapLink("maps.app.goo.gl/AbC?g_st=ic")).toBe(true);
+    expect(isShortMapLink("https://goo.gl/maps/xyz")).toBe(true);
+    expect(isShortMapLink("https://www.google.com/maps/@21.5,39.1,15z")).toBe(false);
+    expect(isShortMapLink("24.81, 46.61")).toBe(false);
+  });
+
+  it("reads the /maps/search/lat,+lng address a shared pin opens to", () => {
+    expect(
+      parseLocation("https://www.google.com/maps/search/24.774265,+46.738586?entry=tts"),
+    ).toEqual({
+      lat: 24.774265,
+      lng: 46.738586,
+    });
+  });
+});

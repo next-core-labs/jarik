@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { officeListingBlock } from "@/lib/listing-fee";
 
 /**
  * Raises (or reuses) the Moyasar invoice for publishing a unit for the next 30 days. The unit must be
@@ -20,8 +21,14 @@ export const startListingPayment = createServerFn({ method: "POST" })
     if (!target) throw new Error("الوحدة غير موجودة أو لا يديرها مكتبك");
     // Paying would buy nothing: the website only shows offices that are public and approved.
     if (!target.office_ready) {
+      const { data: office } = await context.supabase
+        .from("org_settings")
+        .select("listed_publicly, verified")
+        .eq("id", target.org_id)
+        .maybeSingle();
       throw new Error(
-        "لن تظهر الوحدة في الموقع قبل تفعيل «العرض العلني» في هوية المكتب واعتماده من المنصة — أكمل ذلك أولًا ثم ادفع رسوم النشر.",
+        (office && officeListingBlock(office)) ??
+          "لا تُنشر وحدات مكتبك في الموقع حتى يظهر المكتب في دليل المكاتب وتعتمده إدارة جارك.",
       );
     }
     const { openListingInvoice } = await import("./listing-payments.server");

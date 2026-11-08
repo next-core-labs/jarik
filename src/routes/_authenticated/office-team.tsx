@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { Check, Crown, Link2, MailCheck, Trash2, UserMinus, UserPlus, X } from "lucide-react";
+import { Check, Crown, Link2, MailCheck, Send, Trash2, UserMinus, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
+import { emailOfficeInvitation } from "@/lib/office-invitations.functions";
 import { isStaffRole, roleLabel, useMyRoles, type AppRole } from "@/lib/use-role";
 
 export const Route = createFileRoute("/_authenticated/office-team")({
@@ -128,6 +130,26 @@ function OfficeTeam() {
     queryClient.invalidateQueries({ queryKey: ["client-accounts"] });
   };
 
+  // The invitation row only shows up in the app once they sign in; this also emails them.
+  const emailInvitation = useServerFn(emailOfficeInvitation);
+  const sendInviteEmail = async (email: string): Promise<string | null> => {
+    try {
+      const { sent } = await emailInvitation({ data: { email } });
+      return sent === "invite"
+        ? "وصلته رسالة بريد لتفعيل حسابه"
+        : "وصلته رسالة بريد — يدخل بحسابه ويقبل الدعوة";
+    } catch (e) {
+      toast.warning(userErrorMessage(e, "حُفظت الدعوة لكن تعذّر إرسال البريد"));
+      return null;
+    }
+  };
+  const resendEmail = useMutation({
+    mutationFn: async (email: string) => {
+      const note = await sendInviteEmail(email);
+      if (note) toast.success(`أُعيد إرسال الدعوة — ${note}`);
+    },
+  });
+
   const revoke = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.rpc("office_revoke_invitation", { _id: id });
@@ -152,9 +174,12 @@ function OfficeTeam() {
         _manager: memberRole === "staff" && memberManager,
       });
       if (error) throw error;
+      return sendInviteEmail(memberEmail.trim());
     },
-    onSuccess: () => {
-      toast.success("أُرسلت الدعوة — تنضم إلى الفريق بعد قبولها من صاحب الحساب");
+    onSuccess: (note) => {
+      toast.success(
+        `أُرسلت الدعوة — تنضم إلى الفريق بعد قبولها من صاحب الحساب${note ? ` (${note})` : ""}`,
+      );
       setMemberEmail("");
       setMemberTried(false);
       setMemberManager(false);
@@ -173,9 +198,10 @@ function OfficeTeam() {
         _kind: clientKind,
       });
       if (error) throw error;
+      return sendInviteEmail(clientEmail.trim());
     },
-    onSuccess: () => {
-      toast.success("أُرسلت الدعوة — يرتبط الحساب بمكتبك بعد قبولها");
+    onSuccess: (note) => {
+      toast.success(`أُرسلت الدعوة — يرتبط الحساب بمكتبك بعد قبولها${note ? ` (${note})` : ""}`);
       setClientEmail("");
       setClientTried(false);
       refresh();
@@ -397,8 +423,8 @@ function OfficeTeam() {
                       </Select>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      تصل الدعوة لصاحب الحساب، وبعد قبولها يظهر في قوائم مكتبك لإسناد الوحدات وصفحات
-                      الملاك.
+                      تصل الدعوة إلى بريده (وإن لم يكن له حساب يُنشأ له حساب بكلمة مرور يعيّنها)،
+                      وبعد قبولها يظهر في قوائم مكتبك لإسناد الوحدات وصفحات الملاك.
                     </p>
                     <Button type="submit" disabled={linkClient.isPending || !clientEmail.trim()}>
                       إرسال دعوة الربط
@@ -494,16 +520,27 @@ function OfficeTeam() {
                       </div>
                     </div>
                     {iAmManager ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        disabled={revoke.isPending}
-                        onClick={() => revoke.mutate(inv.id)}
-                      >
-                        <Trash2 className="size-4" />
-                        سحب الدعوة
-                      </Button>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={resendEmail.isPending}
+                          onClick={() => resendEmail.mutate(inv.email)}
+                        >
+                          <Send className="size-4" />
+                          إرسال البريد مجددًا
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
+                          disabled={revoke.isPending}
+                          onClick={() => revoke.mutate(inv.id)}
+                        >
+                          <Trash2 className="size-4" />
+                          سحب الدعوة
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 ))}

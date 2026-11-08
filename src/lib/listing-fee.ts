@@ -41,3 +41,19 @@ export function listingPaymentIdFromSearch(search: string): string | null {
     /listing_payment=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(search);
   return match?.[1]?.toLowerCase() ?? null;
 }
+
+/**
+ * Why the office can't publish units on the website yet (null when it can): the website only shows
+ * offices that are listed («إظهار المكتب في دليل المكاتب», settings) AND verified by the platform.
+ * Named the way the settings screen names it, so the office can find the switch.
+ */
+export function officeListingBlock(office: {
+  listed_publicly: boolean | null;
+  verified: boolean | null;
+}): string | null {
+  if (!office.listed_publicly)
+    return "فعّل «إظهار المكتب في دليل المكاتب» من الإعدادات ← بيانات المكتب واحفظ، ثم انشر الوحدة.";
+  if (!office.verified)
+    return "مكتبك بانتظار اعتماد إدارة جارك — تُنشر الوحدات في الموقع بعد الاعتماد.";
+  return null;
+}

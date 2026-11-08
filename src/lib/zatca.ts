@@ -36,7 +36,8 @@ export function buildZatcaQrPayload(input: {
   return toBase64([
     tlv(1, input.sellerName),
     tlv(2, input.sellerVatNumber),
-    tlv(3, new Date(input.issueDate).toISOString()),
+    // ZATCA reads the timestamp as yyyy-MM-ddTHH:mm:ssZ; some validators reject milliseconds.
+    tlv(3, new Date(input.issueDate).toISOString().replace(/\.\d{3}Z$/, "Z")),
     tlv(4, input.total.toFixed(2)),
     tlv(5, input.vatAmount.toFixed(2)),
   ]);

@@ -27,7 +27,7 @@ import { sar, shortDate } from "@/lib/format";
 import { myOrgId } from "@/lib/use-org-branding";
 import { getEjarConnectionStatus, syncEjar, type EjarMismatch } from "@/lib/ejar.functions";
 import { CorrectLeaseDialog } from "@/components/lease-dialog";
-import { LEASE_TERMS, leaseEndDate, leaseStatusText } from "@/components/lease-schedule";
+import { leaseStatusText, leaseTermFromEnd } from "@/components/lease-schedule";
 import { toLatinDigits } from "@/lib/saudi-id";
 
 /**
@@ -392,11 +392,11 @@ type EjarLease = {
 const mismatchOf = (l: { ejar_mismatch: unknown }) =>
   (l.ejar_mismatch as EjarMismatch | null) ?? null;
 
-/** Ejar's terms as a correction: its start and rent, and its term when it is one we offer. */
+/** Ejar's terms as a correction: its start and rent, and its term when it runs whole months. */
 function ejarTerms(lease: EjarLease, m: EjarMismatch) {
   const startDate = m.start_date ?? lease.start_date;
   const termMonths = m.end_date
-    ? LEASE_TERMS.find((t) => leaseEndDate(startDate, t) === m.end_date)
+    ? (leaseTermFromEnd(startDate, m.end_date) ?? undefined)
     : undefined;
   return {
     startDate,

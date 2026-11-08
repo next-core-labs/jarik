@@ -4,6 +4,7 @@ import { FileText, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { openStorageFile } from "@/lib/open-file";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -133,16 +134,7 @@ function DocumentsCard({ propertyId }: { propertyId: string }) {
     },
   });
 
-  const openFile = async (path: string) => {
-    const { data: signed, error } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(path, 300);
-    if (error || !signed) {
-      toast.error("تعذّر فتح الملف");
-      return;
-    }
-    window.open(signed.signedUrl, "_blank", "noopener");
-  };
+  const openFile = (path: string) => void openStorageFile("documents", path);
 
   const docs = (data ?? []).filter((d): d is typeof d & { file_path: string } =>
     Boolean(d.file_path),

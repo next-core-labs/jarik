@@ -28,7 +28,32 @@ export function emailProblem(email: string): string | null {
   return null;
 }
 
-/** Same rules as userErrorMessage, for the sign-in, sign-up and password screens. */
+/**
+ * Same rules as userErrorMessage, for the sign-in, sign-up and password screens — plus Supabase
+ * Auth's own English errors that the person can act on (a weak or leaked password, an expired link
+ * session), which would otherwise all collapse into the screen's generic fallback.
+ */
 export function authErrorMessage(err: unknown, fallback: string): string {
+  const e = err as { message?: unknown; code?: unknown; name?: unknown } | null;
+  const message = typeof e?.message === "string" ? e.message : "";
+  const code = typeof e?.code === "string" ? e.code : "";
+  if (!ARABIC.test(message)) {
+    if (
+      code === "weak_password" ||
+      e?.name === "AuthWeakPasswordError" ||
+      /weak|pwned|should contain|at least/i.test(message)
+    )
+      return "كلمة المرور ضعيفة أو منتشرة — اختر كلمة أطول تجمع أحرفًا إنجليزية كبيرة وصغيرة وأرقامًا";
+    if (code === "same_password" || /different from the old password/i.test(message))
+      return "هذه كلمة مرورك الحالية نفسها — ادخل بها مباشرة";
+    if (
+      code === "session_not_found" ||
+      code === "session_expired" ||
+      code === "bad_jwt" ||
+      e?.name === "AuthSessionMissingError" ||
+      /session missing|jwt expired|unauthorized/i.test(message)
+    )
+      return "انتهت صلاحية رابط الدعوة أو الجلسة — افتح الرابط من البريد مرة أخرى أو اطلب دعوة جديدة";
+  }
   return userErrorMessage(err, fallback);
 }

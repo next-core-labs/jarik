@@ -2,8 +2,11 @@ import { addDays } from "@/lib/dates";
 import { leaseStatusLabel } from "@/lib/format";
 import { splitInstallments } from "@/lib/installments";
 
-/** Lease terms the database accepts (leases_term_months_check). */
-export const LEASE_TERMS = [1, 3, 6, 12] as const;
+/** Quick picks for a lease's length; any whole number of months up to MAX_LEASE_MONTHS is accepted. */
+export const LEASE_TERMS = [1, 3, 6, 12, 24] as const;
+
+/** Longest lease the database accepts (leases_term_months_check / private.check_lease_terms). */
+export const MAX_LEASE_MONTHS = 60;
 
 /**
  * `start` plus whole calendar months. A day the target month doesn't have becomes its last day
@@ -22,6 +25,32 @@ export function addMonths(start: string, months: number): string {
  */
 export function leaseEndDate(start: string, months: number): string {
   return addDays(addMonths(start, months), -1);
+}
+
+/**
+ * The whole months a lease from `start` runs when the office picks `end` as its last day: `end` is
+ * start + n months − 1 day (the stored end date), or the same day-of-month n months on (how many
+ * contracts are written). Null when `end` doesn't complete whole months, or the term is out of range.
+ */
+export function leaseTermFromEnd(start: string, end: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end <= start)
+    return null;
+  const [ys, ms] = start.split("-").map(Number) as [number, number];
+  const [ye, me] = end.split("-").map(Number) as [number, number];
+  const approx = (ye - ys) * 12 + (me - ms);
+  for (const n of [approx, approx + 1, approx - 1]) {
+    if (n < 1 || n > MAX_LEASE_MONTHS) continue;
+    if (leaseEndDate(start, n) === end || addMonths(start, n) === end) return n;
+  }
+  return null;
+}
+
+/** The whole-month term closest to a hand-picked end date (at least 1, at most MAX_LEASE_MONTHS). */
+export function nearestLeaseTerm(start: string, end: string): number {
+  const [ys, ms, ds] = start.split("-").map(Number) as [number, number, number];
+  const [ye, me, de] = end.split("-").map(Number) as [number, number, number];
+  const months = (ye - ys) * 12 + (me - ms) + (de - ds + 1) / 30;
+  return Math.min(MAX_LEASE_MONTHS, Math.max(1, Math.round(months)));
 }
 
 /**

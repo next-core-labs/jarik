@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -67,6 +67,7 @@ import {
   LISTING_PERIOD_DAYS,
   listingPaymentIdFromSearch,
   marketState,
+  officeListingBlock,
 } from "@/lib/listing-fee";
 import { isMoyasarCheckoutUrl } from "@/lib/moyasar-url";
 import { useMyRoles } from "@/lib/use-role";
@@ -127,6 +128,22 @@ function Properties() {
     queryFn: () => myOrgId(),
   });
   const noOffice = isStaff && myOffice.isSuccess && myOffice.data === null;
+  // Paying to publish buys nothing until the office is listed and verified: say so on the unit
+  // instead of offering the payment.
+  const officeListing = useQuery({
+    queryKey: ["office-listing-ready", myOffice.data],
+    enabled: Boolean(myOffice.data),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("org_settings")
+        .select("listed_publicly, verified")
+        .eq("id", myOffice.data!)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? officeListingBlock(data) : null;
+    },
+  });
 
   const [dialog, setDialog] = useState<{
     propertyId: string;
@@ -560,6 +577,7 @@ function Properties() {
                                 unit={u}
                                 officeId={myOffice.data ?? null}
                                 canPublish={canPublish}
+                                publishBlock={officeListing.data ?? null}
                                 publishing={publish.isPending && publish.variables === u.id}
                                 onPublish={() => publish.mutate(u.id)}
                               />
@@ -744,6 +762,7 @@ function UnitMarketStatus({
   unit,
   officeId,
   canPublish,
+  publishBlock,
   publishing,
   onPublish,
 }: {
@@ -757,6 +776,8 @@ function UnitMarketStatus({
   officeId: string | null;
   /** An owner's unit is published only by an office whose agreement grants leasing. */
   canPublish: boolean;
+  /** Why the office can't publish yet (not listed / not verified), or null. */
+  publishBlock: string | null;
   publishing: boolean;
   onPublish: () => void;
 }) {
@@ -779,7 +800,14 @@ function UnitMarketStatus({
         <Globe className="size-3.5 text-brass" />
         {line}
       </p>
-      {canPay ? (
+      {canPay && publishBlock ? (
+        <p className="rounded-sm border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {publishBlock}{" "}
+          <Link to="/settings" className="font-medium text-foreground underline underline-offset-4">
+            الإعدادات
+          </Link>
+        </p>
+      ) : canPay ? (
         <Button
           variant={market.kind === "paid" ? "outline" : "default"}
           className="w-full"
