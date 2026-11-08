@@ -35,6 +35,8 @@ import {
   FileSignature,
   Landmark,
   ArrowLeftRight,
+  ChevronDown,
+  LayoutGrid,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -51,31 +53,80 @@ import { useMyRoles, isStaffRole } from "@/lib/use-role";
 import { todayRiyadh } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-const staffNav = [
+type NavLink = { to: string; label: string; icon: LucideIcon };
+
+// The office's 24 pages, grouped by job so the drawer reads as a few short sections instead of one
+// long list. The daily essentials stay on top; each section folds, and the one holding the current
+// page opens by itself.
+const staffTopNav: NavLink[] = [
   { to: "/dashboard", label: "لوحة المؤشرات", icon: Gauge },
-  { to: "/", label: "سوق العروض", icon: Store },
-  { to: "/office-stats", label: "إحصاءات المكتب", icon: PieChart },
-  { to: "/properties", label: "الأملاك والوحدات", icon: Building2 },
-  { to: "/owner-pages", label: "صفحات الملاك", icon: Contact },
-  { to: "/office-team", label: "فريق المكتب", icon: UserCog },
-  { to: "/agreements", label: "اتفاقيات الإدارة", icon: FileSignature },
-  { to: "/settings", label: "هوية المكتب", icon: BadgeCheck },
-  { to: "/map", label: "خريطة الإشغال", icon: MapPin },
-  { to: "/tenants", label: "المستأجرون والعقود", icon: Users },
-  { to: "/renewals", label: "تجديد العقود", icon: CalendarClock },
-  { to: "/collections", label: "التحصيل والمصروفات", icon: Wallet },
-  { to: "/invoices", label: "الفواتير الإلكترونية", icon: Receipt },
-  { to: "/maintenance", label: "الصيانة", icon: Wrench },
-  { to: "/deals", label: "المبيعات والصفقات", icon: Handshake },
-  { to: "/requests", label: "طلبات الوحدات", icon: ClipboardList },
-  { to: "/reports", label: "التقارير الشهرية", icon: FileBarChart },
-  { to: "/audit", label: "سجل التدقيق", icon: ScrollText },
-  { to: "/documents", label: "وثائق العقارات", icon: FileText },
-  { to: "/messages", label: "المحادثات", icon: MessagesSquare },
-  { to: "/whatsapp", label: "مساعد واتساب", icon: MessageSquare },
   { to: "/notifications", label: "الإشعارات", icon: Bell },
+  { to: "/messages", label: "المحادثات", icon: MessagesSquare },
   { to: "/assistant", label: "المساعد الذكي", icon: MessageCircle },
-] as const;
+];
+
+const staffNavGroups: { key: string; label: string; items: NavLink[] }[] = [
+  {
+    key: "properties",
+    label: "العقارات",
+    items: [
+      { to: "/properties", label: "الأملاك والوحدات", icon: Building2 },
+      { to: "/map", label: "خريطة الإشغال", icon: MapPin },
+      { to: "/documents", label: "وثائق العقارات", icon: FileText },
+      { to: "/owner-pages", label: "صفحات الملاك", icon: Contact },
+      { to: "/agreements", label: "اتفاقيات الإدارة", icon: FileSignature },
+    ],
+  },
+  {
+    key: "leasing",
+    label: "الإيجار والتحصيل",
+    items: [
+      { to: "/tenants", label: "المستأجرون والعقود", icon: Users },
+      { to: "/renewals", label: "تجديد العقود", icon: CalendarClock },
+      { to: "/collections", label: "التحصيل والمصروفات", icon: Wallet },
+      { to: "/invoices", label: "الفواتير الإلكترونية", icon: Receipt },
+      { to: "/maintenance", label: "الصيانة", icon: Wrench },
+    ],
+  },
+  {
+    key: "market",
+    label: "السوق والمبيعات",
+    items: [
+      { to: "/", label: "سوق العروض", icon: Store },
+      { to: "/requests", label: "طلبات الوحدات", icon: ClipboardList },
+      { to: "/deals", label: "المبيعات والصفقات", icon: Handshake },
+      { to: "/whatsapp", label: "مساعد واتساب", icon: MessageSquare },
+    ],
+  },
+  {
+    key: "reports",
+    label: "التقارير",
+    items: [
+      { to: "/office-stats", label: "إحصاءات المكتب", icon: PieChart },
+      { to: "/reports", label: "التقارير الشهرية", icon: FileBarChart },
+      { to: "/audit", label: "سجل التدقيق", icon: ScrollText },
+    ],
+  },
+  {
+    key: "office",
+    label: "المكتب",
+    items: [
+      { to: "/settings", label: "هوية المكتب", icon: BadgeCheck },
+      { to: "/office-team", label: "فريق المكتب", icon: UserCog },
+      { to: "/portal", label: "صفحتي", icon: UserCircle },
+    ],
+  },
+];
+
+// The phone's bottom bar for office staff: the four most used pages, and «المزيد» for the drawer.
+const staffBottomNav: NavLink[] = [
+  { to: "/dashboard", label: "الرئيسية", icon: Gauge },
+  { to: "/properties", label: "الوحدات", icon: Building2 },
+  { to: "/tenants", label: "العقود", icon: Users },
+  { to: "/collections", label: "التحصيل", icon: Wallet },
+];
+
+const NAV_GROUPS_KEY = "jarak:nav-groups";
 
 // حساب بلا دور بعد (أو دور المنصة فقط). "المساعد الذكي" للمكتب فقط (askAssistant يرفض غير
 // الموظفين)، فما يظهر هنا.
@@ -393,15 +444,69 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
-  const nav = platformTeamPage
+  const hqNav: NavLink[] =
+    roles.includes("super_admin") || (hqPermissions.data?.length ?? 0) > 0
+      ? [...superAdminNav]
+      : [];
+  // Staff get the grouped drawer below; everyone else a short flat list.
+  const nav: NavLink[] = platformTeamPage
     ? [...superAdminNav]
-    : [
-        ...(staff ? staffNav : isTechnician ? technicianNav : portalNav),
-        ...(staff ? [{ to: "/portal", label: "صفحتي", icon: UserCircle }] : []),
-        ...(roles.includes("super_admin") || (hqPermissions.data?.length ?? 0) > 0
-          ? superAdminNav
-          : []),
-      ];
+    : staff
+      ? [...staffTopNav, ...hqNav]
+      : [...(isTechnician ? technicianNav : portalNav), ...hqNav];
+  const staffGroups = staff && !platformTeamPage ? staffNavGroups : [];
+
+  // Which sections the person folded open or shut (remembered on this device). A section with no
+  // choice yet is open only while it holds the current page.
+  const [groupChoice, setGroupChoice] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(NAV_GROUPS_KEY);
+      if (saved) setGroupChoice(JSON.parse(saved) as Record<string, boolean>);
+    } catch {
+      // storage blocked: sections follow the current page only
+    }
+  }, []);
+  const groupOpen = (key: string, items: NavLink[]) =>
+    items.some((i) => i.to === pathname) || (groupChoice[key] ?? false);
+  const toggleGroup = (key: string, items: NavLink[]) => {
+    const next = { ...groupChoice, [key]: !groupOpen(key, items) };
+    setGroupChoice(next);
+    try {
+      localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next));
+    } catch {
+      // storage blocked: the choice lasts until the page reloads
+    }
+  };
+
+  const navLink = (item: NavLink) => {
+    const active = pathname === item.to;
+    return (
+      <Link
+        key={item.to}
+        to={item.to}
+        onClick={() => setOpen(false)}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+          active
+            ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60",
+        )}
+      >
+        <item.icon className="size-4" />
+        <span className="flex-1">{item.label}</span>
+        {item.to === "/agreements" && (pendingAgreements.data ?? 0) > 0 ? (
+          <span
+            className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground"
+            aria-label={`${pendingAgreements.data} طلب بانتظار ردّك`}
+          >
+            {pendingAgreements.data}
+          </span>
+        ) : null}
+      </Link>
+    );
+  };
 
   async function signOut() {
     await queryClient.cancelQueries();
@@ -454,62 +559,68 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
           </div>
           <nav className="mt-4 space-y-1">
-            {!platformTeamPage && (tenant || owner)
-              ? portalRoleNav.map((item) => {
-                  const active = portalItemActive(item.href);
-                  const badgeCount = item.badge ? navBadge(item.badge) : 0;
+            {!platformTeamPage && (tenant || owner) ? (
+              portalRoleNav.map((item) => {
+                const active = portalItemActive(item.href);
+                const badgeCount = item.badge ? navBadge(item.badge) : 0;
+                return (
+                  <a
+                    key={item.key}
+                    href={item.href}
+                    onClick={(e) => {
+                      setOpen(false);
+                      followPortalLink(e, item.href);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                      active
+                        ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60",
+                    )}
+                  >
+                    <item.icon className="size-4" />
+                    <span className="flex-1">{item.label}</span>
+                    {badgeCount > 0 ? (
+                      <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground">
+                        {arNum(badgeCount)}
+                      </span>
+                    ) : null}
+                  </a>
+                );
+              })
+            ) : (
+              <>
+                {nav.map(navLink)}
+                {staffGroups.map((group) => {
+                  const isOpen = groupOpen(group.key, group.items);
+                  const hasBadge =
+                    group.items.some((i) => i.to === "/agreements") &&
+                    (pendingAgreements.data ?? 0) > 0;
                   return (
-                    <a
-                      key={item.key}
-                      href={item.href}
-                      onClick={(e) => {
-                        setOpen(false);
-                        followPortalLink(e, item.href);
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                        active
-                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60",
-                      )}
-                    >
-                      <item.icon className="size-4" />
-                      <span className="flex-1">{item.label}</span>
-                      {badgeCount > 0 ? (
-                        <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground">
-                          {arNum(badgeCount)}
-                        </span>
+                    <div key={group.key} className="pt-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.key, group.items)}
+                        aria-expanded={isOpen}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-sidebar-foreground/55 transition-colors hover:text-sidebar-foreground"
+                      >
+                        <span className="flex-1 text-start">{group.label}</span>
+                        {hasBadge && !isOpen ? (
+                          <span className="size-2 rounded-full bg-destructive" aria-hidden />
+                        ) : null}
+                        <ChevronDown
+                          className={cn("size-3.5 transition-transform", isOpen && "rotate-180")}
+                          aria-hidden
+                        />
+                      </button>
+                      {isOpen ? (
+                        <div className="mt-1 space-y-1">{group.items.map(navLink)}</div>
                       ) : null}
-                    </a>
-                  );
-                })
-              : nav.map((item) => {
-                  const active = pathname === item.to;
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setOpen(false)}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                        active
-                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60",
-                      )}
-                    >
-                      <item.icon className="size-4" />
-                      <span className="flex-1">{item.label}</span>
-                      {item.to === "/agreements" && (pendingAgreements.data ?? 0) > 0 ? (
-                        <span
-                          className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground"
-                          aria-label={`${pendingAgreements.data} طلب بانتظار ردّك`}
-                        >
-                          {pendingAgreements.data}
-                        </span>
-                      ) : null}
-                    </Link>
+                    </div>
                   );
                 })}
+              </>
+            )}
           </nav>
         </div>
         <div className="space-y-1">
@@ -573,7 +684,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="font-display font-bold">{brandLabel}</span>
         </header>
         <main
-          className={cn("mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10", tenant && "pb-24 lg:pb-10")}
+          className={cn(
+            "mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10",
+            (tenant || (staff && !platformTeamPage)) && "pb-24 lg:pb-10",
+          )}
         >
           {children}
         </main>
@@ -606,6 +720,47 @@ export function AppShell({ children }: { children: ReactNode }) {
               </a>
             );
           })}
+        </nav>
+      ) : null}
+
+      {!platformTeamPage && staff ? (
+        <nav
+          aria-label="التنقل السريع"
+          className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
+        >
+          {staffBottomNav.map((item) => {
+            const active = pathname === item.to;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-1 py-2 text-[11px]",
+                  active
+                    ? "font-semibold text-foreground shadow-[inset_0_3px_0_var(--color-foreground)]"
+                    : "text-muted-foreground",
+                )}
+              >
+                <item.icon className="size-5" />
+                {item.label}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-expanded={open}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-1 py-2 text-[11px]",
+              !staffBottomNav.some((i) => i.to === pathname)
+                ? "font-semibold text-foreground shadow-[inset_0_3px_0_var(--color-foreground)]"
+                : "text-muted-foreground",
+            )}
+          >
+            <LayoutGrid className="size-5" />
+            المزيد
+          </button>
         </nav>
       ) : null}
     </div>

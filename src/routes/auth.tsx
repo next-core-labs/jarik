@@ -267,7 +267,10 @@ function AuthPage() {
     e.preventDefault();
     if (blocked(emailProblem(email))) return;
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // If the email arrives as a link rather than a code, the link opens /reset-password.
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
     setLoading(false);
     if (error) {
       toast.error(authErrorMessage(error, "تعذّر إرسال الرمز — حاول بعد قليل"));
@@ -275,7 +278,7 @@ function AuthPage() {
     }
     setStep("reset");
     // Always the same wording, so this cannot be used to learn which addresses are registered.
-    toast.success("إن كان البريد مسجَّلًا فسيصلك رمز لإعادة التعيين");
+    toast.success("إن كان البريد مسجَّلًا فسيصلك رمز (أو رابط) لإعادة التعيين");
   }
 
   async function resetPassword(e: React.FormEvent) {

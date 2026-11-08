@@ -88,14 +88,17 @@ export function PortalLoginPage({
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // If the email arrives as a link rather than a code, the link opens /reset-password.
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
       // Only a failed connection is reported: any other answer gets the same wording below.
       if (error && authErrorMessage(error, "") === NETWORK_ERROR_AR) {
         toast.error(NETWORK_ERROR_AR);
         return;
       }
       // نفس الصياغة سواء كان البريد مسجَّلًا أو لا، حتى لا تُستخدم الصفحة لمعرفة من هو مسجَّل.
-      toast.success("إن كان البريد مسجَّلًا فسيصلك رمز لإعادة التعيين");
+      toast.success("إن كان البريد مسجَّلًا فسيصلك رمز (أو رابط) لإعادة التعيين");
       setStep("reset");
     } finally {
       setLoading(false);

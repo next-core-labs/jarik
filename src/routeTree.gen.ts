@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChooseRoleRouteImport } from './routes/choose-role'
 import { Route as OfficesRouteImport } from './routes/offices'
 import { Route as RequestsMarketRouteImport } from './routes/requests-market'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authenticated/agreements'
 import { Route as AuthenticatedAssistantRouteImport } from './routes/_authenticated/assistant'
@@ -89,6 +90,11 @@ const OfficesRoute = OfficesRouteImport.update({
 const RequestsMarketRoute = RequestsMarketRouteImport.update({
   id: '/requests-market',
   path: '/requests-market',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/choose-role': typeof ChooseRoleRoute
   '/offices': typeof OfficesRoute
   '/requests-market': typeof RequestsMarketRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/agreements': typeof AuthenticatedAgreementsRoute
   '/assistant': typeof AuthenticatedAssistantRoute
@@ -396,6 +403,7 @@ export interface FileRoutesByTo {
   '/choose-role': typeof ChooseRoleRoute
   '/offices': typeof OfficesRoute
   '/requests-market': typeof RequestsMarketRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/agreements': typeof AuthenticatedAgreementsRoute
   '/assistant': typeof AuthenticatedAssistantRoute
@@ -451,6 +459,7 @@ export interface FileRoutesById {
   '/choose-role': typeof ChooseRoleRoute
   '/offices': typeof OfficesRoute
   '/requests-market': typeof RequestsMarketRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/agreements': typeof AuthenticatedAgreementsRoute
   '/_authenticated/assistant': typeof AuthenticatedAssistantRoute
@@ -506,6 +515,7 @@ export interface FileRouteTypes {
     | '/choose-role'
     | '/offices'
     | '/requests-market'
+    | '/reset-password'
     | '/sitemap.xml'
     | '/agreements'
     | '/assistant'
@@ -559,6 +569,7 @@ export interface FileRouteTypes {
     | '/choose-role'
     | '/offices'
     | '/requests-market'
+    | '/reset-password'
     | '/sitemap.xml'
     | '/agreements'
     | '/assistant'
@@ -613,6 +624,7 @@ export interface FileRouteTypes {
     | '/choose-role'
     | '/offices'
     | '/requests-market'
+    | '/reset-password'
     | '/sitemap.xml'
     | '/_authenticated/agreements'
     | '/_authenticated/assistant'
@@ -668,6 +680,7 @@ export interface RootRouteChildren {
   ChooseRoleRoute: typeof ChooseRoleRoute
   OfficesRoute: typeof OfficesRoute
   RequestsMarketRoute: typeof RequestsMarketRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   LegalSlugRoute: typeof LegalSlugRoute
   OfficeOfficeIdRoute: typeof OfficeOfficeIdRoute
@@ -723,6 +736,13 @@ declare module '@tanstack/react-router' {
       path: '/requests-market'
       fullPath: '/requests-market'
       preLoaderRoute: typeof RequestsMarketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -1136,6 +1156,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChooseRoleRoute: ChooseRoleRoute,
   OfficesRoute: OfficesRoute,
   RequestsMarketRoute: RequestsMarketRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   LegalSlugRoute: LegalSlugRoute,
   OfficeOfficeIdRoute: OfficeOfficeIdRoute,
