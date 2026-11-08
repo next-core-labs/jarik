@@ -29,8 +29,10 @@ export const Route = createFileRoute("/_authenticated/invoices/")({
   component: Invoices,
 });
 
+// "draft" = issued here but not yet reported to ZATCA's platform (Phase 2) — to the office it is an
+// issued invoice, not an unfinished one.
 const zatcaLabel: Record<string, string> = {
-  draft: "مسودة",
+  draft: "صادرة",
   reported: "مُبلّغة",
   cleared: "مُصادق عليها",
   failed: "فشل الإرسال",
@@ -112,52 +114,63 @@ function Invoices() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {data.invoices.map((inv) => (
-          <Card key={inv.id} className="shadow-deed">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="font-display text-lg" dir="ltr">
-                  {inv.invoice_number}
-                </CardTitle>
-                {/* "default" (red) is reserved for price/primary action/available — a ZATCA status
+          <Link
+            key={inv.id}
+            to="/invoices/$invoiceId"
+            params={{ invoiceId: inv.id }}
+            className="block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2"
+            aria-label={`فتح الفاتورة ${inv.invoice_number}`}
+          >
+            <Card className="shadow-deed transition-colors hover:border-foreground/40">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="font-display text-lg" dir="ltr">
+                    {inv.invoice_number}
+                  </CardTitle>
+                  {/* "default" (red) is reserved for price/primary action/available — a ZATCA status
                     is none of those. */}
-                <Badge variant={inv.zatca_status === "draft" ? "outline" : "secondary"}>
-                  {zatcaLabel[inv.zatca_status] ?? inv.zatca_status}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">{shortDate(inv.issue_date)}</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground">العميل</p>
-                <p className="font-medium">{inv.customer_name}</p>
-                {inv.customer_vat_number ? (
-                  <p className="text-xs text-muted-foreground" dir="ltr">
-                    VAT {inv.customer_vat_number}
+                  <Badge variant={inv.zatca_status === "draft" ? "outline" : "secondary"}>
+                    {zatcaLabel[inv.zatca_status] ?? inv.zatca_status}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{shortDate(inv.issue_date)}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">العميل</p>
+                  <p className="font-medium">{inv.customer_name}</p>
+                  {inv.customer_vat_number ? (
+                    <p className="text-xs text-muted-foreground" dir="ltr">
+                      VAT {inv.customer_vat_number}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-1 border-t border-border pt-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">الإجمالي قبل الضريبة</span>
+                    <span>{sar2(inv.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ضريبة القيمة المضافة</span>
+                    <span>{sar2(inv.vat_amount)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>الإجمالي</span>
+                    <span>{sar2(inv.total)}</span>
+                  </div>
+                </div>
+                {inv.qr_payload ? (
+                  <p className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                    <QrCode className="size-4 text-brass" />
+                    رمز QR جاهز للطباعة على الفاتورة
                   </p>
                 ) : null}
-              </div>
-              <div className="space-y-1 border-t border-border pt-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">الإجمالي قبل الضريبة</span>
-                  <span>{sar2(inv.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">ضريبة القيمة المضافة</span>
-                  <span>{sar2(inv.vat_amount)}</span>
-                </div>
-                <div className="flex justify-between font-bold">
-                  <span>الإجمالي</span>
-                  <span>{sar2(inv.total)}</span>
-                </div>
-              </div>
-              {inv.qr_payload ? (
-                <p className="flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                  <QrCode className="size-4 text-brass" />
-                  رمز QR جاهز للطباعة على الفاتورة
+                <p className="text-sm font-medium underline underline-offset-4">
+                  عرض الفاتورة وتنزيل PDF
                 </p>
-              ) : null}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
         {data.invoices.length === 0 ? (
           <p className="text-sm text-muted-foreground">لا توجد فواتير.</p>

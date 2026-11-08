@@ -6,6 +6,7 @@ import { Download, LayoutDashboard, Paperclip, Phone, Star } from "lucide-react"
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { openStorageFile } from "@/lib/open-file";
 import { PageHeader } from "@/components/app-shell";
 import { OfficeIdentity } from "@/components/office-identity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -411,13 +412,8 @@ function Portal() {
     },
   });
 
-  const openMedia = async (path: string) => {
-    const { data: url } = await supabase.storage
-      .from("maintenance-media")
-      .createSignedUrl(path, 300);
-    if (url?.signedUrl) window.open(url.signedUrl, "_blank", "noopener");
-    else toast.error("تعذّر فتح المرفق");
-  };
+  const openMedia = (path: string) =>
+    void openStorageFile("maintenance-media", path, "تعذّر فتح المرفق");
 
   const roleBadges = (
     <div className="mb-6 flex flex-wrap items-center gap-2">

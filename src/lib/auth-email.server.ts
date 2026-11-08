@@ -23,7 +23,12 @@ const DEFAULT_FROM = `"${SITE_NAME}" <noreply@notify.jarak-ksa.com>`;
 const TOLERANCE_SECONDS = 5 * 60;
 
 export type HookPayload = {
-  user: { email: string; new_email?: string | null };
+  user: {
+    email: string;
+    new_email?: string | null;
+    /** Set by the inviter (inviteUserByEmail `data`): invited_by_office, invited_as. */
+    user_metadata?: Record<string, unknown> | null;
+  };
   email_data: {
     token: string;
     token_hash: string;
@@ -164,18 +169,25 @@ export function buildEmails(p: HookPayload, supabaseUrl: string): OutgoingEmail[
           }),
         },
       ];
-    case "invite":
+    case "invite": {
+      const meta = p.user.user_metadata ?? {};
+      const officeName =
+        typeof meta["invited_by_office"] === "string" ? meta["invited_by_office"] : null;
+      const roleLabel = typeof meta["invited_as"] === "string" ? meta["invited_as"] : null;
       return [
         {
           to: p.user.email,
-          subject: "دعوة للانضمام إلى جارك",
+          subject: officeName ? `دعوة من مكتب «${officeName}» على جارك` : "دعوة للانضمام إلى جارك",
           element: React.createElement(InviteEmail, {
             siteName: SITE_NAME,
             siteUrl: SITE_URL,
             confirmationUrl: url(d.token_hash),
+            officeName,
+            roleLabel,
           }),
         },
       ];
+    }
     case "magiclink":
       return [
         {

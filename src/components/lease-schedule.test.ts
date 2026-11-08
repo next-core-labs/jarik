@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, leaseEndDate, leaseSchedule } from "@/components/lease-schedule";
+import {
+  addMonths,
+  leaseEndDate,
+  leaseSchedule,
+  leaseTermFromEnd,
+} from "@/components/lease-schedule";
 
 describe("leaseEndDate", () => {
   it("ends the day before the same date a term later", () => {
@@ -97,5 +102,22 @@ describe("leaseSchedule", () => {
     });
     expect(rows.map((r) => r.amount)).toEqual([1666.67, 1666.67, 1666.66]);
     expect(rows.map((r) => r.due_date)).toEqual(["2026-11-01", "2027-01-01", "2027-03-01"]);
+  });
+});
+
+describe("leaseTermFromEnd", () => {
+  it("reads the stored end (start + n months − 1 day) and the same-day form", () => {
+    expect(leaseTermFromEnd("2026-12-08", "2027-12-07")).toBe(12);
+    expect(leaseTermFromEnd("2026-12-08", "2027-12-08")).toBe(12);
+    expect(leaseTermFromEnd("2026-12-08", "2028-12-07")).toBe(24);
+    expect(leaseTermFromEnd("2026-01-31", "2026-02-27")).toBe(1);
+    expect(leaseTermFromEnd("2026-12-08", "2027-03-07")).toBe(3);
+  });
+
+  it("refuses ends that are not whole months, before the start, or too long", () => {
+    expect(leaseTermFromEnd("2026-12-08", "2027-01-20")).toBeNull();
+    expect(leaseTermFromEnd("2026-12-08", "2026-12-01")).toBeNull();
+    expect(leaseTermFromEnd("2026-12-08", "2036-12-07")).toBeNull();
+    expect(leaseTermFromEnd("", "2027-12-07")).toBeNull();
   });
 });

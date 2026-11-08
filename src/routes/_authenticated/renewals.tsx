@@ -153,11 +153,18 @@ function Renewals() {
       return Number(n ?? 0);
     },
     onSuccess: (n) => {
-      toast.success(
-        n > 0
-          ? `تم إرسال تنبيهات تجديد لـ ${arCount(n, { one: "عقد واحد", two: "عقدين", few: "عقود", many: "عقدًا" })}`
-          : "لا توجد عقود تنتهي خلال ٩٠ يومًا",
-      );
+      if (n > 0) {
+        toast.success(
+          `تم إرسال تنبيهات تجديد لـ ${arCount(n, { one: "عقد واحد", two: "عقدين", few: "عقود", many: "عقدًا" })}`,
+        );
+      } else if (list.length > 0) {
+        // The leases are there, but neither side has an account on Jarak to receive the notice.
+        toast.warning(
+          "لا يوجد مالك أو مستأجر بحساب على جارك لهذه العقود — ادعُهم من «فريق المكتب» أو تواصل معهم مباشرة",
+        );
+      } else {
+        toast.success("لا توجد عقود تنتهي خلال ٩٠ يومًا");
+      }
       queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر الإرسال")),

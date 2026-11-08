@@ -52,6 +52,7 @@ import { Route as TenantActivateRouteImport } from './routes/tenant.activate'
 import { Route as TenantLoginRouteImport } from './routes/tenant.login'
 import { Route as UnitUnitIdRouteImport } from './routes/unit.$unitId'
 import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices.index'
+import { Route as AuthenticatedInvoicesInvoiceIdRouteImport } from './routes/_authenticated/invoices.$invoiceId'
 import { Route as AuthenticatedInvoicesNewRouteImport } from './routes/_authenticated/invoices.new'
 import { Route as AuthenticatedOwnerAgreementsRouteImport } from './routes/_authenticated/owner.agreements'
 import { Route as AuthenticatedOwnerPropertiesRouteImport } from './routes/_authenticated/owner.properties'
@@ -283,6 +284,12 @@ const AuthenticatedInvoicesIndexRoute =
     path: '/invoices/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedInvoicesInvoiceIdRoute =
+  AuthenticatedInvoicesInvoiceIdRouteImport.update({
+    id: '/invoices/$invoiceId',
+    path: '/invoices/$invoiceId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedInvoicesNewRoute =
   AuthenticatedInvoicesNewRouteImport.update({
     id: '/invoices/new',
@@ -372,6 +379,7 @@ export interface FileRoutesByFullPath {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
+  '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
   '/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
@@ -424,6 +432,7 @@ export interface FileRoutesByTo {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
+  '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
   '/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
@@ -478,6 +487,7 @@ export interface FileRoutesById {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
+  '/_authenticated/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/_authenticated/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/_authenticated/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
   '/_authenticated/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
@@ -532,6 +542,7 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
+    | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/owner/agreements'
     | '/owner/properties'
@@ -584,6 +595,7 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
+    | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/owner/agreements'
     | '/owner/properties'
@@ -637,6 +649,7 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
+    | '/_authenticated/invoices/$invoiceId'
     | '/_authenticated/invoices/new'
     | '/_authenticated/owner/agreements'
     | '/_authenticated/owner/properties'
@@ -971,6 +984,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInvoicesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/invoices/$invoiceId': {
+      id: '/_authenticated/invoices/$invoiceId'
+      path: '/invoices/$invoiceId'
+      fullPath: '/invoices/$invoiceId'
+      preLoaderRoute: typeof AuthenticatedInvoicesInvoiceIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/invoices/new': {
       id: '/_authenticated/invoices/new'
       path: '/invoices/new'
@@ -1059,6 +1079,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedTenantsRoute: typeof AuthenticatedTenantsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWhatsappRoute: typeof AuthenticatedWhatsappRoute
+  AuthenticatedInvoicesInvoiceIdRoute: typeof AuthenticatedInvoicesInvoiceIdRoute
   AuthenticatedInvoicesNewRoute: typeof AuthenticatedInvoicesNewRoute
   AuthenticatedOwnerAgreementsRoute: typeof AuthenticatedOwnerAgreementsRoute
   AuthenticatedOwnerPropertiesRoute: typeof AuthenticatedOwnerPropertiesRoute
@@ -1096,6 +1117,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedTenantsRoute: AuthenticatedTenantsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWhatsappRoute: AuthenticatedWhatsappRoute,
+  AuthenticatedInvoicesInvoiceIdRoute: AuthenticatedInvoicesInvoiceIdRoute,
   AuthenticatedInvoicesNewRoute: AuthenticatedInvoicesNewRoute,
   AuthenticatedOwnerAgreementsRoute: AuthenticatedOwnerAgreementsRoute,
   AuthenticatedOwnerPropertiesRoute: AuthenticatedOwnerPropertiesRoute,

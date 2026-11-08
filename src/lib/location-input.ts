@@ -9,12 +9,19 @@ export function isInSaudi({ lat, lng }: LatLng): boolean {
   return lat >= 16 && lat <= 32.5 && lng >= 34.4 && lng <= 55.7;
 }
 
+/** Google Maps share links (maps.app.goo.gl/…, goo.gl/maps/…) — they hold coordinates only once opened. */
+export function isShortMapLink(input: string): boolean {
+  return /^\s*(?:https?:\/\/)?(?:maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)\/\S+\s*$/i.test(
+    input,
+  );
+}
+
 const PAIR = /(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/;
 
 /**
  * Coordinates from text: a bare «lat, lng» pair, or a full Google Maps URL (`@lat,lng,17z`,
  * `!3dlat!4dlng`, `?q=lat,lng`, `ll=` / `query=` / `destination=`). Short links (maps.app.goo.gl)
- * hold no coordinates until they are opened, so they return null. Arabic-Indic digits are accepted.
+ * hold no coordinates until they are opened, so they return null here (see `resolveMapLink`). Arabic-Indic digits are accepted.
  */
 export function parseLocation(input: string): LatLng | null {
   const text = decodeSafe(toWesternDigits(input.trim())).replace(/،/g, ",");
@@ -24,9 +31,11 @@ export function parseLocation(input: string): LatLng | null {
   const pin = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/.exec(text);
   const param = /[?&](?:q|ll|query|destination|center)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/.exec(text);
   const at = /@(-?\d+\.\d+),(-?\d+\.\d+)/.exec(text);
+  // A shared dropped pin opens as /maps/search/24.81,+46.61 (or /place/…, /dir/…).
+  const path = /\/(?:search|place|dir)\/(-?\d+\.\d+),\s*\+?(-?\d+\.\d+)/.exec(text);
   const bare = /^[^a-z]*$/i.test(text) ? PAIR.exec(text) : null;
 
-  const m = pin ?? param ?? at ?? bare;
+  const m = pin ?? param ?? path ?? at ?? bare;
   if (!m) return null;
   const lat = Number(m[1]);
   const lng = Number(m[2]);

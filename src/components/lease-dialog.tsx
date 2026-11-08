@@ -27,21 +27,98 @@ import {
 } from "@/components/ui/select";
 import {
   LEASE_TERMS,
+  MAX_LEASE_MONTHS,
   leaseEndDate,
   leaseSchedule,
   leaseStatusText,
+  leaseTermFromEnd,
+  nearestLeaseTerm,
 } from "@/components/lease-schedule";
 import { effectiveStatus, todayRiyadh } from "@/lib/dates";
 import { arNum, monthsLabel, paymentStatusLabel, sar, shortDate } from "@/lib/format";
 import { parseSaudiMobile } from "@/lib/public-form";
 import { toLatinDigits, validateSaudiId } from "@/lib/saudi-id";
 
-const termLabel: Record<number, string> = {
-  1: monthsLabel(1),
-  3: monthsLabel(3),
-  6: monthsLabel(6),
-  12: "سنة كاملة",
-};
+/** A lease's length in words: «سنة كاملة», «سنتان», «3 سنوات», «6 أشهر». */
+function termText(months: number): string {
+  if (months === 12) return "سنة كاملة";
+  if (months === 24) return "سنتان";
+  if (months % 12 === 0) return `${arNum(months / 12)} سنوات`;
+  return monthsLabel(months);
+}
+
+/** Why a picked end date can't be used (null when it can). */
+function endDateError(startDate: string, endDate: string): string | null {
+  if (!endDate) return "حدّد تاريخ نهاية العقد";
+  if (startDate && endDate <= startDate) return "تاريخ النهاية يجب أن يكون بعد تاريخ البداية";
+  if (startDate && leaseTermFromEnd(startDate, endDate) === null)
+    return `تاريخ النهاية يجب أن يُكمل أشهرًا كاملة من تاريخ البداية (حتى ${arNum(MAX_LEASE_MONTHS / 12)} سنوات)`;
+  return null;
+}
+
+/**
+ * «تاريخ نهاية العقد»: the office picks the contract's last day (as written on the contract); the
+ * term in whole months follows from it. Quick picks fill common lengths.
+ */
+function LeaseEndField({
+  id,
+  startDate,
+  endDate,
+  onEndDate,
+  error,
+}: {
+  id: string;
+  startDate: string;
+  endDate: string;
+  onEndDate: (end: string) => void;
+  error: string | null;
+}) {
+  const term = startDate ? leaseTermFromEnd(startDate, endDate) : null;
+  const suggestion =
+    startDate && endDate > startDate && term === null
+      ? leaseEndDate(startDate, nearestLeaseTerm(startDate, endDate))
+      : null;
+  return (
+    <Field id={id} label="تاريخ نهاية العقد" error={error}>
+      <Input
+        id={id}
+        type="date"
+        dir="ltr"
+        min={startDate || undefined}
+        value={endDate}
+        onChange={(e) => onEndDate(e.target.value)}
+      />
+      <div className="flex flex-wrap gap-1.5">
+        {LEASE_TERMS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            disabled={!startDate}
+            onClick={() => onEndDate(leaseEndDate(startDate, t))}
+            className={`rounded-sm border px-2 py-0.5 text-xs ${
+              term === t ? "border-foreground bg-foreground text-background" : "border-border"
+            }`}
+          >
+            {termText(t)}
+          </button>
+        ))}
+      </div>
+      {term !== null ? (
+        <p className="text-xs text-muted-foreground">
+          مدة العقد: {termText(term)} — آخر يوم {shortDate(leaseEndDate(startDate, term))}
+        </p>
+      ) : suggestion ? (
+        <button
+          type="button"
+          className="text-xs underline underline-offset-4"
+          onClick={() => onEndDate(suggestion)}
+        >
+          استخدم أقرب تاريخ: {shortDate(suggestion)}
+        </button>
+      ) : null}
+    </Field>
+  );
+}
 
 const depositStatusLabel: Record<string, string> = {
   held: "محجوزة",
@@ -139,9 +216,7 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
               </Item>
               <Item label="المدة">
                 {shortDate(data.start_date)} — {shortDate(data.end_date)}
-                <span className="ms-2 text-muted-foreground">
-                  ({termLabel[data.term_months] ?? monthsLabel(data.term_months)})
-                </span>
+                <span className="ms-2 text-muted-foreground">({termText(data.term_months)})</span>
               </Item>
               <Item label="الحالة">
                 <Badge variant={data.status === "active" ? "secondary" : "outline"}>
@@ -428,17 +503,26 @@ export function CorrectLeaseDialog({
   const queryClient = useQueryClient();
   const uid = useId();
   const [startDate, setStartDate] = useState(initial?.startDate ?? lease.start_date);
-  const [termMonths, setTermMonths] = useState(String(initial?.termMonths ?? lease.term_months));
+  const [endDate, setEndDate] = useState(() =>
+    leaseEndDate(initial?.startDate ?? lease.start_date, initial?.termMonths ?? lease.term_months),
+  );
+  // A new start keeps the picked length: the end date moves with it.
+  const changeStart = (next: string) => {
+    const kept = leaseTermFromEnd(startDate, endDate);
+    setStartDate(next);
+    if (kept && next) setEndDate(leaseEndDate(next, kept));
+  };
   const [annualRent, setAnnualRent] = useState(String(initial?.annualRent ?? lease.annual_rent));
   const [installments, setInstallments] = useState(String(lease.installments));
   const [depositText, setDepositText] = useState(String(lease.deposit));
 
-  const term = Number(termMonths);
+  const term = (startDate && leaseTermFromEnd(startDate, endDate)) || 0;
   const rent = parseNumber(annualRent);
   const count = parseNumber(installments);
   const deposit = depositText.trim() ? parseNumber(depositText) : 0;
   const errors = {
     startDate: !startDate ? "حدّد تاريخ بداية العقد" : null,
+    endDate: endDateError(startDate, endDate),
     rent:
       rent === null || rent <= 0
         ? "أدخل الإيجار السنوي بالريال"
@@ -448,7 +532,7 @@ export function CorrectLeaseDialog({
     installments:
       count === null || !Number.isInteger(count) || count < 1 || count > 24
         ? "عدد الدفعات من 1 إلى 24"
-        : count > term
+        : term > 0 && count > term
           ? "عدد الدفعات لا يتجاوز مدة العقد بالأشهر"
           : null,
     deposit:
@@ -503,28 +587,16 @@ export function CorrectLeaseDialog({
               type="date"
               dir="ltr"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => changeStart(e.target.value)}
             />
           </Field>
-          <Field id={`${uid}-term`} label="مدة العقد">
-            <Select value={termMonths} onValueChange={setTermMonths}>
-              <SelectTrigger id={`${uid}-term`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LEASE_TERMS.map((t) => (
-                  <SelectItem key={t} value={String(t)}>
-                    {termLabel[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {startDate ? (
-              <p className="text-xs text-muted-foreground">
-                ينتهي في {shortDate(leaseEndDate(startDate, term))}
-              </p>
-            ) : null}
-          </Field>
+          <LeaseEndField
+            id={`${uid}-end`}
+            startDate={startDate}
+            endDate={endDate}
+            onEndDate={setEndDate}
+            error={errors.endDate}
+          />
           <Field id={`${uid}-rent`} label="الإيجار السنوي (ريال)" error={errors.rent}>
             <Input
               id={`${uid}-rent`}
@@ -599,7 +671,7 @@ const emptyForm = {
   nationalId: "",
   email: "",
   startDate: "",
-  termMonths: "12",
+  endDate: "",
   annualRent: "",
   installments: "4",
   deposit: "0",
@@ -635,7 +707,8 @@ export function NewLeaseDialog({
 
   useEffect(() => {
     if (open) {
-      setForm({ ...emptyForm, startDate: todayRiyadh() });
+      const today = todayRiyadh();
+      setForm({ ...emptyForm, startDate: today, endDate: leaseEndDate(today, 12) });
       setTried(false);
     }
   }, [open]);
@@ -666,11 +739,21 @@ export function NewLeaseDialog({
     },
   });
 
-  const term = Number(form.termMonths);
+  const term = (form.startDate && leaseTermFromEnd(form.startDate, form.endDate)) || 0;
   const rent = parseNumber(form.annualRent);
   const count = parseNumber(form.installments);
   const deposit = form.deposit.trim() ? parseNumber(form.deposit) : 0;
-  const endDate = form.startDate ? leaseEndDate(form.startDate, term) : null;
+  const endDate = term > 0 ? leaseEndDate(form.startDate, term) : null;
+  // A new start keeps the picked length: the end date moves with it.
+  const changeStart = (next: string) =>
+    setForm((f) => {
+      const kept = leaseTermFromEnd(f.startDate, f.endDate);
+      return {
+        ...f,
+        startDate: next,
+        endDate: kept && next ? leaseEndDate(next, kept) : f.endDate,
+      };
+    });
 
   const errors = {
     unit: !form.unitId ? "اختر الوحدة" : null,
@@ -697,6 +780,7 @@ export function NewLeaseDialog({
         ? "البريد الإلكتروني غير صحيح"
         : null,
     startDate: !form.startDate ? "حدّد تاريخ بداية العقد" : null,
+    endDate: endDateError(form.startDate, form.endDate),
     rent:
       rent === null || rent <= 0
         ? "أدخل الإيجار السنوي بالريال"
@@ -706,7 +790,7 @@ export function NewLeaseDialog({
     installments:
       count === null || !Number.isInteger(count) || count < 1 || count > 24
         ? "عدد الدفعات من 1 إلى 24"
-        : count > term
+        : term > 0 && count > term
           ? "عدد الدفعات لا يتجاوز مدة العقد بالأشهر"
           : null,
     deposit: deposit === null ? "أدخل مبلغ التأمين بالأرقام (0 إن لم يوجد)" : null,
@@ -914,26 +998,16 @@ export function NewLeaseDialog({
                 type="date"
                 dir="ltr"
                 value={form.startDate}
-                onChange={(e) => set("startDate", e.target.value)}
+                onChange={(e) => changeStart(e.target.value)}
               />
             </Field>
-            <Field id={`${uid}-term`} label="مدة العقد">
-              <Select value={form.termMonths} onValueChange={(v) => set("termMonths", v)}>
-                <SelectTrigger id={`${uid}-term`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LEASE_TERMS.map((t) => (
-                    <SelectItem key={t} value={String(t)}>
-                      {termLabel[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {endDate ? (
-                <p className="text-xs text-muted-foreground">ينتهي في {shortDate(endDate)}</p>
-              ) : null}
-            </Field>
+            <LeaseEndField
+              id={`${uid}-end`}
+              startDate={form.startDate}
+              endDate={form.endDate}
+              onEndDate={(v) => set("endDate", v)}
+              error={show("endDate", form.endDate !== "")}
+            />
             <Field
               id={`${uid}-rent`}
               label="الإيجار السنوي (ريال)"

@@ -45,8 +45,17 @@ export const inviteTenant = createServerFn({ method: "POST" })
     });
     if (inviteError) throw new Error("تعذّر إنشاء الدعوة");
 
+    const { data: office } = await supabaseAdmin
+      .from("org_settings")
+      .select("company_name")
+      .eq("id", orgId)
+      .maybeSingle();
     const { error: sendError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: { account_type: "tenant" },
+      data: {
+        account_type: "tenant",
+        invited_by_office: office?.company_name?.trim() || null,
+        invited_as: "مستأجر",
+      },
       redirectTo: `${APP_URL}/tenant/activate`,
     });
     if (
@@ -82,7 +91,11 @@ export const completeTenantActivation = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (inviteError || !invite) throw new Error("ما فيه دعوة معلّقة لهذا البريد");
+    if (inviteError) throw new Error("تعذّر التحقق من دعوتك — حاول مرة أخرى");
+    // Invited by an office as an owner or team member (invitations, accepted from the in-app
+    // banner), or this tenant invite was already completed: the password is set and the account is
+    // ready — nothing to link here.
+    if (!invite) return { ok: true, linked: false };
 
     const hoursOld = (Date.now() - new Date(invite.created_at).getTime()) / 3_600_000;
     if (hoursOld > 72) throw new Error("انتهت صلاحية الدعوة — اطلب من المكتب دعوة جديدة");
@@ -105,7 +118,7 @@ export const completeTenantActivation = createServerFn({ method: "POST" })
       .from("tenant_invites")
       .update({ used_at: new Date().toISOString() })
       .eq("id", invite.id);
-    return { ok: true };
+    return { ok: true, linked: true };
   });
 
 /**
