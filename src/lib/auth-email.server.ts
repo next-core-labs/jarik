@@ -12,13 +12,13 @@ import { ReauthenticationEmail } from "@/lib/email-templates/reauthentication";
  * Supabase signs every hook call with Standard Webhooks (headers webhook-id / webhook-timestamp /
  * webhook-signature; the secret is shown in the dashboard as "v1,whsec_…"). Settings:
  *   SEND_EMAIL_HOOK_SECRET  the hook secret from Authentication → Hooks
- *   RESEND_API_KEY          Resend API key (sending domain notify.jarak-ksa.com verified there)
- *   EMAIL_FROM              optional, default «جارك <noreply@notify.jarak-ksa.com>»
+ *   RESEND_API_KEY          Resend API key (sending domain jarak-ksa.com verified there)
+ *   EMAIL_FROM              optional, default «جارك <noreply@jarak-ksa.com>»
  */
 
 export const SITE_NAME = "جارك";
 export const SITE_URL = "https://jarak-ksa.com";
-const DEFAULT_FROM = `"${SITE_NAME}" <noreply@notify.jarak-ksa.com>`;
+const DEFAULT_FROM = `"${SITE_NAME}" <noreply@jarak-ksa.com>`;
 /** Reject hook calls signed more than this long ago (replay protection). */
 const TOLERANCE_SECONDS = 5 * 60;
 
