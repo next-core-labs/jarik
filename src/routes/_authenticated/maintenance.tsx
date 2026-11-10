@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Paperclip, Zap } from "lucide-react";
+import { Paperclip, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { openStorageFile } from "@/lib/open-file";
 import { smartScheduleMaintenance } from "@/lib/office-tools.functions";
 import { PageHeader } from "@/components/app-shell";
+import { NewMaintenanceDialog } from "@/components/new-maintenance-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ function Maintenance() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [creating, setCreating] = useState(false);
   // Inline errors of the cost and visit-time fields, keyed `${requestId}-cost` / `${requestId}-at`.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const setFieldError = (key: string, message: string | null) =>
@@ -269,7 +271,18 @@ function Maintenance() {
     <>
       <PageHeader
         title="الصيانة"
-        subtitle="طلب المستأجر يصبح مهمة، والحالة تتحدّث حتى الإنجاز وترحيل التكلفة."
+        subtitle="طلبات المستأجرين وطلبات المكتب تصبح مهام، والحالة تتحدّث حتى الإنجاز وترحيل التكلفة."
+        action={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            طلب صيانة جديد
+          </Button>
+        }
+      />
+      <NewMaintenanceDialog
+        open={creating}
+        onOpenChange={setCreating}
+        technicians={technicians.data ?? []}
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -348,7 +361,7 @@ function Maintenance() {
                       ) : null}
                       <p className="mt-2 text-xs text-muted-foreground">
                         {m.units?.properties?.name} · وحدة {m.units?.unit_number} ·{" "}
-                        {m.tenants?.full_name ?? "—"}
+                        {m.tenants?.full_name ?? (m.source === "office" ? "سجّله المكتب" : "—")}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {shortDate(m.created_at)}
@@ -471,7 +484,6 @@ function Maintenance() {
                             // smart schedule) so the field shows the server value.
                             key={`${m.id}-${m.scheduled_at ?? ""}`}
                             type="datetime-local"
-                            dir="ltr"
                             className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
                             defaultValue={toDatetimeLocalValue(m.scheduled_at)}
                             onBlur={(e) => {

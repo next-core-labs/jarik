@@ -61,15 +61,8 @@ import { buildingSpecsLine, UnitFurnishingLine } from "@/components/unit-specs-s
 import { sar, shortDate, unitStatusLabel } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
 import { generateAdText } from "@/lib/pricing.functions";
-import { confirmListingPayment, startListingPayment } from "@/lib/listing-payments.functions";
-import {
-  LISTING_FEE_SAR,
-  LISTING_PERIOD_DAYS,
-  listingPaymentIdFromSearch,
-  marketState,
-  officeListingBlock,
-} from "@/lib/listing-fee";
-import { isMoyasarCheckoutUrl } from "@/lib/moyasar-url";
+import { confirmListingPayment } from "@/lib/listing-payments.functions";
+import { listingPaymentIdFromSearch, marketState, officeListingBlock } from "@/lib/listing-fee";
 import { useMyRoles } from "@/lib/use-role";
 import { myOrgId } from "@/lib/use-org-branding";
 import { useUnitManagement, type UnitManagement } from "@/lib/unit-management";
@@ -174,20 +167,29 @@ function Properties() {
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر توليد الإعلان")),
   });
 
-  // Publishing on the website is paid per unit (listing-fee.ts): the office pays on Moyasar's page.
-  const startPayment = useServerFn(startListingPayment);
+  // Publishing on the website is free for offices: the database (guard_market_publish) records
+  // the publication under this office when its staff switch the unit on.
   const publish = useMutation({
-    mutationFn: (unitId: string) => startPayment({ data: { unitId } }),
-    onSuccess: (res) => {
-      if (res.status === "paid") {
-        toast.success("تم نشر الوحدة في الموقع");
-        queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
-      } else if (isMoyasarCheckoutUrl(res.url)) {
-        toast.info("جارٍ تحويلك إلى صفحة الدفع…");
-        window.location.assign(res.url);
-      }
+    mutationFn: async ({ unitId, listed }: { unitId: string; listed: boolean }) => {
+      const { data, error } = await supabase
+        .from("units")
+        .update(
+          listed
+            ? { market_listed: true, market_listed_at: new Date().toISOString() }
+            : { market_listed: false },
+        )
+        .eq("id", unitId)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("ليست لديك صلاحية نشر هذه الوحدة");
+      return listed;
     },
-    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر فتح صفحة الدفع")),
+    onSuccess: (listed) => {
+      toast.success(listed ? "نُشرت الوحدة في الموقع" : "أُخفيت الوحدة من الموقع");
+      queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
+      queryClient.invalidateQueries({ queryKey: ["market"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر تحديث النشر")),
   });
 
   // Back from Moyasar: the server asks Moyasar whether it was paid; the URL itself proves nothing.
@@ -578,8 +580,8 @@ function Properties() {
                                 officeId={myOffice.data ?? null}
                                 canPublish={canPublish}
                                 publishBlock={officeListing.data ?? null}
-                                publishing={publish.isPending && publish.variables === u.id}
-                                onPublish={() => publish.mutate(u.id)}
+                                publishing={publish.isPending && publish.variables?.unitId === u.id}
+                                onToggle={(listed) => publish.mutate({ unitId: u.id, listed })}
                               />
                               {ownerManaged ? null : (
                                 <Select
@@ -757,14 +759,14 @@ function Properties() {
   );
 }
 
-/** Whether the unit is on the website and until when, with the paid publish / extend button. */
+/** Whether the unit is on the website, with the (free) publish / hide button. */
 function UnitMarketStatus({
   unit,
   officeId,
   canPublish,
   publishBlock,
   publishing,
-  onPublish,
+  onToggle,
 }: {
   unit: {
     status: string;
@@ -772,54 +774,46 @@ function UnitMarketStatus({
     market_paid_until: string | null;
     market_org_id: string | null;
   };
-  /** The viewing office: another office's leftover paid days are not this office's. */
+  /** The viewing office: another office's publication is not this office's. */
   officeId: string | null;
   /** An owner's unit is published only by an office whose agreement grants leasing. */
   canPublish: boolean;
-  /** Why the office can't publish yet (not listed / not verified), or null. */
+  /** Why the office's units don't show yet (not listed / not verified), or null. */
   publishBlock: string | null;
   publishing: boolean;
-  onPublish: () => void;
+  onToggle: (listed: boolean) => void;
 }) {
   const market = marketState(unit, undefined, officeId);
-  const line =
-    market.kind === "paid"
-      ? unit.market_listed
-        ? `منشورة في الموقع حتى ${shortDate(market.until.toISOString())}`
-        : `النشر مدفوع حتى ${shortDate(market.until.toISOString())} — مخفية حاليًا`
-      : market.kind === "free"
-        ? "منشورة في الموقع"
-        : market.kind === "expired"
-          ? `انتهى النشر في ${shortDate(market.until.toISOString())}`
-          : "غير منشورة في الموقع";
-  // An occupied unit never shows on the website, and a free legacy listing has nothing to pay.
-  const canPay = canPublish && unit.status === "vacant" && market.kind !== "free";
+  const listed = unit.market_listed && (market.kind === "free" || market.kind === "paid");
+  // An occupied unit never shows on the website: nothing to publish until it is vacant again.
+  const canToggle = canPublish && (listed || unit.status === "vacant");
   return (
     <>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Globe className="size-3.5 text-brass" />
-        {line}
+        {listed
+          ? unit.status === "vacant"
+            ? "منشورة في الموقع"
+            : "منشورة — تظهر في الموقع متى أصبحت شاغرة"
+          : "غير منشورة في الموقع"}
       </p>
-      {canPay && publishBlock ? (
+      {canToggle && publishBlock ? (
         <p className="rounded-sm border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {publishBlock}{" "}
           <Link to="/settings" className="font-medium text-foreground underline underline-offset-4">
             الإعدادات
           </Link>
         </p>
-      ) : canPay ? (
+      ) : null}
+      {canToggle ? (
         <Button
-          variant={market.kind === "paid" ? "outline" : "default"}
+          variant={listed ? "outline" : "default"}
           className="w-full"
           disabled={publishing}
-          onClick={onPublish}
+          onClick={() => onToggle(!listed)}
         >
           <Globe className="size-4" />
-          {publishing
-            ? "جارٍ فتح صفحة الدفع…"
-            : market.kind === "paid"
-              ? `تمديد النشر ${LISTING_PERIOD_DAYS} يومًا — ${LISTING_FEE_SAR} ريال`
-              : `نشر في الموقع — ${LISTING_FEE_SAR} ريال`}
+          {publishing ? "جارٍ الحفظ…" : listed ? "إخفاء من الموقع" : "نشر في الموقع — مجانًا"}
         </Button>
       ) : null}
     </>

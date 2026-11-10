@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, ClipboardList, MessagesSquare, Store } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -149,7 +149,11 @@ function TenantDashboard() {
     <>
       <PageHeader
         title={firstName ? `أهلاً ${firstName}` : "أهلاً بك"}
-        subtitle="لوحة المستأجر — عقدك ومستحقاتك وطلبات صيانتك، والنظام يلاحق المواعيد نيابةً عنك."
+        subtitle={
+          currentLease
+            ? "لوحة المستأجر — عقدك ومستحقاتك وطلبات صيانتك، والنظام يلاحق المواعيد نيابةً عنك."
+            : "ابحث عن عقار للشراء أو الإيجار، وانشر طلبك لتصلك عروض المكاتب والملاك."
+        }
         action={
           <div className="flex items-center gap-2">
             {data.leases.length > 1 ? (
@@ -185,11 +189,7 @@ function TenantDashboard() {
       <OfficeIdentity />
 
       {!currentLease ? (
-        <Card className="shadow-deed">
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            لا توجد عقود مرتبطة بحسابك بعد.
-          </CardContent>
-        </Card>
+        <ClientHome />
       ) : (
         <div className="space-y-6">
           <NextPaymentCard leaseId={currentLease.id} earlierLeaseIds={earlierLeaseIds} />
@@ -235,5 +235,61 @@ function TenantDashboard() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * A «عميل» with no lease yet — someone looking to buy or rent: where to look and how to ask. Once
+ * an office links a lease to the account, the contract dashboard replaces this.
+ */
+function ClientHome() {
+  const actions = [
+    {
+      to: "/",
+      icon: Store,
+      title: "تصفّح سوق العروض",
+      body: "وحدات للإيجار والبيع من المكاتب والملاك، على الخريطة وبالحي — احفظ ما يعجبك.",
+      cta: "سوق العروض",
+    },
+    {
+      to: "/requests-market",
+      icon: ClipboardList,
+      title: "انشر طلبك",
+      body: "اكتب ما تبحث عنه (الحي، الميزانية، عدد الغرف) ويراه كل مكتب ومالك على جارك.",
+      cta: "سوق الطلبات",
+    },
+    {
+      to: "/messages",
+      icon: MessagesSquare,
+      title: "محادثاتك",
+      body: "ردود المكاتب والملاك على استفساراتك وطلباتك في مكان واحد.",
+      cta: "المحادثات",
+    },
+  ] as const;
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        {actions.map((a) => (
+          <Card key={a.to} className="shadow-deed">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <a.icon className="size-5 text-brass" aria-hidden />
+                {a.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">{a.body}</p>
+              <Button asChild variant="outline" className="w-full">
+                <Link to={a.to}>{a.cta}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <p className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        مستأجر لدى مكتب على جارك؟ يظهر عقدك ودفعاتك وطلبات الصيانة هنا بعد أن يربط المكتب العقد
+        ببريدك.
+      </p>
+    </div>
   );
 }

@@ -393,7 +393,6 @@ function NewInvoice() {
                 <Label>تاريخ الإصدار</Label>
                 <Input
                   type="date"
-                  dir="ltr"
                   value={issueDate}
                   onChange={(e) => setIssueDate(e.target.value)}
                 />

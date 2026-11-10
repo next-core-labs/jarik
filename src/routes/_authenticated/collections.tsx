@@ -783,7 +783,6 @@ function Collections() {
                   <Input
                     id="pay-date"
                     type="date"
-                    dir="ltr"
                     max={today}
                     value={paidDate}
                     onChange={(e) => setPaidDate(e.target.value)}

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { getMyOrgId, requireStaff, type ServerCtx } from "@/lib/server-context";
 
 // No APP_URL env var exists in this project yet (checked: only client-side window.location.origin
@@ -13,17 +14,32 @@ const APP_URL = process.env["APP_URL"] ?? "https://jarak-ksa.com";
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MINUTES = 15;
 
-/** الموظف يدعو مستأجرًا على عقد بإيميله — يرسل دعوة Supabase الأصلية (نفس نظام بريد الرموز
- * المستخدَم أصلًا لتسجيل الدخول والتحقق، لا بنية بريد مخصّصة جديدة) وتُسجَّل الدعوة لإكمال ربط
- * tenants.user_id بعد قبولها. */
+export type TenantInviteResult = {
+  /** The invite email went out (only when Resend is configured). */
+  emailed: boolean;
+  /** The email already has a Jarak account: no link — the lease links when they sign in. */
+  existingAccount: boolean;
+  /** The one-time activation link for a NEW account, for the office to send (WhatsApp / copy). */
+  link: string | null;
+};
+
+/**
+ * الموظف يدعو مستأجرًا على عقد بإيميله. تُسجَّل الدعوة (tenant_invites) ثم:
+ * - حساب جديد: رابط تفعيل لمرة واحدة (generateLink، بلا بريد من Supabase) يُعاد للمكتب ليرسله
+ *   بالواتساب أو ينسخه، ويُرسل بالبريد أيضًا بقالبنا العربي متى كان Resend مُعدًّا. كان الإرسال
+ *   يعتمد على بريد Supabase الافتراضي الذي لا يصل إلا لعناوين فريق المشروع، فلم تصل الدعوات.
+ * - بريد له حساب أصلًا: لا رابط (رابط دخول لحساب قائم لا يُسلَّم للمكتب أبدًا)؛ يُربط العقد
+ *   بحسابه تلقائيًا عند دخوله (completeTenantActivation من لوحته)، ويُنبَّه بالبريد إن أمكن.
+ */
 export const inviteTenant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { leaseId: string; email: string }) =>
     z.object({ leaseId: z.string().uuid(), email: z.string().email() }).parse(input),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<TenantInviteResult> => {
     const ctx = context as unknown as ServerCtx;
     await requireStaff(ctx);
+    await enforceRateLimit(ctx, "tenant_invite", 30, 3600);
 
     // RLS already scopes this to a lease the caller's own office can see.
     const { data: lease, error } = await ctx.supabase
@@ -50,25 +66,75 @@ export const inviteTenant = createServerFn({ method: "POST" })
       .select("company_name")
       .eq("id", orgId)
       .maybeSingle();
-    const { error: sendError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: {
-        account_type: "tenant",
-        invited_by_office: office?.company_name?.trim() || null,
-        invited_as: "مستأجر",
+    const officeName = office?.company_name?.trim() || null;
+
+    // Creates the account if the email has none, and returns its one-time link without sending.
+    const { data: generated, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: { account_type: "tenant", invited_by_office: officeName, invited_as: "مستأجر" },
+        redirectTo: `${APP_URL}/tenant/activate`,
       },
-      redirectTo: `${APP_URL}/tenant/activate`,
     });
-    if (
-      sendError &&
-      !/already registered|already exists|already been registered/i.test(sendError.message)
-    ) {
-      throw new Error("تعذّر إرسال دعوة البريد الإلكتروني");
+    const existingAccount = Boolean(
+      linkError &&
+      /already registered|already exists|already been registered|email_exists/i.test(
+        `${linkError.message} ${(linkError as { code?: string }).code ?? ""}`,
+      ),
+    );
+    if (linkError && !existingAccount) {
+      console.error("[inviteTenant] generateLink failed:", linkError.message);
+      throw new Error("تعذّر إنشاء رابط التفعيل — حاول مرة أخرى");
     }
-    // An email that already has an account is fine: the pending tenant_invites row we just wrote
-    // is keyed by email, not by a fresh signup — they complete activation by signing in normally
-    // and visiting /tenant/activate, which the accept flow already redirects to either way.
-    return { ok: true };
+    const link = existingAccount ? null : (generated?.properties?.action_link ?? null);
+
+    const emailed = await sendTenantInviteEmail({
+      to: email,
+      officeName,
+      url: link ?? `${APP_URL}/tenant/login`,
+      existingAccount,
+    });
+    return { emailed, existingAccount, link };
   });
+
+/** The invite by email through Resend, when it is configured. Never throws: the link still works. */
+async function sendTenantInviteEmail(input: {
+  to: string;
+  officeName: string | null;
+  url: string;
+  existingAccount: boolean;
+}): Promise<boolean> {
+  const apiKey = process.env["RESEND_API_KEY"];
+  if (!apiKey) return false;
+  try {
+    const React = await import("react");
+    const { InviteEmail } = await import("@/lib/email-templates/invite");
+    const { SITE_NAME, SITE_URL, sendViaResend } = await import("@/lib/auth-email.server");
+    await sendViaResend(
+      {
+        to: input.to,
+        subject: input.officeName
+          ? `دعوة من مكتب «${input.officeName}» على جارك`
+          : "دعوة للانضمام إلى جارك",
+        element: React.createElement(InviteEmail, {
+          siteName: SITE_NAME,
+          siteUrl: SITE_URL,
+          confirmationUrl: input.url,
+          officeName: input.officeName,
+          roleLabel: "مستأجر",
+          existingAccount: input.existingAccount,
+        }),
+      },
+      apiKey,
+      process.env["EMAIL_FROM"] || undefined,
+    );
+    return true;
+  } catch (e) {
+    console.error("[inviteTenant] email failed:", e);
+    return false;
+  }
+}
 
 /** المستأجر المدعو، بعد قبول الدعوة والدخول، يكمل ربط حسابه بسجل tenants الخاص بعقده. */
 export const completeTenantActivation = createServerFn({ method: "POST" })
@@ -83,41 +149,91 @@ export const completeTenantActivation = createServerFn({ method: "POST" })
     if (userError || !authUser.user?.email) throw new Error("تعذّر التحقق من حسابك");
     const email = authUser.user.email.toLowerCase().trim();
 
-    const { data: invite, error: inviteError } = await supabaseAdmin
+    // Every pending invite to this (verified) email from the last 30 days — an office may invite the
+    // same tenant on several leases. The account's own email is the proof: the invite named it.
+    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const { data: invites, error: inviteError } = await supabaseAdmin
       .from("tenant_invites")
-      .select("id, lease_id, created_at, used_at")
+      .select("id, lease_id, org_id, created_at")
       .eq("email", email)
       .is("used_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .gte("created_at", since)
+      .order("created_at", { ascending: false });
     if (inviteError) throw new Error("تعذّر التحقق من دعوتك — حاول مرة أخرى");
     // Invited by an office as an owner or team member (invitations, accepted from the in-app
-    // banner), or this tenant invite was already completed: the password is set and the account is
-    // ready — nothing to link here.
-    if (!invite) return { ok: true, linked: false };
+    // banner), or the tenant invites were already completed: nothing to link here.
+    if (!invites?.length) return { ok: true, linked: false };
 
-    const hoursOld = (Date.now() - new Date(invite.created_at).getTime()) / 3_600_000;
-    if (hoursOld > 72) throw new Error("انتهت صلاحية الدعوة — اطلب من المكتب دعوة جديدة");
+    let linked = 0;
+    let lastProblem: string | null = null;
+    for (const invite of invites) {
+      const { data: lease } = await supabaseAdmin
+        .from("leases")
+        .select("tenant_id, tenants(user_id, org_id)")
+        .eq("id", invite.lease_id)
+        .maybeSingle();
+      const tenant = lease?.tenants as { user_id: string | null; org_id: string | null } | null;
+      if (!lease?.tenant_id || !tenant) {
+        lastProblem = "تعذّر إيجاد بيانات المستأجر لهذا العقد";
+        continue;
+      }
+      if (tenant.user_id && tenant.user_id !== ctx.userId) {
+        lastProblem = "بيانات المستأجر في هذا العقد مربوطة بحساب آخر — تواصل مع المكتب";
+        continue;
+      }
+      if (!tenant.user_id) {
+        // Accepting the office's invite makes the account that office's client — the link guard
+        // (private.may_link) refuses a person who isn't one, which is why activation never linked.
+        const orgId = tenant.org_id ?? invite.org_id;
+        if (orgId) {
+          // Listed with the office's people like an accepted invitation (a member keeps membership).
+          await supabaseAdmin
+            .from("org_members")
+            .upsert(
+              {
+                org_id: orgId,
+                user_id: ctx.userId,
+                kind: "client",
+                role: "tenant",
+                is_manager: false,
+              },
+              { onConflict: "org_id,user_id", ignoreDuplicates: true },
+            );
+          await supabaseAdmin
+            .from("org_clients")
+            .upsert(
+              { org_id: orgId, user_id: ctx.userId, accepted_at: new Date().toISOString() },
+              { onConflict: "org_id,user_id" },
+            );
+        }
+        const { data: rows, error: linkError } = await supabaseAdmin
+          .from("tenants")
+          .update({ user_id: ctx.userId })
+          .eq("id", lease.tenant_id)
+          .is("user_id", null)
+          .select("id");
+        if (linkError || !rows?.length) {
+          console.error("[completeTenantActivation] link failed:", linkError?.message);
+          lastProblem = "تعذّر ربط حسابك ببيانات المستأجر — حاول مرة أخرى";
+          continue;
+        }
+      }
+      await supabaseAdmin
+        .from("tenant_invites")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", invite.id);
+      linked++;
+    }
+    if (linked === 0) throw new Error(lastProblem ?? "تعذّر ربط حسابك ببيانات المستأجر");
 
-    const { data: lease, error: leaseError } = await supabaseAdmin
-      .from("leases")
-      .select("tenant_id")
-      .eq("id", invite.lease_id)
-      .maybeSingle();
-    if (leaseError || !lease?.tenant_id) throw new Error("تعذّر إيجاد بيانات المستأجر لهذا العقد");
-
-    const { error: linkError } = await supabaseAdmin
-      .from("tenants")
-      .update({ user_id: ctx.userId })
-      .eq("id", lease.tenant_id)
-      .is("user_id", null);
-    if (linkError) throw new Error("تعذّر ربط حسابك ببيانات المستأجر");
-
+    // The tenant dashboard follows the tenant role: an owner or client account invited onto a
+    // lease gets it too.
     await supabaseAdmin
-      .from("tenant_invites")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", invite.id);
+      .from("user_roles")
+      .upsert(
+        { user_id: ctx.userId, role: "tenant" },
+        { onConflict: "user_id,role", ignoreDuplicates: true },
+      );
     return { ok: true, linked: true };
   });
 

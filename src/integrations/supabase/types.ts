@@ -3834,6 +3834,18 @@ export type Database = {
           unit_label: string;
         }[];
       };
+      office_add_client_by_code: {
+        Args: { _code: string; _kind: string };
+        Returns: string;
+      };
+      lookup_account_by_code: {
+        Args: { _code: string };
+        Returns: {
+          already_client: boolean;
+          full_name: string;
+          phone_hint: string;
+        }[];
+      };
       market_stats: {
         Args: never;
         Returns: {

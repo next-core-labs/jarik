@@ -317,7 +317,6 @@ function Reports() {
               <label className="block text-xs text-muted-foreground">من تاريخ</label>
               <Input
                 type="date"
-                dir="ltr"
                 className="w-36"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
@@ -327,7 +326,6 @@ function Reports() {
               <label className="block text-xs text-muted-foreground">إلى تاريخ</label>
               <Input
                 type="date"
-                dir="ltr"
                 className="w-36"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}

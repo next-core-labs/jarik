@@ -28,9 +28,9 @@ export function PasswordField({
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      {/* dir="ltr" on the wrapper, not just the input: the eye's `end-2` and the input's `pe-10`
-          must resolve on the same side, or in the RTL page the eye lands on the typed text. */}
-      <div className="relative" dir="ltr">
+      {/* The eye's `end-2` and the input's `pe-10` resolve on the same side (the page's), so the
+          eye never lands on the typed text; the dots line up on the right like every field. */}
+      <div className="relative">
         <Input
           id={id}
           type={shown ? "text" : "password"}
