@@ -37,7 +37,7 @@ import {
 import { effectiveStatus, todayRiyadh } from "@/lib/dates";
 import { arNum, monthsLabel, paymentStatusLabel, sar, shortDate } from "@/lib/format";
 import { parseSaudiMobile } from "@/lib/public-form";
-import { toLatinDigits, validateSaudiId } from "@/lib/saudi-id";
+import { digitsOnly, toLatinDigits, validateSaudiId } from "@/lib/saudi-id";
 
 /** A lease's length in words: «سنة كاملة», «سنتان», «3 سنوات», «6 أشهر». */
 function termText(months: number): string {
@@ -83,7 +83,6 @@ function LeaseEndField({
       <Input
         id={id}
         type="date"
-        dir="ltr"
         min={startDate || undefined}
         value={endDate}
         onChange={(e) => onEndDate(e.target.value)}
@@ -441,7 +440,6 @@ export function EndLeaseDialog({
             <Input
               id={`${uid}-move-out`}
               type="date"
-              dir="ltr"
               min={lease.start_date}
               max={today}
               value={moveOut}
@@ -585,7 +583,6 @@ export function CorrectLeaseDialog({
             <Input
               id={`${uid}-start`}
               type="date"
-              dir="ltr"
               value={startDate}
               onChange={(e) => changeStart(e.target.value)}
             />
@@ -664,7 +661,8 @@ function Item({ label, children }: { label: string; children: React.ReactNode })
 
 const emptyForm = {
   unitId: "",
-  tenantMode: "existing" as "existing" | "new",
+  tenantMode: "existing" as "existing" | "new" | "code",
+  referenceCode: "",
   tenantId: "",
   fullName: "",
   phone: "",
@@ -755,6 +753,22 @@ export function NewLeaseDialog({
       };
     });
 
+  // «برقم التعريف»: an existing Jarak account by its 6-digit number — whose it is, to confirm.
+  const code = digitsOnly(form.referenceCode);
+  const account = useQuery({
+    queryKey: ["account-by-code", code],
+    enabled: open && form.tenantMode === "code" && code.length === 6,
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("lookup_account_by_code", { _code: code });
+      if (error) throw error;
+      const row = data?.[0];
+      if (!row) throw new Error("لا يوجد حساب بهذا الرقم التعريفي");
+      return row;
+    },
+  });
+
   const errors = {
     unit: !form.unitId ? "اختر الوحدة" : null,
     tenant:
@@ -762,9 +776,17 @@ export function NewLeaseDialog({
         ? !form.tenantId
           ? "اختر المستأجر"
           : null
-        : form.fullName.trim().length < 3
-          ? "اكتب اسم المستأجر الكامل"
-          : null,
+        : form.tenantMode === "code"
+          ? code.length !== 6
+            ? "اكتب الرقم التعريفي للمستأجر (6 أرقام)"
+            : account.isError
+              ? userErrorMessage(account.error, "تعذّر التحقق من الرقم التعريفي")
+              : !account.data
+                ? "جارٍ التحقق من الرقم…"
+                : null
+          : form.fullName.trim().length < 3
+            ? "اكتب اسم المستأجر الكامل"
+            : null,
     phone:
       form.tenantMode === "new" && form.phone.trim() && !parseSaudiMobile(form.phone)
         ? "رقم الجوال غير صحيح — مثال: 05xxxxxxxx"
@@ -829,7 +851,10 @@ export function NewLeaseDialog({
                 national_id: form.nationalId.trim() ? toLatinDigits(form.nationalId.trim()) : null,
                 email: form.email.trim() || null,
               }
-            : null,
+            : form.tenantMode === "code"
+              ? // The database links that account right away and notifies the person.
+                { reference_code: code }
+              : null,
         _start_date: form.startDate,
         _term_months: term,
         _annual_rent: rent,
@@ -899,7 +924,12 @@ export function NewLeaseDialog({
               <Field
                 id={`${uid}-tenant`}
                 label="المستأجر"
-                error={show("tenant", form.fullName.trim() !== "")}
+                error={show(
+                  "tenant",
+                  form.tenantMode === "code"
+                    ? code.length === 6 && !account.isFetching
+                    : form.fullName.trim() !== "",
+                )}
               >
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -920,8 +950,47 @@ export function NewLeaseDialog({
                   >
                     مستأجر جديد
                   </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={form.tenantMode === "code" ? "secondary" : "outline"}
+                    aria-pressed={form.tenantMode === "code"}
+                    onClick={() => set("tenantMode", "code")}
+                  >
+                    برقم التعريف
+                  </Button>
                 </div>
-                {form.tenantMode === "existing" ? (
+                {form.tenantMode === "code" ? (
+                  <div className="space-y-1.5">
+                    <Input
+                      id={`${uid}-tenant`}
+                      dir="ltr"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={form.referenceCode}
+                      onChange={(e) => set("referenceCode", e.target.value)}
+                      placeholder="الرقم التعريفي — 6 أرقام"
+                    />
+                    {account.data ? (
+                      <p className="rounded-sm border border-border bg-muted/40 px-3 py-2 text-sm">
+                        <span className="font-medium">{account.data.full_name}</span>
+                        {account.data.phone_hint ? (
+                          <span className="text-muted-foreground">
+                            {" · جوال ينتهي بـ "}
+                            <span dir="ltr">{account.data.phone_hint.replace(/^•+/, "")}</span>
+                          </span>
+                        ) : null}
+                        <span className="block text-xs text-muted-foreground">
+                          يُربط العقد بحسابه فورًا ويصله إشعار، ويظهر في لوحة المستأجر عنده.
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        يجده صاحب الحساب في «حسابي» على جارك — اطلبه منه.
+                      </p>
+                    )}
+                  </div>
+                ) : form.tenantMode === "existing" ? (
                   <Select value={form.tenantId} onValueChange={(v) => set("tenantId", v)}>
                     <SelectTrigger id={`${uid}-tenant`}>
                       <SelectValue
@@ -996,7 +1065,6 @@ export function NewLeaseDialog({
               <Input
                 id={`${uid}-start`}
                 type="date"
-                dir="ltr"
                 value={form.startDate}
                 onChange={(e) => changeStart(e.target.value)}
               />

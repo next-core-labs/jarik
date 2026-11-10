@@ -554,7 +554,6 @@ function Portal() {
                         // the server value.
                         key={`${m.id}-${m.scheduled_at ?? ""}-${jobResetNonce}`}
                         type="datetime-local"
-                        dir="ltr"
                         min={visitMin}
                         disabled={schedule.isPending}
                         className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"

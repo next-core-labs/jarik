@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Eye, Gift, Handshake, MessageCircle, PieChart, Phone } from "lucide-react";
 import { toast } from "sonner";
@@ -220,6 +220,18 @@ function OfficeStats() {
       <Card className="mt-6 shadow-deed">
         <CardHeader>
           <CardTitle className="text-base">الوحدات الشاغرة — حوّلها إلى صفقة تسويق</CardTitle>
+          {/* A marketing deal stays inside the office's pipeline; it does not publish the unit. */}
+          <p className="text-xs text-muted-foreground">
+            الصفقة داخلية لمتابعة التسويق في «المبيعات والصفقات» ولا يراها غير مكتبك. لعرض الوحدة
+            لكل الزوار والمكاتب انشرها من{" "}
+            <Link
+              to="/properties"
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              الأملاك والوحدات ← نشر في الموقع
+            </Link>{" "}
+            (مجانًا).
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
           {vacant.length === 0 ? (

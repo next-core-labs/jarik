@@ -618,7 +618,6 @@ function MetersSection() {
               <Label>التاريخ</Label>
               <Input
                 type="date"
-                dir="ltr"
                 value={readingDate}
                 onChange={(e) => setReadingDate(e.target.value)}
               />

@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DirectionProvider } from "@radix-ui/react-direction";
 import {
   Outlet,
   Link,
@@ -120,7 +121,9 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        {/* Radix (tabs, menus, selects, radio groups…) reads direction from this provider, not
+            from <html dir>; without it every one of them rendered dir="ltr" inside Arabic pages. */}
+        <DirectionProvider dir={en ? "ltr" : "rtl"}>{children}</DirectionProvider>
         <Scripts />
       </body>
     </html>

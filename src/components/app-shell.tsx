@@ -43,6 +43,8 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { platformSettings } from "@/lib/super-admin.functions";
+import { completeTenantActivation } from "@/lib/tenant-portal.functions";
+import { toast } from "sonner";
 import { InvitationsBanner } from "@/components/invitations-banner";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { Button } from "@/components/ui/button";
@@ -73,7 +75,7 @@ const staffNavGroups: { key: string; label: string; items: NavLink[] }[] = [
       { to: "/properties", label: "الأملاك والوحدات", icon: Building2 },
       { to: "/map", label: "خريطة الإشغال", icon: MapPin },
       { to: "/documents", label: "وثائق العقارات", icon: FileText },
-      { to: "/owner-pages", label: "صفحات الملاك", icon: Contact },
+      { to: "/owner-pages", label: "الملاك والمستأجرون", icon: Contact },
       { to: "/agreements", label: "اتفاقيات الإدارة", icon: FileSignature },
     ],
   },
@@ -187,6 +189,22 @@ const tenantNav: PortalNavItem[] = [
 // الجانبية (زر الهامبرغر) فقط، مو من الشريط السفلي.
 const tenantBottomNav = tenantNav.slice(0, 5);
 
+// «عميل» before any lease: someone looking to buy or rent has no payments or maintenance yet, so
+// their menu points at the market and the requests market instead. Five items: the bottom bar too.
+const clientNav: PortalNavItem[] = [
+  { key: "home", label: "الرئيسية", icon: Gauge, href: "/tenant-dashboard" },
+  { key: "market", label: "سوق العروض", icon: Store, href: "/" },
+  { key: "requests", label: "سوق الطلبات", icon: ClipboardList, href: "/requests-market" },
+  {
+    key: "messages",
+    label: "المحادثات",
+    icon: MessagesSquare,
+    href: "/messages",
+    badge: "unread",
+  },
+  { key: "settings", label: "الإعدادات", icon: UserCog, href: "/tenant/settings" },
+];
+
 // قائمة المالك (spec: owner-dashboard-prompt.md، قسم 3) — بنفس منطق قائمة المستأجر: عناصر
 // "#" ترجع لنفس صفحة /owner-dashboard وتمرّر لقسمها، لأن كل الأقسام المذكورة موجودة فعليًا
 // بنفس الصفحة (لا صفحات "المالية"/"التقارير" منفصلة موصوفة بأي تفاصيل غير الموجودة أصلًا).
@@ -255,13 +273,29 @@ export function AppShell({ children }: { children: ReactNode }) {
   // other side, so neither dashboard is ever unreachable from the menu.
   const owner = isOwner && (!isTenant || pathname.startsWith("/owner"));
   const tenant = isTenant && !owner;
+  // A tenant-role account with no lease at all is a client (buyer / renter): see clientNav.
+  const hasLease = useQuery({
+    queryKey: ["tenant-nav-has-lease", me?.userId],
+    enabled: isTenant && !!me?.userId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("leases")
+        .select("id, tenants!inner(user_id)", { count: "exact", head: true })
+        .eq("tenants.user_id", me!.userId!);
+      if (error) throw error;
+      return (count ?? 0) > 0;
+    },
+  });
+  const client = tenant && hasLease.data === false;
+  const myTenantNav = client ? clientNav : tenantNav;
   const roleNav: PortalNavItem[] = tenant
     ? isOwner
       ? [
-          ...tenantNav,
+          ...myTenantNav,
           { key: "switch", label: "لوحة المالك", icon: ArrowLeftRight, href: "/owner-dashboard" },
         ]
-      : tenantNav
+      : myTenantNav
     : isTenant
       ? [
           ...ownerNav,
@@ -292,12 +326,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     : staff
       ? "مكتب"
       : tenant
-        ? "مستأجر"
+        ? client
+          ? "عميل"
+          : "مستأجر"
         : owner
           ? "مالك"
           : isTechnician
             ? "فني"
             : "جارك";
+
+  // An office may have invited this account onto a lease (by email) while it already existed: link
+  // it on the first page of the session, so the lease shows without any special link.
+  const linkTenantInvites = useServerFn(completeTenantActivation);
+  useEffect(() => {
+    const uid = me?.userId;
+    if (!uid || staff || platformTeamPage) return;
+    const key = `jarak:tenant-invites-checked:${uid}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // storage blocked: check on every load, it is one small query
+    }
+    linkTenantInvites()
+      .then((res) => {
+        if (!res.linked) return;
+        toast.success("رُبط عقد الإيجار بحسابك");
+        void queryClient.invalidateQueries();
+      })
+      .catch(() => {
+        // Best effort: /tenant/activate reports problems when the tenant opens their invite.
+      });
+  }, [me?.userId, staff, platformTeamPage, linkTenantInvites, queryClient]);
 
   const fetchPlatformSettings = useServerFn(platformSettings);
   const announcement = useQuery({
@@ -695,7 +755,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {!platformTeamPage && tenant ? (
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card lg:hidden">
-          {tenantBottomNav.map((item) => {
+          {(client ? clientNav : tenantBottomNav).map((item) => {
             const active = portalItemActive(item.href);
             const badgeCount = item.badge ? navBadge(item.badge) : 0;
             return (

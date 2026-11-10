@@ -1,4 +1,4 @@
-/** Publishing a unit on the website: 50 SAR, VAT included, for 30 days. */
+/** An OWNER publishing a unit on the website: 50 SAR, VAT included, for 30 days. Offices publish free. */
 export const LISTING_FEE_SAR = 50;
 export const LISTING_FEE_HALALAS = LISTING_FEE_SAR * 100;
 export const LISTING_PERIOD_DAYS = 30;
@@ -52,8 +52,8 @@ export function officeListingBlock(office: {
   verified: boolean | null;
 }): string | null {
   if (!office.listed_publicly)
-    return "فعّل «إظهار المكتب في دليل المكاتب» من الإعدادات ← بيانات المكتب واحفظ، ثم انشر الوحدة.";
+    return "وحداتك المنشورة لا تظهر حتى تفعّل «إظهار المكتب في دليل المكاتب» من الإعدادات ← بيانات المكتب وتحفظ.";
   if (!office.verified)
-    return "مكتبك بانتظار اعتماد إدارة جارك — تُنشر الوحدات في الموقع بعد الاعتماد.";
+    return "مكتبك بانتظار اعتماد إدارة جارك — تظهر وحداتك المنشورة في الموقع بعد الاعتماد.";
   return null;
 }

@@ -279,7 +279,6 @@ function Documents() {
               <Input
                 id="doc-date"
                 type="date"
-                dir="ltr"
                 value={docDate}
                 max={hasIssueDate(kind) ? today : undefined}
                 onChange={(e) => setDocDate(e.target.value)}

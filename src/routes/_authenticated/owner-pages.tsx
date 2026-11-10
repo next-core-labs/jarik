@@ -2,11 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, ImagePlus } from "lucide-react";
+import { ExternalLink, ImagePlus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { PageHeader } from "@/components/app-shell";
+import { AddClientDialog } from "@/components/add-client-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { arNum } from "@/lib/format";
 import { Avatar } from "@/components/listing-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,10 +29,10 @@ export const Route = createFileRoute("/_authenticated/owner-pages")({
   staticData: { sitemap: false },
   head: () => ({
     meta: [
-      { title: "صفحات الملاك — جارك" },
+      { title: "الملاك والمستأجرون — جارك" },
       {
         name: "description",
-        content: "ابنِ صفحة عامة لكل مالك: الاسم والصورة والنبذة وعروضه تظهر في سوق العروض.",
+        content: "ملاك المكتب ومستأجروه: إضافتهم برقمهم التعريفي أو بالبريد، وصفحة عامة لكل مالك.",
       },
     ],
   }),
@@ -54,6 +57,8 @@ function OwnerPages() {
   const { data: me } = useMyRoles();
   const staff = isStaffRole(me?.roles ?? []);
   const fetchAccounts = useServerFn(listClientAccounts);
+  const [tab, setTab] = useState<"owners" | "tenants">("owners");
+  const [adding, setAdding] = useState<"owner" | "tenant" | null>(null);
 
   const accounts = useQuery({
     queryKey: ["client-accounts"],
@@ -73,11 +78,26 @@ function OwnerPages() {
       return data;
     },
   });
+  // The office's tenant records (RLS: this office's only) — with or without a Jarak account.
+  const tenants = useQuery({
+    queryKey: ["office-tenants"],
+    enabled: staff,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select(
+          "id, full_name, phone, email, user_id, leases(status, units(unit_number, unit_name, properties(name)))",
+        )
+        .order("full_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   if (me && !staff) {
     return (
       <>
-        <PageHeader title="صفحات الملاك" />
+        <PageHeader title="الملاك والمستأجرون" />
         <p className="text-muted-foreground">هذه الشاشة لموظفي المكتب.</p>
       </>
     );
@@ -85,30 +105,112 @@ function OwnerPages() {
 
   const owners = (accounts.data ?? []).filter((a) => a.roles.includes("owner"));
   const byOwner = new Map((pages.data ?? []).map((p) => [p.owner_id, p]));
+  const tenantRows = tenants.data ?? [];
 
   return (
     <>
       <PageHeader
-        title="صفحات الملاك"
-        subtitle="ابنِ صفحة عامة لكل مالك (الاسم والصورة والنبذة)، ثم انشرها لتظهر عروضه في سوق العروض. اربط الوحدات بالمالك من شاشة «الأملاك والوحدات»."
+        title="الملاك والمستأجرون"
+        subtitle="أضف ملاك مكتبك ومستأجريه برقمهم التعريفي أو بالبريد، وابنِ لكل مالك صفحة عامة تظهر عليها عروضه في سوق العروض."
+        action={
+          <Button onClick={() => setAdding(tab === "owners" ? "owner" : "tenant")}>
+            <UserPlus className="size-4" />
+            {tab === "owners" ? "إضافة مالك" : "إضافة مستأجر"}
+          </Button>
+        }
+      />
+      <AddClientDialog
+        kind={adding ?? "owner"}
+        open={adding !== null}
+        onOpenChange={(v) => !v && setAdding(null)}
       />
 
-      {accounts.isLoading || pages.isLoading ? (
-        <Skeleton className="h-64" />
-      ) : owners.length === 0 ? (
-        <Card className="shadow-deed">
-          <CardContent className="py-10 text-center text-muted-foreground">
-            لا توجد حسابات بدور «مالك» بعد. أنشئ حسابًا للمالك ثم اسند له الدور من شاشة «المستخدمون
-            والأدوار».
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {owners.map((a) => (
-            <OwnerPageCard key={a.id} account={a} page={byOwner.get(a.id) ?? null} />
-          ))}
-        </div>
-      )}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "owners" | "tenants")}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="owners">الملاك ({arNum(owners.length)})</TabsTrigger>
+          <TabsTrigger value="tenants">المستأجرون ({arNum(tenantRows.length)})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="owners">
+          {accounts.isLoading || pages.isLoading ? (
+            <Skeleton className="h-64" />
+          ) : owners.length === 0 ? (
+            <Card className="shadow-deed">
+              <CardContent className="space-y-4 py-10 text-center text-muted-foreground">
+                <p>لا يوجد ملاك مرتبطون بمكتبك بعد.</p>
+                <Button variant="outline" onClick={() => setAdding("owner")}>
+                  <UserPlus className="size-4" />
+                  إضافة مالك
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                لكل مالك صفحة عامة (الاسم والصورة والنبذة) تُنشر لتظهر عروضه في سوق العروض. اربط
+                الوحدات بالمالك من «الأملاك والوحدات».
+              </p>
+              {owners.map((a) => (
+                <OwnerPageCard key={a.id} account={a} page={byOwner.get(a.id) ?? null} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="tenants">
+          {tenants.isLoading ? (
+            <Skeleton className="h-64" />
+          ) : tenantRows.length === 0 ? (
+            <Card className="shadow-deed">
+              <CardContent className="space-y-4 py-10 text-center text-muted-foreground">
+                <p>لا يوجد مستأجرون بعد.</p>
+                <Button variant="outline" onClick={() => setAdding("tenant")}>
+                  <UserPlus className="size-4" />
+                  إضافة مستأجر
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {tenantRows.map((t) => {
+                const active = t.leases?.find((l) => l.status === "active");
+                const unit = active?.units;
+                return (
+                  <Card key={t.id} className="shadow-deed">
+                    <CardContent className="space-y-1.5 pt-6 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium">{t.full_name}</p>
+                        <Badge variant={t.user_id ? "secondary" : "outline"}>
+                          {t.user_id ? "مرتبط بحساب" : "بدون حساب"}
+                        </Badge>
+                      </div>
+                      {t.phone || t.email ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t.phone ? <span dir="ltr">{t.phone}</span> : null}
+                          {t.phone && t.email ? " · " : null}
+                          {t.email ? <span dir="ltr">{t.email}</span> : null}
+                        </p>
+                      ) : null}
+                      <p className="text-xs text-muted-foreground">
+                        {unit
+                          ? `عقد ساري: ${unit.properties?.name ?? ""} · ${unit.unit_name || `وحدة ${unit.unit_number}`}`
+                          : "لا يوجد عقد ساري"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-4 text-xs text-muted-foreground">
+            العقود ودعوات الدخول للمستأجرين من{" "}
+            <Link to="/tenants" className="underline underline-offset-4">
+              المستأجرون والعقود
+            </Link>
+            .
+          </p>
+        </TabsContent>
+      </Tabs>
     </>
   );
 }

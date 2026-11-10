@@ -241,6 +241,42 @@
     border-color: var(--color-border);
   }
 
+  /* Arabic pages line up on the right everywhere. Phones, emails, VAT numbers and other Latin
+     values keep dir="ltr" so their characters stay in order (+966…, name@mail.com), but they sit
+     on the right like the rest of the form instead of jumping to the left edge. An explicit
+     utility (text-center on a code box, text-left in a table) still wins: utilities beat base. */
+  html[dir="rtl"]
+    :is(input, textarea, p, li, dd, dt, td, th, label, h1, h2, h3, h4, h5, h6)[dir="ltr"] {
+    text-align: right;
+  }
+
+  /* Date fields: no dir="ltr" on them. In an RTL page Safari reorders the day/month/year parts
+     and their «/» separators («082026/11/», «08 11//2026», a time of 03:30 shown as «30:03»).
+     The fields read left to right in their own order (08/11/2026، 03:30 م), right-aligned.
+     Desktop browsers build the value from edit fields; iPhone shows one text run. */
+  html[dir="rtl"] input:is([type="date"], [type="datetime-local"]) {
+    text-align: right;
+    /* The shared Input is display:flex, where text-align can't move the value: push it right. */
+    justify-content: flex-end;
+  }
+  html[dir="rtl"] input:is([type="date"], [type="datetime-local"])::-webkit-datetime-edit {
+    direction: ltr;
+  }
+  html[dir="rtl"]
+    input:is([type="date"], [type="datetime-local"])::-webkit-datetime-edit-fields-wrapper {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+  html[dir="rtl"] input:is([type="date"], [type="datetime-local"])::-webkit-datetime-edit-text {
+    direction: ltr;
+    unicode-bidi: bidi-override;
+  }
+  html[dir="rtl"] input:is([type="date"], [type="datetime-local"])::-webkit-date-and-time-value {
+    direction: ltr;
+    unicode-bidi: bidi-override;
+    text-align: right;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);

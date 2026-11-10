@@ -150,12 +150,9 @@ function Deals() {
                         القيمة {sar(d.value)} · العمولة {sar(d.commission)}
                       </p>
                       {d.phone ? (
-                        <p
-                          className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
-                          dir="ltr"
-                        >
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Phone className="size-3.5" />
-                          {d.phone}
+                          <span dir="ltr">{d.phone}</span>
                         </p>
                       ) : null}
                       <p className="mt-1 text-xs text-muted-foreground">

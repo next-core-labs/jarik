@@ -55,8 +55,8 @@ is enabled, because a disabled provider sends people to a raw error page.
 
 The site sends its own branded Arabic emails through **Resend**:
 
-1. resend.com → **Domains** → add `notify.jarak-ksa.com` → add the DNS records it shows in
-   Cloudflare (**DNS → Records**) → wait for "Verified".
+1. resend.com → **Domains** → add `jarak-ksa.com` → add the DNS records it shows in
+   Cloudflare (**DNS → Records**, each "DNS only") → wait for "Verified".
 2. Resend → **API Keys** → create one → Cloudflare secret `RESEND_API_KEY` (B3).
 3. Supabase → **Authentication → Hooks → Send Email** → type **HTTPS** →
    URL `https://jarak-ksa.com/api/auth/send-email` → **Generate secret** → copy it (it looks like
@@ -131,7 +131,7 @@ Cloudflare → **Workers & Pages → jarak → Settings → Variables and Secret
 | `AI_BASE_URL`, `AI_MODEL`                                         | optional — only to use another OpenAI-compatible provider                                                              |
 | `SEND_EMAIL_HOOK_SECRET`                                          | from A4                                                                                                                |
 | `RESEND_API_KEY`                                                  | from A4                                                                                                                |
-| `EMAIL_FROM`                                                      | optional, default `"جارك" <noreply@notify.jarak-ksa.com>`                                                              |
+| `EMAIL_FROM`                                                      | optional, default `"جارك" <noreply@jarak-ksa.com>`                                                                     |
 | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`               | your existing WhatsApp Cloud API values                                                                                |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | if you use Twilio                                                                                                      |
 | `EJAR_API_BASE_URL`, `EJAR_CLIENT_ID`, `EJAR_CLIENT_SECRET`       | if you use the Ejar integration                                                                                        |

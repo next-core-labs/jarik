@@ -12,7 +12,6 @@ import { resolvePostLoginPath } from "@/lib/portal-routing";
 import { parseSaudiMobile } from "@/lib/public-form";
 import { safeNext } from "@/lib/safe-redirect";
 import {
-  ACCOUNT_TYPE_LABEL,
   digitsOnly,
   idTypeOf,
   validateFalLicense,
@@ -59,6 +58,18 @@ function passwordProblem(password: string): string | null {
   if (password.length < 6) return "كلمة المرور 6 أحرف على الأقل";
   return null;
 }
+
+/** Sign-up's account types as a visitor thinks of them: a renter or buyer is «عميل». */
+const SIGNUP_TYPE_LABEL: Record<AccountType, string> = {
+  office: "مكتب عقاري",
+  owner: "مالك",
+  tenant: "عميل",
+};
+const SIGNUP_TYPE_HINT: Record<AccountType, string> = {
+  office: "تدير أملاك الآخرين وتعرض الوحدات — يُراجَع مكتبك قبل ظهوره في سوق العروض.",
+  owner: "تملك عقارًا وتريد متابعته أو تأجيره أو بيعه عبر مكتب.",
+  tenant: "تبحث عن عقار للشراء أو الإيجار، أو أنت مستأجر لدى مكتب.",
+};
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -538,22 +549,28 @@ function AuthPage() {
                   <form onSubmit={signUp} noValidate className="space-y-4">
                     <div className="space-y-2">
                       <Label>نوع الحساب</Label>
-                      {/* المستأجر لم يعد يسجّل نفسه من هنا — يُدعى من المكتب على عقده ويفعّل حسابه
-                          من رابط الدعوة (/tenant/activate)، أو يدخل مباشرة من /tenant/login بعد
-                          التفعيل. */}
-                      <div className="grid grid-cols-2 gap-2">
-                        {(["office", "owner"] as const).map((t) => (
+                      {/* «عميل» = من يبحث عن عقار للشراء أو الإيجار، والمستأجر لدى مكتب. يُسجَّل
+                          بدور tenant: لوحته تعرض عقده متى ربطه المكتب بحسابه، وقبل ذلك سوق العروض
+                          والطلبات. المستأجر الذي دعاه مكتبه يفعّل حسابه من رابط الدعوة
+                          (/tenant/activate) كما كان. */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["office", "owner", "tenant"] as const).map((t) => (
                           <Button
                             key={t}
                             type="button"
                             size="sm"
                             variant={accountType === t ? "default" : "outline"}
+                            aria-pressed={accountType === t}
+                            className="justify-center"
                             onClick={() => setAccountType(t)}
                           >
-                            {ACCOUNT_TYPE_LABEL[t]}
+                            {SIGNUP_TYPE_LABEL[t]}
                           </Button>
                         ))}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {SIGNUP_TYPE_HINT[accountType]}
+                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -580,7 +597,7 @@ function AuthPage() {
                         maxLength={10}
                         required
                         placeholder={
-                          accountType === "office" ? "1xxxxxxxxx" : "1xxxxxxxxx أو 2xxxxxxxxx"
+                          accountType === "office" ? "1xxxxxxxxx" : "1xxxxxxxxx / 2xxxxxxxxx"
                         }
                         value={nationalId}
                         onChange={(e) => setNationalId(digitsOnly(e.target.value))}
