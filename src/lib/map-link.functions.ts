@@ -47,3 +47,38 @@ export const resolveMapLink = createServerFn({ method: "POST" })
     }
     return parseLocation(url);
   });
+
+export type PlaceHit = { label: string; lat: number; lng: number };
+
+/**
+ * «ابحث عن حي أو معلم» on the location picker: OpenStreetMap's Nominatim, Saudi Arabia only, Arabic
+ * names. Server-side (like geocodeProperties) with an identifying User-Agent, as Nominatim asks, and
+ * a per-user limit well under its fair-use policy.
+ */
+export const searchPlaces = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ q: z.string().trim().min(2).max(120) }).parse(input))
+  .handler(async ({ data, context }): Promise<PlaceHit[]> => {
+    await enforceRateLimit(context, "search_places", 60, 600);
+    const url =
+      "https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=sa" +
+      `&accept-language=ar&q=${encodeURIComponent(data.q)}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Jarak/1.0 (jarak-ksa.com property listings)" },
+      signal: AbortSignal.timeout(6000),
+    }).catch(() => null);
+    if (!res?.ok) throw new Error("تعذّر البحث الآن — حدّد الموقع على الخريطة مباشرة");
+    const rows = (await res.json()) as { display_name?: string; lat?: string; lon?: string }[];
+    return rows
+      .map((r) => ({
+        // «الملقا، الرياض، منطقة الرياض، السعودية» → the first three parts are enough.
+        label: (r.display_name ?? "")
+          .split(/[,،]/)
+          .slice(0, 3)
+          .map((part) => part.trim())
+          .join("، "),
+        lat: Number(r.lat),
+        lng: Number(r.lon),
+      }))
+      .filter((r) => r.label && Number.isFinite(r.lat) && Number.isFinite(r.lng));
+  });

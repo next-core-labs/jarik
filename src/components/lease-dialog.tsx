@@ -528,8 +528,8 @@ export function CorrectLeaseDialog({
           ? "الإيجار بحد أقصى منزلتين عشريتين"
           : null,
     installments:
-      count === null || !Number.isInteger(count) || count < 1 || count > 24
-        ? "عدد الدفعات من 1 إلى 24"
+      count === null || !Number.isInteger(count) || count < 1 || count > 60
+        ? "عدد الدفعات من 1 إلى 60"
         : term > 0 && count > term
           ? "عدد الدفعات لا يتجاوز مدة العقد بالأشهر"
           : null,
@@ -810,8 +810,8 @@ export function NewLeaseDialog({
           ? "الإيجار بحد أقصى منزلتين عشريتين"
           : null,
     installments:
-      count === null || !Number.isInteger(count) || count < 1 || count > 24
-        ? "عدد الدفعات من 1 إلى 24"
+      count === null || !Number.isInteger(count) || count < 1 || count > 60
+        ? "عدد الدفعات من 1 إلى 60"
         : term > 0 && count > term
           ? "عدد الدفعات لا يتجاوز مدة العقد بالأشهر"
           : null,
@@ -839,7 +839,7 @@ export function NewLeaseDialog({
       }
       // One database transaction: the tenant (if new), the lease and its schedule are written
       // together or not at all, and the database refuses a second active lease on the unit.
-      const { error } = await supabase.rpc("create_lease", {
+      const { data: leaseId, error } = await supabase.rpc("create_lease", {
         _unit_id: form.unitId,
         // create_lease takes NULL here for a new tenant; generated RPC types can't express a nullable arg.
         _tenant_id: form.tenantMode === "existing" ? form.tenantId : (null as unknown as string),
@@ -862,6 +862,8 @@ export function NewLeaseDialog({
         _deposit: deposit,
       });
       if (error) throw error;
+      // An unknown reference number creates nothing and returns no lease (the attempt still counts).
+      if (!leaseId) throw new Error("لا يوجد حساب بهذا الرقم التعريفي");
     },
     onSuccess: () => {
       toast.success("أُنشئ العقد وجدول دفعاته — وثّقه في «إيجار» ثم اربط رقمه");
@@ -966,7 +968,6 @@ export function NewLeaseDialog({
                       id={`${uid}-tenant`}
                       dir="ltr"
                       inputMode="numeric"
-                      maxLength={6}
                       value={form.referenceCode}
                       onChange={(e) => set("referenceCode", e.target.value)}
                       placeholder="الرقم التعريفي — 6 أرقام"

@@ -83,6 +83,8 @@ export function AddClientDialog({
           _kind: kind,
         });
         if (error) throw error;
+        // An unknown number returns nothing (so the attempt still counts against the limit).
+        if (!data) throw new Error("لا يوجد حساب بهذا الرقم التعريفي");
         return `أُضيف ${data} ${KIND_LABEL[kind]}ًا لمكتبك ووصله إشعار`;
       }
       const { error } = await supabase.rpc("office_link_client", {
@@ -147,7 +149,6 @@ export function AddClientDialog({
               id={`${uid}-code`}
               dir="ltr"
               inputMode="numeric"
-              maxLength={6}
               value={codeText}
               onChange={(e) => setCodeText(e.target.value)}
               placeholder="6 أرقام"
@@ -189,7 +190,13 @@ export function AddClientDialog({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@example.com"
+              aria-invalid={Boolean(email.trim()) && !validEmail}
             />
+            {email.trim() && !validEmail ? (
+              <p className="text-xs text-destructive">
+                البريد الإلكتروني غير صحيح — مثال: name@example.com
+              </p>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               تصله دعوة يقبلها من حسابه (وإن لم يكن له حساب يُنشئه من الرابط). إرسال الدعوات بالبريد
               لمدير المكتب.

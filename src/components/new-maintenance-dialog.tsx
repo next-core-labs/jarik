@@ -133,6 +133,7 @@ export function NewMaintenanceDialog({
     onSuccess: () => {
       toast.success("أُضيف طلب الصيانة");
       queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إضافة طلب الصيانة")),

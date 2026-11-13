@@ -9,9 +9,12 @@ export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   tenant: "مستأجر",
 };
 
-/** Arabic-Indic digits are what a Saudi keyboard produces, so they count as digits here. */
+/** Arabic-Indic digits are what a Saudi keyboard produces (and Persian/Urdu keyboards type the
+ * extended ۰-۹), so both count as digits here. */
 export function toLatinDigits(value: string): string {
-  return value.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  return value
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
 }
 
 export function digitsOnly(value: string): string {

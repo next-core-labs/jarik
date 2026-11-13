@@ -37,7 +37,7 @@ export function PasswordField({
           required
           minLength={minLength}
           autoComplete={autoComplete}
-          className="pe-10"
+          className="pe-10 [unicode-bidi:plaintext] rtl:text-right"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />

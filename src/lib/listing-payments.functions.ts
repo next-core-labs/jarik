@@ -2,10 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { officeListingBlock } from "@/lib/listing-fee";
 
 /**
- * Raises (or reuses) the Moyasar invoice for publishing a unit for the next 30 days. The unit must be
+ * Retired for offices (they publish free since 20261111100000): it now always refuses, so no new
+ * Moyasar invoice can turn a free listing into a 30-day one. Kept for a future owner paid flow.
+ * Previously: raised (or reused) the Moyasar invoice for publishing a unit for the next 30 days. The unit must be
  * vacant and managed by the caller's office (with `leasing` for an owner's unit under an agreement);
  * listing_publish_target refuses otherwise with the reason.
  */
@@ -19,25 +20,9 @@ export const startListingPayment = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!target) throw new Error("الوحدة غير موجودة أو لا يديرها مكتبك");
-    // Paying would buy nothing: the website only shows offices that are public and approved.
-    if (!target.office_ready) {
-      const { data: office } = await context.supabase
-        .from("org_settings")
-        .select("listed_publicly, verified")
-        .eq("id", target.org_id)
-        .maybeSingle();
-      throw new Error(
-        (office && officeListingBlock(office)) ??
-          "لا تُنشر وحدات مكتبك في الموقع حتى يظهر المكتب في دليل المكاتب وتعتمده إدارة جارك.",
-      );
-    }
-    const { openListingInvoice } = await import("./listing-payments.server");
-    return openListingInvoice({
-      unitId: data.unitId,
-      orgId: target.org_id,
-      userId: context.userId,
-      unitLabel: target.unit_label,
-    });
+    // listing_publish_target only answers an office's staff — and offices publish free
+    // (20261111100000). A paid period here would turn a free listing into one that expires.
+    throw new Error("النشر في الموقع مجاني للمكاتب — استخدم «نشر في الموقع» على الوحدة");
   });
 
 /** After Moyasar sends the office back: checks the invoice with Moyasar and publishes the unit if paid. */

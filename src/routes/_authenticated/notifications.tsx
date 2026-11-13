@@ -42,6 +42,7 @@ const kindLabel: Record<string, string> = {
   unit: "وحدة",
   deal: "صفقة",
   agreement: "اتفاقية إدارة",
+  system: "تنبيه",
 };
 
 /** What this page is about, in the words of the role reading it. */
@@ -164,7 +165,7 @@ function Notifications() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium">{n.title}</p>
-                    <Badge variant="secondary">{kindLabel[n.kind] ?? n.kind}</Badge>
+                    <Badge variant="secondary">{kindLabel[n.kind] ?? "تنبيه"}</Badge>
                     <span className="text-xs text-muted-foreground">{shortDate(n.created_at)}</span>
                   </div>
                   {n.body ? (

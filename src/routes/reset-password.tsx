@@ -28,6 +28,13 @@ function ResetPassword() {
   // null while the link's session is read, so the "expired" note doesn't flash.
   const [ready, setReady] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
+  // Read before the auth client consumes the URL: only a genuine reset link may open the form —
+  // an existing sign-in alone must not let whoever holds the session change the password here.
+  const [link] = useState(() => {
+    if (typeof window === "undefined") return { recovery: false, failed: false };
+    const params = `${window.location.hash} ${window.location.search}`;
+    return { recovery: /type=recovery/.test(params), failed: /error(_code)?=/.test(params) };
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -39,6 +46,10 @@ function ResetPassword() {
     };
     // The session from the link's #access_token is set during client start-up, which can finish
     // after this effect: listen for it too, and give up after a few seconds.
+    if (link.failed || !link.recovery) {
+      settle(false);
+      return;
+    }
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")) settle(true);
     });
@@ -50,7 +61,7 @@ function ResetPassword() {
       sub.subscription.unsubscribe();
       clearTimeout(timer);
     };
-  }, []);
+  }, [link]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

@@ -451,18 +451,24 @@ function InviteTenantDialog({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tenant@example.com"
+                aria-invalid={Boolean(email.trim()) && !validEmail}
               />
+              {email.trim() && !validEmail ? (
+                <p className="text-xs text-destructive">
+                  البريد الإلكتروني غير صحيح — مثال: name@example.com
+                </p>
+              ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
               نجهّز له رابط تفعيل تُرسله بالواتساب أو تنسخه، ويصله بالبريد أيضًا متى كان البريد
-              مفعّلًا. إن كان له حساب على جارك بنفس البريد يُربط العقد بحسابه عند دخوله التالي.
+              مفعّلًا. إن كان له حساب على جارك بنفس البريد تظهر له الدعوة في حسابه ليقبلها.
             </p>
           </div>
         ) : (
           <div className="grid gap-3 text-sm">
             <p className="rounded-md border border-border bg-muted/40 px-3 py-2">
               {result.existingAccount
-                ? "لهذا البريد حساب على جارك — يُربط العقد بحسابه تلقائيًا عند دخوله التالي."
+                ? "لهذا البريد حساب على جارك — تظهر له الدعوة في حسابه فيقبلها، ثم يُربط العقد به."
                 : "جهزت الدعوة — أرسل رابط التفعيل للمستأجر."}{" "}
               {result.emailed
                 ? "وأُرسلت له رسالة بالبريد أيضًا."

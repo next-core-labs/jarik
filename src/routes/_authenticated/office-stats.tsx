@@ -248,8 +248,10 @@ function OfficeStats() {
                   <div>
                     <p className="font-medium">
                       {label}
-                      <span className="ms-2 text-sm text-muted-foreground">
-                        {u.properties?.name ?? ""} {u.district ? `— ${u.district}` : ""}
+                      {/* A text separator, not a margin: mixed Arabic/Latin names lost the gap. */}
+                      <span className="text-sm text-muted-foreground">
+                        {u.properties?.name ? ` · ${u.properties.name}` : ""}
+                        {u.district ? ` — ${u.district}` : ""}
                       </span>
                     </p>
                     <p className="text-sm text-muted-foreground">

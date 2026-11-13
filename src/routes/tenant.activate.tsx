@@ -60,8 +60,7 @@ function ActivateTenant() {
           .select("role")
           .eq("user_id", session.user.id);
         if ((roleRows ?? []).some((r) => r.role === "tenant")) {
-          // Link any lease the office invited this email onto before leaving (best effort).
-          await completeTenantActivation().catch(() => null);
+          // Their pending lease invitations wait on the dashboard to be accepted.
           navigate({ to: "/tenant-dashboard", replace: true });
           return;
         }

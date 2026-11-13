@@ -30,6 +30,14 @@ describe("enforceRateLimit", () => {
     await expect(enforceRateLimit(ctx, "a", 1, 60)).rejects.toThrow(/تجاوزت الحد/);
   });
 
+  it("blocks when the database raises its own over-the-limit error", async () => {
+    const { ctx } = ctxWithRpc({
+      data: null,
+      error: { message: "تجاوزت الحد المسموح من الطلبات — جرّب بعد قليل" },
+    });
+    await expect(enforceRateLimit(ctx, "a", 1, 60, "كثير")).rejects.toThrow("كثير");
+  });
+
   it("fails open, and logs, when the limiter itself errors", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { ctx } = ctxWithRpc({ data: null, error: { message: "function does not exist" } });
