@@ -3834,10 +3834,6 @@ export type Database = {
           unit_label: string;
         }[];
       };
-      office_add_client_by_code: {
-        Args: { _code: string; _kind: string };
-        Returns: string;
-      };
       lookup_account_by_code: {
         Args: { _code: string };
         Returns: {
@@ -3939,6 +3935,10 @@ export type Database = {
       notify_unit_staff: {
         Args: { _body: string; _kind: string; _title: string; _unit_id: string };
         Returns: undefined;
+      };
+      office_add_client_by_code: {
+        Args: { _code: string; _kind: string };
+        Returns: string;
       };
       office_add_member: {
         Args: { _email: string; _manager: boolean; _role: string };
