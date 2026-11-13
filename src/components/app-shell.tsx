@@ -43,8 +43,7 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { platformSettings } from "@/lib/super-admin.functions";
-import { completeTenantActivation } from "@/lib/tenant-portal.functions";
-import { toast } from "sonner";
+import { TenantInvitesBanner } from "@/components/tenant-invites-banner";
 import { InvitationsBanner } from "@/components/invitations-banner";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { Button } from "@/components/ui/button";
@@ -335,30 +334,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             ? "فني"
             : "جارك";
 
-  // An office may have invited this account onto a lease (by email) while it already existed: link
-  // it on the first page of the session, so the lease shows without any special link.
-  const linkTenantInvites = useServerFn(completeTenantActivation);
-  useEffect(() => {
-    const uid = me?.userId;
-    if (!uid || staff || platformTeamPage) return;
-    const key = `jarak:tenant-invites-checked:${uid}`;
-    try {
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, "1");
-    } catch {
-      // storage blocked: check on every load, it is one small query
-    }
-    linkTenantInvites()
-      .then((res) => {
-        if (!res.linked) return;
-        toast.success("رُبط عقد الإيجار بحسابك");
-        void queryClient.invalidateQueries();
-      })
-      .catch(() => {
-        // Best effort: /tenant/activate reports problems when the tenant opens their invite.
-      });
-  }, [me?.userId, staff, platformTeamPage, linkTenantInvites, queryClient]);
-
   const fetchPlatformSettings = useServerFn(platformSettings);
   const announcement = useQuery({
     queryKey: ["platform-announcement-banner"],
@@ -527,8 +502,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       // storage blocked: sections follow the current page only
     }
   }, []);
+  // A link is current on its own page and on its sub-pages (/invoices/new, /invoices/<id>).
+  const isCurrent = (to: string) =>
+    pathname === to || (to !== "/" && pathname.startsWith(`${to}/`));
+  // The person's own choice wins; with none, a section is open while it holds the current page.
   const groupOpen = (key: string, items: NavLink[]) =>
-    items.some((i) => i.to === pathname) || (groupChoice[key] ?? false);
+    groupChoice[key] ?? items.some((i) => isCurrent(i.to));
   const toggleGroup = (key: string, items: NavLink[]) => {
     const next = { ...groupChoice, [key]: !groupOpen(key, items) };
     setGroupChoice(next);
@@ -540,7 +519,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const navLink = (item: NavLink) => {
-    const active = pathname === item.to;
+    const active = isCurrent(item.to);
     return (
       <Link
         key={item.to}
@@ -600,7 +579,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           // On phones the drawer is taller than the screen (24 staff links), so it scrolls on its
           // own to keep "خروج" reachable. On desktop it is sticky and one screen tall, so the nav
           // stays in view down a long page and scrolls on its own the same way.
-          "fixed inset-y-0 end-0 z-40 w-64 shrink-0 flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-sidebar p-4 text-sidebar-foreground transition-transform lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0",
+          "fixed inset-y-0 start-0 z-40 w-64 shrink-0 flex-col justify-between gap-4 overflow-y-auto overscroll-contain bg-sidebar p-4 text-sidebar-foreground transition-transform lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0",
           open ? "flex" : "hidden",
         )}
       >
@@ -698,6 +677,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="min-w-0 flex-1">
         <InvitationsBanner />
+        {/* Lease invitations by email wait here for the person to accept (never linked silently). */}
+        <TenantInvitesBanner enabled={Boolean(me?.userId) && !staff && !platformTeamPage} />
         {announcement.data?.announcement_banner ? (
           <div className="border-b border-border bg-info-tint px-4 py-2 text-center text-sm text-info-tint-foreground">
             {announcement.data.announcement_banner}
@@ -789,7 +770,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
         >
           {staffBottomNav.map((item) => {
-            const active = pathname === item.to;
+            const active = isCurrent(item.to);
             return (
               <Link
                 key={item.to}
@@ -813,7 +794,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-expanded={open}
             className={cn(
               "flex flex-1 flex-col items-center gap-1 py-2 text-[11px]",
-              !staffBottomNav.some((i) => i.to === pathname)
+              !staffBottomNav.some((i) => isCurrent(i.to))
                 ? "font-semibold text-foreground shadow-[inset_0_3px_0_var(--color-foreground)]"
                 : "text-muted-foreground",
             )}

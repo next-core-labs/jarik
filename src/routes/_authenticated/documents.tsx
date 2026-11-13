@@ -111,8 +111,12 @@ function Documents() {
   const save = useMutation({
     mutationFn: async () => {
       setSaving(true);
-      const path = file ? await uploadDocumentFile(propertyId, file) : null;
       const deed = hasIssueDate(kind);
+      // Checked before the upload, so a refused save leaves no orphan file.
+      if (deed && docDate && docDate > todayRiyadh()) {
+        throw new Error("تاريخ إصدار الصك لا يكون في المستقبل");
+      }
+      const path = file ? await uploadDocumentFile(propertyId, file) : null;
       const { error } = await supabase.from("property_documents").insert({
         property_id: propertyId,
         kind,
@@ -247,7 +251,14 @@ function Documents() {
             </div>
             <div className="space-y-2">
               <Label>نوع الوثيقة</Label>
-              <Select value={kind} onValueChange={setKind}>
+              <Select
+                value={kind}
+                onValueChange={(v) => {
+                  // An issue date and an expiry date are different things: don't carry one over.
+                  if (hasIssueDate(v) !== hasIssueDate(kind)) setDocDate("");
+                  setKind(v);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

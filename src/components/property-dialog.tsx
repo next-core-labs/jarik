@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Building2, Home } from "lucide-react";
+import { Building2, Home, LocateFixed, Search } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -28,7 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { isInSaudi, isShortMapLink, parseLocation } from "@/lib/location-input";
-import { resolveMapLink } from "@/lib/map-link.functions";
+import { resolveMapLink, searchPlaces, type PlaceHit } from "@/lib/map-link.functions";
+import { Skeleton } from "@/components/ui/skeleton";
 import { parseAmount } from "@/lib/public-form";
 import {
   BUILDING_TYPES,
@@ -38,6 +39,9 @@ import {
   type PropertyStructure,
 } from "@/lib/property-types";
 import { deedFormatError, normalizeDeed } from "@/lib/unit-duplicates";
+
+// Leaflet needs the browser: the picker loads only when the dialog shows it.
+const LocationPickerMap = lazy(() => import("@/components/location-picker-map"));
 
 const empty = {
   structure: "single" as PropertyStructure,
@@ -175,10 +179,11 @@ export function PropertyDialog({
     );
   }, [resolved.data, shortLink]);
 
-  const locationError = !form.location.trim()
-    ? null
-    : shortLink && (resolved.isPending || resolved.data)
-      ? "جارٍ قراءة الموقع من الرابط…"
+  // Reading a short link is progress, not an error: a neutral note, but saving waits for it.
+  const locationPending = Boolean(shortLink && (resolved.isPending || resolved.data));
+  const locationError =
+    !form.location.trim() || locationPending
+      ? null
       : !location
         ? shortLink
           ? "تعذّر قراءة الموقع من الرابط المختصر — افتح الرابط في خرائط جوجل وانسخ الإحداثيات أو الرابط الكامل"
@@ -231,7 +236,11 @@ export function PropertyDialog({
       : null);
 
   const formError =
-    locationError ?? deedError ?? Object.values(errors).find((e) => e !== null) ?? null;
+    locationError ??
+    (locationPending ? "جارٍ قراءة الموقع من الرابط…" : null) ??
+    deedError ??
+    Object.values(errors).find((e) => e !== null) ??
+    null;
 
   // The property's columns as this form would write them — also applied to the saved property, so
   // an edit sends only what changed.
@@ -500,18 +509,30 @@ export function PropertyDialog({
           </Field>
           <div className="sm:col-span-2">
             <Field label="الموقع على الخريطة (يظهر تقريبيًا للعموم)" error={locationError}>
+              <LocationPicker
+                open={open}
+                point={location && isInSaudi(location) ? location : null}
+                onPick={(p) => set("location", `${p.lat}, ${p.lng}`)}
+              />
               <Input
                 dir="ltr"
                 value={form.location}
                 onChange={(e) => set("location", e.target.value)}
                 placeholder="24.8073, 46.6129  أو  رابط خرائط جوجل"
+                aria-label="الإحداثيات أو رابط خرائط جوجل"
                 aria-invalid={Boolean(locationError)}
               />
-              {locationError ? null : (
+              {locationPending ? (
+                <p className="text-xs text-muted-foreground" role="status">
+                  جارٍ قراءة الموقع من الرابط…
+                </p>
+              ) : locationError ? null : (
                 <p className="text-xs text-muted-foreground">
+                  اضغط على الخريطة لوضع الدبوس واسحبه للتعديل، أو ابحث عن الحي، أو الصق الإحداثيات
+                  أو رابط خرائط جوجل.{" "}
                   {isOwner
                     ? "يساعدنا الموقع على اقتراح أقرب المكاتب لعقارك."
-                    : "بدون موقع لن تظهر الوحدات على الخريطة. يمكنك تحديده لاحقًا من صفحة الخريطة."}
+                    : "بدون موقع لن تظهر الوحدات على الخريطة."}
                 </p>
               )}
             </Field>
@@ -586,6 +607,142 @@ function Field({
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The map part of «الموقع على الخريطة»: search a district or landmark, «موقعي الحالي», and the map
+ * itself (tap to drop the pin, drag to adjust). The picked point is written into the field above,
+ * so pasting coordinates or a Google Maps link keeps working.
+ */
+function LocationPicker({
+  open,
+  point,
+  onPick,
+}: {
+  open: boolean;
+  point: { lat: number; lng: number } | null;
+  onPick: (p: { lat: number; lng: number }) => void;
+}) {
+  const search = useServerFn(searchPlaces);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<PlaceHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [flyTo, setFlyTo] = useState<{
+    point: { lat: number; lng: number };
+    zoom: number;
+    key: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      setHits(null);
+      setFlyTo(null);
+    }
+  }, [open]);
+
+  async function runSearch() {
+    const q = query.trim();
+    if (q.length < 2) {
+      toast.info("اكتب حرفين على الأقل من اسم الحي أو المعلم");
+      return;
+    }
+    setSearching(true);
+    try {
+      const rows = await search({ data: { q } });
+      setHits(rows);
+      if (rows.length === 0) toast.info("لم نجد هذا المكان — جرّب اسم الحي مع المدينة");
+    } catch (e) {
+      toast.error(userErrorMessage(e, "تعذّر البحث الآن"));
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function locateMe() {
+    if (!navigator.geolocation) {
+      toast.error("جهازك لا يدعم تحديد الموقع");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const p = {
+          lat: Math.round(pos.coords.latitude * 1e6) / 1e6,
+          lng: Math.round(pos.coords.longitude * 1e6) / 1e6,
+        };
+        onPick(p);
+        setFlyTo({ point: p, zoom: 17, key: Date.now() });
+      },
+      () => {
+        setLocating(false);
+        toast.error("تعذّر تحديد موقعك — اسمح للمتصفح بالوصول إلى الموقع أو حدّده على الخريطة");
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <form
+          className="flex min-w-[14rem] flex-1 gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runSearch();
+          }}
+        >
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ابحث عن حي أو معلم"
+            aria-label="البحث عن مكان"
+          />
+          <Button type="submit" variant="outline" size="icon" disabled={searching} aria-label="بحث">
+            <Search className="size-4" />
+          </Button>
+        </form>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={locateMe}
+          disabled={locating}
+          className="shrink-0"
+        >
+          <LocateFixed className="size-4" />
+          {locating ? "جارٍ التحديد…" : "موقعي الحالي"}
+        </Button>
+      </div>
+      {hits && hits.length > 0 ? (
+        <ul className="divide-y divide-border rounded-md border border-border text-sm">
+          {hits.map((h) => (
+            <li key={`${h.lat},${h.lng}`}>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-start hover:bg-muted"
+                onClick={() => {
+                  // The result is the choice: drop the pin there too (drag it to refine).
+                  const p = { lat: h.lat, lng: h.lng };
+                  onPick(p);
+                  setFlyTo({ point: p, zoom: 16, key: Date.now() });
+                  setHits(null);
+                }}
+              >
+                {h.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {open ? (
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+          <LocationPickerMap value={point} onChange={onPick} flyTo={flyTo} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

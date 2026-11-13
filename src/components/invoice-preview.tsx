@@ -34,14 +34,20 @@ function useQrImage(payload: string) {
     // A slower render for an earlier invoice must not land after a later one's.
     let current = true;
     setImage("");
+    // Nothing issued yet (or an old invoice without a payload): no QR, and no "No input text" error.
+    if (!payload) return;
     void (async () => {
-      const QR = await import("qrcode");
-      const dataUrl = await QR.toDataURL(payload, {
-        margin: 2,
-        width: 320,
-        errorCorrectionLevel: "M",
-      });
-      if (current) setImage(dataUrl);
+      try {
+        const QR = await import("qrcode");
+        const dataUrl = await QR.toDataURL(payload, {
+          margin: 2,
+          width: 320,
+          errorCorrectionLevel: "M",
+        });
+        if (current) setImage(dataUrl);
+      } catch (e) {
+        console.error("Invoice QR failed", e);
+      }
     })();
     return () => {
       current = false;

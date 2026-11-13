@@ -59,6 +59,11 @@ function OwnerPages() {
   const fetchAccounts = useServerFn(listClientAccounts);
   const [tab, setTab] = useState<"owners" | "tenants">("owners");
   const [adding, setAdding] = useState<"owner" | "tenant" | null>(null);
+  // The dialog keeps its last kind while it animates closed (no «مالك» flash on «إضافة مستأجر»).
+  const [addKind, setAddKind] = useState<"owner" | "tenant">("owner");
+  useEffect(() => {
+    if (adding) setAddKind(adding);
+  }, [adding]);
 
   const accounts = useQuery({
     queryKey: ["client-accounts"],
@@ -120,7 +125,7 @@ function OwnerPages() {
         }
       />
       <AddClientDialog
-        kind={adding ?? "owner"}
+        kind={adding ?? addKind}
         open={adding !== null}
         onOpenChange={(v) => !v && setAdding(null)}
       />

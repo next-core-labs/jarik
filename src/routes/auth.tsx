@@ -66,7 +66,7 @@ const SIGNUP_TYPE_LABEL: Record<AccountType, string> = {
   tenant: "عميل",
 };
 const SIGNUP_TYPE_HINT: Record<AccountType, string> = {
-  office: "تدير أملاك الآخرين وتعرض الوحدات — يُراجَع مكتبك قبل ظهوره في سوق العروض.",
+  office: "تدير أملاك الآخرين وتعرض الوحدات.",
   owner: "تملك عقارًا وتريد متابعته أو تأجيره أو بيعه عبر مكتب.",
   tenant: "تبحث عن عقار للشراء أو الإيجار، أو أنت مستأجر لدى مكتب.",
 };
