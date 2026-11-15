@@ -95,20 +95,24 @@ export const smartScheduleMaintenance = createServerFn({ method: "POST" })
 
     const { data: req, error } = await ctx.supabase
       .from("maintenance_requests")
-      .select("id, title, priority, status, approval_status, unit_id, units(property_id)")
+      .select(
+        "id, title, priority, status, approval_status, technician_id, unit_id, units(property_id)",
+      )
       .eq("id", data.requestId)
       .maybeSingle();
     if (error || !req) throw new Error("لم نجد طلب الصيانة");
 
-    // Only this office's own technicians: the database refuses a job assigned to anyone else.
-    const { data: techs } = await ctx.supabase
-      .from("user_roles")
-      .select("user_id, org_members!inner(org_id)")
-      .eq("role", "technician")
-      .eq("org_members.org_id", orgId);
-    const techIds = (techs ?? []).map((t) => t.user_id);
+    // Only this office's own technicians (team members with the technician role) — the same list
+    // as the board's «الفني المسند», and the only people the database lets a job go to. The old
+    // query embedded org_members under user_roles, which have no relation: it always failed, so
+    // smart scheduling said «لا يوجد فنيون» even with technicians on the team.
+    const { data: people, error: peopleError } = await ctx.supabase.rpc("office_people");
+    if (peopleError) throw new Error("تعذّر قراءة فريق المكتب — حاول مرة أخرى");
+    const techIds = (people ?? [])
+      .filter((p) => p.relation === "member" && (p.roles ?? []).includes("technician"))
+      .map((p) => p.user_id);
     if (techIds.length === 0)
-      throw new Error("لا يوجد فنيون — أضف مستخدمًا بدور «فني» من شاشة المستخدمين");
+      throw new Error("لا يوجد فنيون في مكتبك — ادعُ فنيًا من «فريق المكتب»");
 
     const { data: open } = await ctx.supabase
       .from("maintenance_requests")
@@ -131,7 +135,11 @@ export const smartScheduleMaintenance = createServerFn({ method: "POST" })
       if (a[1] !== b[1]) return a[1] - b[1];
       return Number(near.has(b[0])) - Number(near.has(a[0]));
     });
-    const techId: string = sorted[0]?.[0] ?? techIds[0]!;
+    // A job that already has one of the office's technicians keeps them: only the visit is set.
+    const techId: string =
+      req.technician_id && techIds.includes(req.technician_id)
+        ? req.technician_id
+        : (sorted[0]?.[0] ?? techIds[0]!);
     const hours = priorityHours[req.priority] ?? 72;
     const scheduledAt = new Date(Date.now() + hours * 3600000).toISOString();
 

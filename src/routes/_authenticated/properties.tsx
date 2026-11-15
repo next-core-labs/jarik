@@ -28,6 +28,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { UnitPhotoRequest } from "@/components/unit-photo-request";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -125,6 +126,26 @@ function Properties() {
   const noOffice = isStaff && myOffice.isSuccess && myOffice.data === null;
   // Paying to publish buys nothing until the office is listed and verified: say so on the unit
   // instead of offering the payment.
+  // Photography requests still open for this office's units (one per unit at most).
+  const photoRequests = useQuery({
+    queryKey: ["unit-photo-requests", myOffice.data],
+    enabled: isStaff && Boolean(myOffice.data),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("unit_photo_requests")
+        .select("unit_id, status, scheduled_for")
+        .in("status", ["new", "scheduled"]);
+      if (error) throw error;
+      return new Map(
+        (data ?? []).map((r) => [
+          r.unit_id,
+          { status: r.status as "new" | "scheduled", scheduled_for: r.scheduled_for },
+        ]),
+      );
+    },
+  });
+
   const officeListing = useQuery({
     queryKey: ["office-listing-ready", myOffice.data],
     enabled: Boolean(myOffice.data),
@@ -631,6 +652,13 @@ function Properties() {
                                   }
                                   onToggle={(listed) => publish.mutate({ unitId: u.id, listed })}
                                 />
+                                {isStaff ? (
+                                  <UnitPhotoRequest
+                                    unitId={u.id}
+                                    unitLabel={`${p.name} · ${u.unit_name || `وحدة ${u.unit_number}`}`}
+                                    open={photoRequests.data?.get(u.id) ?? null}
+                                  />
+                                ) : null}
                                 {ownerManaged ? null : (
                                   <Select
                                     value={u.owner_id ?? "none"}

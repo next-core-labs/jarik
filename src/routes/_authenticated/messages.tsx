@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { MessagesSquare } from "lucide-react";
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
+import { appPath } from "@/lib/app-path";
+import { usePortalSide, type PortalSide } from "@/lib/portal-side";
 import { cn } from "@/lib/utils";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,16 +83,44 @@ function MessagesPage() {
     },
   });
 
+  // An owner who is also a tenant sees the threads of the side they are using: their rented units in
+  // the tenant dashboard, their owned units in the owner dashboard (RLS alone shows both).
+  const pathname = useRouterState({ select: (s) => appPath(s.location.pathname) });
+  const portalSide = usePortalSide(pathname);
+  const isOwner = !staff && roles.includes("owner");
+  const isTenant = !staff && roles.includes("tenant");
+  const chatSide: PortalSide | null = staff
+    ? null
+    : isOwner && isTenant
+      ? portalSide
+      : isOwner
+        ? "owner"
+        : isTenant
+          ? "tenant"
+          : null;
+
   const units = useQuery({
-    queryKey: ["chat-units"],
+    queryKey: ["chat-units", me?.userId, chatSide],
     enabled: !!me && !technicianOnly,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("units")
-        .select("id, unit_number, unit_name, status, properties(name)")
+        .select("id, unit_number, unit_name, status, owner_id, properties(name, owner_id)")
         .order("unit_number");
       if (error) throw error;
-      return data ?? [];
+      const all = data ?? [];
+      if (!chatSide || !me?.userId) return all;
+      if (chatSide === "owner") {
+        return all.filter((u) => (u.owner_id ?? u.properties?.owner_id) === me.userId);
+      }
+      // Units this account rents (or rented): its own leases, as the tenant.
+      const { data: leases, error: leaseError } = await supabase
+        .from("leases")
+        .select("unit_id, tenants!inner(user_id)")
+        .eq("tenants.user_id", me.userId);
+      if (leaseError) throw leaseError;
+      const rented = new Set((leases ?? []).map((l) => l.unit_id));
+      return all.filter((u) => rented.has(u.id));
     },
   });
 
@@ -171,7 +201,7 @@ function MessagesPage() {
               </CardHeader>
               <CardContent>
                 {active ? (
-                  <UnitChat unitId={active} />
+                  <UnitChat unitId={active} {...(chatSide ? { as: chatSide } : {})} />
                 ) : linkedMissing ? (
                   <p className="text-sm text-muted-foreground">
                     لا يمكنك فتح محادثة هذه الوحدة. اختر وحدة من القائمة.

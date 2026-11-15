@@ -22,7 +22,15 @@ const roleLabels: Record<string, string> = {
  * محادثة موحّدة لكل وحدة بين المكتب والمالك والمستأجر. اسم المرسل ودوره تحددهما قاعدة البيانات
  * (a_fill_sender) من علاقته بالوحدة، لا المتصفح.
  */
-export function UnitChat({ unitId }: { unitId: string }) {
+export function UnitChat({
+  unitId,
+  as,
+}: {
+  unitId: string;
+  /** The side the person writes from (owner / tenant dashboard). The database keeps it only when it
+   * is true for them on this unit, and otherwise decides itself (a_fill_sender). */
+  as?: "owner" | "tenant";
+}) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -59,6 +67,7 @@ export function UnitChat({ unitId }: { unitId: string }) {
         unit_id: unitId,
         sender_id: userId,
         body: body.trim(),
+        ...(as ? { sender_role: as } : {}),
       });
       // RLS refusal: e.g. an office managing the unit by agreement without «التواصل مع المستأجر».
       if (error?.code === "42501") throw new Error("لا تملك صلاحية المراسلة في محادثة هذه الوحدة");
