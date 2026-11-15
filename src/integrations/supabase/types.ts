@@ -2952,6 +2952,48 @@ export type Database = {
           },
         ];
       };
+      unit_photo_requests: {
+        Row: {
+          created_at: string;
+          handled_by: string | null;
+          hq_note: string | null;
+          id: string;
+          notes: string | null;
+          org_id: string;
+          requested_by: string | null;
+          scheduled_for: string | null;
+          status: string;
+          unit_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          handled_by?: string | null;
+          hq_note?: string | null;
+          id?: string;
+          notes?: string | null;
+          org_id: string;
+          requested_by?: string | null;
+          scheduled_for?: string | null;
+          status?: string;
+          unit_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          handled_by?: string | null;
+          hq_note?: string | null;
+          id?: string;
+          notes?: string | null;
+          org_id?: string;
+          requested_by?: string | null;
+          scheduled_for?: string | null;
+          status?: string;
+          unit_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       unit_photos: {
         Row: {
           caption: string | null;
@@ -3833,6 +3875,39 @@ export type Database = {
           org_id: string;
           unit_label: string;
         }[];
+      };
+      hq_photo_requests: {
+        Args: never;
+        Returns: {
+          city: string;
+          created_at: string;
+          district: string;
+          hq_note: string;
+          id: string;
+          lat: number;
+          lng: number;
+          notes: string;
+          office_name: string;
+          office_phone: string;
+          requested_by_name: string;
+          requested_by_phone: string;
+          scheduled_for: string;
+          status: string;
+          unit_id: string;
+          unit_label: string;
+        }[];
+      };
+      hq_set_photo_request: {
+        Args: { _id: string; _note?: string; _scheduled_for?: string; _status: string };
+        Returns: undefined;
+      };
+      request_unit_photos: {
+        Args: { _notes?: string; _unit_id: string };
+        Returns: string;
+      };
+      office_invite_tenant_by_code: {
+        Args: { _code: string; _lease_id: string };
+        Returns: string;
       };
       lookup_account_by_code: {
         Args: { _code: string };

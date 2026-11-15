@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { exportWorkbook } from "@/lib/export-excel";
 import { inviteTenant, type TenantInviteResult } from "@/lib/tenant-portal.functions";
 import { whatsappHref } from "@/lib/market";
+import { digitsOnly } from "@/lib/saudi-id";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app-shell";
 import { EndLeaseDialog, LeaseDetailsDialog, NewLeaseDialog } from "@/components/lease-dialog";
@@ -406,6 +407,41 @@ function InviteTenantDialog({
   const [email, setEmail] = useState(lease.tenantEmail ?? "");
   const [result, setResult] = useState<TenantInviteResult | null>(null);
   const invite = useServerFn(inviteTenant);
+  // «برقم التعريف»: the tenant already has a Jarak account — the invitation reaches them inside the
+  // site (notice + «قبول» at the top of their pages). «رابط تسجيل»: no account yet.
+  const [mode, setMode] = useState<"code" | "link">("code");
+  const [codeText, setCodeText] = useState("");
+  const code = digitsOnly(codeText);
+  const account = useQuery({
+    queryKey: ["account-by-code", code],
+    enabled: mode === "code" && code.length === 6,
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("lookup_account_by_code", { _code: code });
+      if (error) throw error;
+      const row = data?.[0];
+      if (!row) throw new Error("لا يوجد حساب بهذا الرقم التعريفي");
+      return row;
+    },
+  });
+  const sendInApp = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("office_invite_tenant_by_code", {
+        _lease_id: lease.id,
+        _code: code,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("لا يوجد حساب بهذا الرقم التعريفي");
+      return data;
+    },
+    onSuccess: (name) => {
+      toast.success(`وصلت الدعوة لـ ${name} داخل جارك — تظهر له في أعلى صفحاته ليقبلها`);
+      onDone();
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال الدعوة")),
+  });
 
   const send = useMutation({
     mutationFn: () => invite({ data: { leaseId: lease.id, email: email.trim() } }),
@@ -441,6 +477,62 @@ function InviteTenantDialog({
         </DialogHeader>
 
         {!result ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "code" ? "secondary" : "outline"}
+              aria-pressed={mode === "code"}
+              onClick={() => setMode("code")}
+            >
+              برقم التعريف (داخل الموقع)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "link" ? "secondary" : "outline"}
+              aria-pressed={mode === "link"}
+              onClick={() => setMode("link")}
+            >
+              رابط تسجيل (ليس له حساب)
+            </Button>
+          </div>
+        ) : null}
+
+        {!result && mode === "code" ? (
+          <div className="grid gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-code">الرقم التعريفي للمستأجر</Label>
+              <Input
+                id="invite-code"
+                dir="ltr"
+                inputMode="numeric"
+                value={codeText}
+                onChange={(e) => setCodeText(e.target.value)}
+                placeholder="6 أرقام"
+              />
+              {account.data ? (
+                <p className="rounded-sm border border-border bg-muted/40 px-3 py-2 text-sm">
+                  <span className="font-medium">{account.data.full_name}</span>
+                  {account.data.phone_hint ? (
+                    <span className="text-muted-foreground">
+                      {" · جوال ينتهي بـ "}
+                      <span dir="ltr">{account.data.phone_hint.replace(/^•+/, "")}</span>
+                    </span>
+                  ) : null}
+                </p>
+              ) : account.isError ? (
+                <p className="text-xs text-destructive">
+                  {userErrorMessage(account.error, "تعذّر التحقق من الرقم التعريفي")}
+                </p>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              يجده المستأجر في «حسابي» على جارك. تصله الدعوة إشعارًا داخل الموقع وتظهر في أعلى
+              صفحاته ليقبلها، ثم يظهر له العقد ودفعاته — دون أن يغادر جارك.
+            </p>
+          </div>
+        ) : !result ? (
           <div className="grid gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="invite-email">بريد المستأجر الإلكتروني</Label>
@@ -509,9 +601,18 @@ function InviteTenantDialog({
               <Button variant="outline" onClick={onClose}>
                 إلغاء
               </Button>
-              <Button onClick={() => send.mutate()} disabled={send.isPending || !validEmail}>
-                {send.isPending ? "جارٍ التجهيز..." : "إنشاء الدعوة"}
-              </Button>
+              {mode === "code" ? (
+                <Button
+                  onClick={() => sendInApp.mutate()}
+                  disabled={sendInApp.isPending || !account.data}
+                >
+                  {sendInApp.isPending ? "جارٍ الإرسال..." : "إرسال الدعوة"}
+                </Button>
+              ) : (
+                <Button onClick={() => send.mutate()} disabled={send.isPending || !validEmail}>
+                  {send.isPending ? "جارٍ التجهيز..." : "إنشاء رابط التسجيل"}
+                </Button>
+              )}
             </>
           )}
         </DialogFooter>

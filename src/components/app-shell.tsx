@@ -49,6 +49,7 @@ import { FeedbackWidget } from "@/components/feedback-widget";
 import { Button } from "@/components/ui/button";
 import { myOrgId } from "@/lib/use-org-branding";
 import { appPath } from "@/lib/app-path";
+import { usePortalSide } from "@/lib/portal-side";
 import { arNum } from "@/lib/format";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
 import { todayRiyadh } from "@/lib/dates";
@@ -258,6 +259,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // always agree on which page is open.
   const pathname = useRouterState({ select: (s) => appPath(s.location.pathname) });
   const hash = useRouterState({ select: (s) => s.location.hash });
+  const search = useRouterState({ select: (s) => s.location.searchStr });
   const platformTeamPage = pathname === "/hq";
   const [open, setOpen] = useState(false);
   const [canRestore, setCanRestore] = useState(false);
@@ -267,10 +269,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isTenant = !staff && roles.includes("tenant");
   const isOwner = !staff && roles.includes("owner");
   const isTechnician = roles.includes("technician");
-  // A dual owner+tenant account gets the owner nav on the owner pages (/owner-dashboard,
-  // /owner/*) and the tenant nav everywhere else — each nav carries a link to switch to the
-  // other side, so neither dashboard is ever unreachable from the menu.
-  const owner = isOwner && (!isTenant || pathname.startsWith("/owner"));
+  // A dual owner+tenant account gets the nav of the dashboard it is using (see portal-side.ts);
+  // each nav carries a link to switch to the other side.
+  // An owner who is also a tenant: the dashboard they're using decides the menu, also on the pages
+  // both dashboards share (/messages, /documents…), so «الدفعات» never opens the other side.
+  const side = usePortalSide(pathname);
+  const owner = isOwner && (!isTenant || side === "owner");
   const tenant = isTenant && !owner;
   // A tenant-role account with no lease at all is a client (buyer / renter): see clientNav.
   const hasLease = useQuery({
@@ -308,13 +312,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       : ownerNav;
   // فني يملك أيضًا دور مالك/مستأجر: قائمة البوابة ما فيها /portal، فنضيف رابط أعماله.
   const portalRoleNav: PortalNavItem[] = isTechnician
-    ? [...roleNav, { key: "jobs", label: "أعمال الصيانة", icon: Wrench, href: "/portal" }]
+    ? [...roleNav, { key: "jobs", label: "أعمال الصيانة", icon: Wrench, href: "/portal?view=jobs" }]
     : roleNav;
   // A "#قسم" item is active when the URL points at its section; the page's own item only when the
   // URL points at none of its listed sections, so "الرئيسية" lets go once "الدفعات" is chosen.
   const portalItemActive = (href: string) => {
-    const [path = href, section] = href.split("#");
+    const [withQuery = href, section] = href.split("#");
+    const [path = withQuery, query] = withQuery.split("?");
     if (appPath(path) !== pathname) return false;
+    // «أعمال الصيانة» (/portal?view=jobs) is current only on that view.
+    if (query !== undefined) return search.includes(query);
     if (section !== undefined) return section === hash;
     return !portalRoleNav.some((item) => item.href === `${path}#${hash}`);
   };

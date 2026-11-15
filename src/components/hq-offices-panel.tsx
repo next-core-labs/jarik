@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { HqPhotoRequests } from "@/components/hq-photo-requests";
 import { useState } from "react";
 import { BadgeCheck, MessageSquare, Search, ShieldOff, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -70,6 +71,7 @@ export function HqOfficesPanel() {
 
   return (
     <div className="space-y-6">
+      <HqPhotoRequests />
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
