@@ -37,56 +37,16 @@ export const Route = createFileRoute("/api/public/cron/office-reminders")({
           return Response.json({ error: "email not configured" }, { status: 500 });
         }
 
-        const { data: pending, error } = await supabaseAdmin.rpc("pending_reminder_emails", {
-          _limit: 50,
-        });
-        if (error) {
-          console.error("[cron/office-reminders] could not read the outbox", error.message);
+        // نفس المنطق الذي يستدعيه زر «أرسل الآن» في /hq — مكان واحد.
+        try {
+          const { drainReminderEmails } = await import("@/lib/reminder-emails.server");
+          const result = await drainReminderEmails(supabaseAdmin, resendKey);
+          return Response.json(result);
+        } catch (e) {
+          const message = e instanceof Error ? e.message : "drain failed";
+          console.error("[cron/office-reminders]", message);
           return Response.json({ error: "internal error" }, { status: 500 });
         }
-        const rows = pending ?? [];
-        if (rows.length === 0) return Response.json({ sent: 0, failed: 0, pending: 0 });
-
-        const { OfficeActivationEmail } = await import("@/lib/email-templates/office-activation");
-        const { SITE_NAME, SITE_URL, sendViaResend } = await import("@/lib/auth-email.server");
-        const React = await import("react");
-
-        let sent = 0;
-        let failed = 0;
-        for (const row of rows) {
-          try {
-            await sendViaResend(
-              {
-                to: row.to_email,
-                subject: row.subject,
-                element: React.createElement(OfficeActivationEmail, {
-                  siteName: SITE_NAME,
-                  siteUrl: SITE_URL,
-                  title: row.subject.split(" — ")[0] ?? row.subject,
-                  body: row.body,
-                  officeName: row.company_name,
-                  stage: Number(row.stage),
-                }),
-              },
-              resendKey,
-              process.env["EMAIL_FROM"] || undefined,
-            );
-            await supabaseAdmin.rpc("mark_reminder_email", { _id: row.id, _ok: true });
-            sent += 1;
-          } catch (e) {
-            const message = e instanceof Error ? e.message : "send failed";
-            // الفشل يُسجَّل على السطر نفسه، فلا يوقف بقية الصندوق.
-            await supabaseAdmin.rpc("mark_reminder_email", {
-              _id: row.id,
-              _ok: false,
-              _error: message,
-            });
-            failed += 1;
-            console.error("[cron/office-reminders] send failed", row.id, message);
-          }
-        }
-
-        return Response.json({ sent, failed, pending: rows.length - sent - failed });
       },
     },
   },

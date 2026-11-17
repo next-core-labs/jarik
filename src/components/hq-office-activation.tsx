@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useServerFn } from "@tanstack/react-start";
+
 import { supabase } from "@/integrations/supabase/client";
+import { hqSendReminderEmails } from "@/lib/reminder-emails.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +83,20 @@ export function HqOfficeActivation() {
     },
   });
 
+  // التصريف اليدوي: نفس ما يفعله الـcron يوميًا، ليُجرَّب الآن بلا انتظار.
+  const drain = useServerFn(hqSendReminderEmails);
+  const sendNow = useMutation({
+    mutationFn: async () => await drain({ data: undefined }),
+    onSuccess: async (r) => {
+      if (r.sent === 0 && r.failed === 0) toast.info("لا بريد في الانتظار");
+      else if (r.failed === 0) toast.success(`أُرسل ${r.sent} بريد تذكير`);
+      else toast.warning(`أُرسل ${r.sent} وفشل ${r.failed} — راجع السطور أدناه`);
+      await queryClient.invalidateQueries({ queryKey: ["hq-reminder-emails"] });
+      await queryClient.invalidateQueries({ queryKey: ["hq-office-activation"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر إرسال البريد")),
+  });
+
   const verify = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.rpc("hq_set_office_verified", {
@@ -116,7 +133,18 @@ export function HqOfficeActivation() {
   return (
     <Card className="shadow-deed">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">تفعيل المكاتب — لماذا لا تنشر عروضًا؟</CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <CardTitle className="text-base">تفعيل المكاتب — لماذا لا تنشر عروضًا؟</CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={sendNow.isPending}
+            onClick={() => sendNow.mutate()}
+          >
+            <Mail className="size-4" />
+            {sendNow.isPending ? "جارٍ الإرسال…" : "أرسل بريد التذكير الآن"}
+          </Button>
+        </div>
         {activation.isLoading ? null : (
           <p className="mt-1 text-xs text-muted-foreground">
             {active.length} مكتب ينشر ({liveTotal} عرض ظاهر للزائر) · {blocked.length} متوقف

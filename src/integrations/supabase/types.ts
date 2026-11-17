@@ -1745,6 +1745,84 @@ export type Database = {
           },
         ];
       };
+      office_reminder_emails: {
+        Row: {
+          attempts: number;
+          body: string;
+          created_at: string;
+          error: string | null;
+          id: string;
+          org_id: string | null;
+          sent_at: string | null;
+          stage: number;
+          status: string;
+          subject: string;
+          to_email: string;
+        };
+        Insert: {
+          attempts?: number;
+          body: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          org_id?: string | null;
+          sent_at?: string | null;
+          stage: number;
+          status?: string;
+          subject: string;
+          to_email: string;
+        };
+        Update: {
+          attempts?: number;
+          body?: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          org_id?: string | null;
+          sent_at?: string | null;
+          stage?: number;
+          status?: string;
+          subject?: string;
+          to_email?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "office_reminder_emails_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "office_reminder_emails_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "office_reminder_emails_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "office_reminder_emails_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "office_reminder_emails_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+        ];
+      };
       office_reviews: {
         Row: {
           comment: string | null;
@@ -1948,48 +2026,6 @@ export type Database = {
             referencedColumns: ["office_id"];
           },
         ];
-      };
-      office_reminder_emails: {
-        Row: {
-          attempts: number;
-          body: string;
-          created_at: string;
-          error: string | null;
-          id: string;
-          org_id: string | null;
-          sent_at: string | null;
-          stage: number;
-          status: string;
-          subject: string;
-          to_email: string;
-        };
-        Insert: {
-          attempts?: number;
-          body: string;
-          created_at?: string;
-          error?: string | null;
-          id?: string;
-          org_id?: string | null;
-          sent_at?: string | null;
-          stage: number;
-          status?: string;
-          subject: string;
-          to_email: string;
-        };
-        Update: {
-          attempts?: number;
-          body?: string;
-          created_at?: string;
-          error?: string | null;
-          id?: string;
-          org_id?: string | null;
-          sent_at?: string | null;
-          stage?: number;
-          status?: string;
-          subject?: string;
-          to_email?: string;
-        };
-        Relationships: [];
       };
       org_members: {
         Row: {
@@ -4701,6 +4737,7 @@ export type Database = {
         };
         Returns: string;
       };
+      cron_secret_valid: { Args: { _secret: string }; Returns: boolean };
       decay_vacant_unit_prices: { Args: never; Returns: number };
       decline_hq_invitation: { Args: { _id: string }; Returns: undefined };
       decline_invitation: { Args: { _id: string }; Returns: undefined };
@@ -4849,6 +4886,7 @@ export type Database = {
         Args: { _email: string; _permissions: string[] };
         Returns: string;
       };
+      is_hq_offices_me: { Args: never; Returns: boolean };
       is_office_manager: { Args: never; Returns: boolean };
       is_staff: { Args: { _user_id: string }; Returns: boolean };
       list_hq_admins: {
@@ -4876,6 +4914,10 @@ export type Database = {
           full_name: string;
           phone_hint: string;
         }[];
+      };
+      mark_reminder_email: {
+        Args: { _error?: string; _id: string; _ok: boolean };
+        Returns: undefined;
       };
       market_stats: {
         Args: never;
@@ -4952,22 +4994,6 @@ export type Database = {
       my_reference_code: { Args: never; Returns: string };
       my_referral_code: { Args: never; Returns: string };
       next_invoice_number: { Args: { _year: number }; Returns: string };
-      cron_secret_valid: { Args: { _secret: string }; Returns: boolean };
-      mark_reminder_email: {
-        Args: { _error?: string; _id: string; _ok: boolean };
-        Returns: undefined;
-      };
-      pending_reminder_emails: {
-        Args: { _limit?: number };
-        Returns: {
-          body: string;
-          company_name: string;
-          id: string;
-          stage: number;
-          subject: string;
-          to_email: string;
-        }[];
-      };
       notify_cold_offices: { Args: never; Returns: number };
       notify_expiring_leases: { Args: { _days?: number }; Returns: number };
       notify_lease_tenant: {
@@ -5304,6 +5330,17 @@ export type Database = {
           rent_request_status: string;
           unit_id: string;
           vacant_since: string;
+        }[];
+      };
+      pending_reminder_emails: {
+        Args: { _limit?: number };
+        Returns: {
+          body: string;
+          company_name: string;
+          id: string;
+          stage: number;
+          subject: string;
+          to_email: string;
         }[];
       };
       record_market_request_contact: {
