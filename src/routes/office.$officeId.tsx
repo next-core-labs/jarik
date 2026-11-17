@@ -3,6 +3,7 @@ import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-rout
 import { AdvertiserPage, type AdvertiserPageData } from "@/components/advertiser-page";
 import { tf } from "@/components/listing-detail/format";
 import { SiteHeader } from "@/components/site-header";
+import { UnitRequestForm } from "@/components/unit-request-form";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { langSearch, localeFromSearch, useLocale } from "@/lib/i18n";
@@ -153,8 +154,26 @@ export const Route = createFileRoute("/office/$officeId")({
 function OfficePage() {
   useTrackSiteVisit("/office/$officeId");
   const data = Route.useLoaderData();
+  const { officeId } = Route.useParams();
+  const [locale] = useLocale();
   if (data.status !== "ok") return <OfficeUnavailable error />;
-  return <AdvertiserPage page={data.page} listings={data.listings} />;
+  return (
+    <AdvertiserPage
+      page={data.page}
+      listings={data.listings}
+      // «رابط المكتب»: الطلب يصل هذا المكتب وحده (unit_requests) ويظهر في شاشة طلباته فورًا.
+      requestForm={
+        <UnitRequestForm
+          officeId={officeId}
+          officeName={data.page.name}
+          city={data.address.city}
+          district={data.address.district}
+          locale={locale}
+          heading={tf(locale, "adv_request_title")}
+        />
+      }
+    />
+  );
 }
 
 /** A missing office (404) or one that failed to load, with the way back to the market. */

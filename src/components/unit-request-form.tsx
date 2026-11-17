@@ -29,6 +29,7 @@ export function UnitRequestForm({
   officeName,
   purpose = "rent",
   locale = "ar",
+  heading,
 }: {
   unitType?: string;
   district?: string | null;
@@ -42,6 +43,8 @@ export function UnitRequestForm({
   /** Renting or buying — taken from the listing the visitor is looking at. */
   purpose?: ListingPurpose;
   locale?: Locale;
+  /** عنوان النموذج: «اطلب هذه الوحدة» افتراضيًا، وعلى صفحة المكتب «أرسل طلبك لهذا المكتب». */
+  heading?: string;
 }) {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -130,7 +133,7 @@ export function UnitRequestForm({
         submit.mutate();
       }}
     >
-      <h2 className="text-lg font-bold">{t("ld_request_title")}</h2>
+      <h2 className="text-lg font-bold">{heading ?? t("ld_request_title")}</h2>
 
       <div
         role="radiogroup"

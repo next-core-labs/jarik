@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Handshake, Inbox, Phone } from "lucide-react";
+import { Handshake, Inbox, Link2, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { createDealFromRequest } from "@/lib/office-tools.functions";
 import { sar } from "@/lib/format";
+import { officeListingBlock } from "@/lib/listing-fee";
 import { PageHeader } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +42,49 @@ type RequestRow = {
   notes: string | null;
   status: string;
   created_at: string;
+  /** العرض الذي طُلب منه؛ NULL = وصل عبر «رابط المكتب» من صفحة المكتب العامة. */
+  unit_id: string | null;
 };
+
+/**
+ * «رابط المكتب»: نسخ رابط صفحة المكتب العامة بمرساة النموذج — يوزّعه المكتب على عملائه فتصل
+ * طلباتهم هذه الشاشة مباشرة. معطّل مع السبب ما دام المكتب غير ظاهر في الموقع (نفس شرط النشر).
+ */
+function CopyOfficeLink() {
+  const { data } = useQuery({
+    queryKey: ["office-link"],
+    queryFn: async () => {
+      const { data: orgId } = await supabase.rpc("my_org_id");
+      if (!orgId) return null;
+      const { data: office } = await supabase
+        .from("org_settings")
+        .select("listed_publicly, verified")
+        .eq("id", orgId)
+        .maybeSingle();
+      return office ? { orgId, block: officeListingBlock(office) } : null;
+    },
+  });
+  if (!data) return null;
+  const url = `https://jarak-ksa.com/office/${data.orgId}#request`;
+  return (
+    <Button
+      variant="outline"
+      title={data.block ?? url}
+      disabled={data.block !== null}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          toast.success("نُسخ رابط مكتبك — وزّعه على عملائك وتصل طلباتهم هنا");
+        } catch {
+          toast.info(url);
+        }
+      }}
+    >
+      <Link2 className="size-4" />
+      انسخ رابط مكتبك
+    </Button>
+  );
+}
 
 function Requests() {
   const queryClient = useQueryClient();
@@ -82,7 +125,8 @@ function Requests() {
     <>
       <PageHeader
         title="طلبات الوحدات"
-        subtitle="كل زائر يطلب وحدة من صفحة العرض يوصل طلبك هنا — حوّله إلى صفقة بضغطة."
+        subtitle="طلبات الزوار من صفحات العرض ومن رابط مكتبك تصل هنا — حوّلها إلى صفقات بضغطة."
+        action={<CopyOfficeLink />}
       />
 
       <div className="space-y-3">
@@ -101,11 +145,19 @@ function Requests() {
                     </p>
                   </div>
                 </div>
-                {/* "default" (red) is reserved for price/primary action/available — a converted
-                    lead is none of those. */}
-                <Badge variant={r.status === "converted" ? "outline" : "secondary"}>
-                  {r.status === "converted" ? "تحوّلت صفقة" : "جديد"}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  {r.unit_id === null ? (
+                    <Badge variant="outline" className="gap-1">
+                      <Link2 className="size-3" />
+                      عبر رابط المكتب
+                    </Badge>
+                  ) : null}
+                  {/* "default" (red) is reserved for price/primary action/available — a converted
+                      lead is none of those. */}
+                  <Badge variant={r.status === "converted" ? "outline" : "secondary"}>
+                    {r.status === "converted" ? "تحوّلت صفقة" : "جديد"}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent>

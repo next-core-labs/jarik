@@ -53,9 +53,15 @@ const ratingsCount = (n: number, locale: Locale) =>
 export function AdvertiserPage({
   page,
   listings,
+  requestForm,
 }: {
   page: AdvertiserPageData;
   listings: Listing[];
+  /**
+   * «رابط المكتب»: نموذج طلب موجّه لهذا المكتب وحده، في عمود جانبي ثابت بمرساة #request —
+   * فيوزّع المكتب jarak-ksa.com/office/<id>#request على عملائه ويستقبل طلباتهم في شاشة الطلبات.
+   */
+  requestForm?: ReactNode;
 }) {
   const [locale] = useLocale();
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => tf(locale, key, vars);
@@ -141,8 +147,13 @@ export function AdvertiserPage({
                     · {ratingsCount(page.ratingsCount ?? 0, locale)}
                   </span>
                 ) : null}
-                {tel || wa ? (
+                {tel || wa || requestForm ? (
                   <div className="grid grid-cols-2 gap-2 md:flex">
+                    {requestForm ? (
+                      <Button asChild className="col-span-2 md:order-last">
+                        <a href="#request">{t("adv_request_cta")}</a>
+                      </Button>
+                    ) : null}
                     {wa ? (
                       <Button variant="whatsapp" asChild className={tel ? undefined : "col-span-2"}>
                         <a href={wa} target="_blank" rel="noreferrer">
@@ -174,114 +185,129 @@ export function AdvertiserPage({
           </div>
         </div>
 
-        <main className="mx-auto max-w-[1240px] px-5 pt-2 pb-16">
-          <TabsContent value="offers" className="mt-6">
-            <div className="mb-5 flex flex-col gap-2 sm:flex-row">
-              <div className="relative flex-1">
-                <Search
-                  className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  className="ps-9"
-                  placeholder={t("adv_search_ph")}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  aria-label={t("adv_search_aria")}
-                />
+        <main
+          className={`mx-auto max-w-[1240px] px-5 pt-2 pb-16 ${
+            requestForm ? "grid items-start gap-x-7 lg:grid-cols-[minmax(0,1fr)_360px]" : ""
+          }`}
+        >
+          <div className="min-w-0">
+            <TabsContent value="offers" className="mt-6">
+              <div className="mb-5 flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search
+                    className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <Input
+                    className="ps-9"
+                    placeholder={t("adv_search_ph")}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    aria-label={t("adv_search_aria")}
+                  />
+                </div>
+                <select
+                  aria-label={t("filter_sort")}
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortKey)}
+                  className="h-11 border border-input bg-card px-3 text-[15px] focus-visible:border-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none"
+                >
+                  <option value="newest">{t("sort_newest")}</option>
+                  <option value="price-asc">{t("sort_price_asc")}</option>
+                  <option value="price-desc">{t("sort_price_desc")}</option>
+                  <option value="area-desc">{t("sort_area_desc")}</option>
+                </select>
               </div>
-              <select
-                aria-label={t("filter_sort")}
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                className="h-11 border border-input bg-card px-3 text-[15px] focus-visible:border-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:outline-none"
-              >
-                <option value="newest">{t("sort_newest")}</option>
-                <option value="price-asc">{t("sort_price_asc")}</option>
-                <option value="price-desc">{t("sort_price_desc")}</option>
-                <option value="area-desc">{t("sort_area_desc")}</option>
-              </select>
-            </div>
 
-            {shown.length === 0 ? (
-              <ArchEmptyState
-                title={t(listings.length === 0 ? "adv_empty_none" : "adv_empty_match")}
-                hint={
-                  listings.length === 0
-                    ? t("adv_empty_none_hint", { name: page.name })
-                    : t("adv_empty_match_hint")
-                }
-              >
-                {text ? (
-                  <Button variant="outline" onClick={() => setText("")}>
-                    {t("search_clear")}
+              {shown.length === 0 ? (
+                <ArchEmptyState
+                  title={t(listings.length === 0 ? "adv_empty_none" : "adv_empty_match")}
+                  hint={
+                    listings.length === 0
+                      ? t("adv_empty_none_hint", { name: page.name })
+                      : t("adv_empty_match_hint")
+                  }
+                >
+                  {text ? (
+                    <Button variant="outline" onClick={() => setText("")}>
+                      {t("search_clear")}
+                    </Button>
+                  ) : null}
+                  <Button asChild variant={text ? "ghost" : "outline"}>
+                    <Link to="/" search={langSearch(locale)}>
+                      {t("adv_browse_all")}
+                    </Link>
                   </Button>
-                ) : null}
-                <Button asChild variant={text ? "ghost" : "outline"}>
-                  <Link to="/" search={langSearch(locale)}>
-                    {t("adv_browse_all")}
-                  </Link>
-                </Button>
-              </ArchEmptyState>
-            ) : (
-              <>
-                <p className="mb-3 text-sm text-muted-foreground">
-                  {listingsCount(shown.length, locale)}
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {shown.map((l) => (
-                    <ListingRow key={l.id} listing={l} showAdvertiser={false} locale={locale} />
-                  ))}
-                </div>
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="about" className="mt-6">
-            <div className="max-w-3xl border border-border bg-card p-5 md:p-6">
-              {hasAbout ? (
-                <div className="flex flex-col gap-5">
-                  {page.bio ? (
-                    <p className="text-[15px] leading-relaxed whitespace-pre-line">{page.bio}</p>
-                  ) : null}
-                  {page.propertyTypes || page.areas || page.location || page.licenseNo ? (
-                    <dl className="grid gap-4 border-t border-border pt-5 text-[15px] sm:grid-cols-2">
-                      {page.propertyTypes ? (
-                        <Row label={t("adv_types")} value={page.propertyTypes} />
-                      ) : null}
-                      {page.areas ? <Row label={t("adv_areas")} value={page.areas} /> : null}
-                      {page.location ? (
-                        <Row
-                          label={t("adv_location")}
-                          value={
-                            <span className="flex items-start gap-1.5">
-                              <MapPin
-                                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                                aria-hidden
-                              />
-                              {page.location}
-                            </span>
-                          }
-                        />
-                      ) : null}
-                      {page.licenseNo ? (
-                        <Row
-                          label={t("ld_adv_license")}
-                          value={
-                            <span dir="ltr" className="tabular-nums">
-                              {page.licenseNo}
-                            </span>
-                          }
-                        />
-                      ) : null}
-                    </dl>
-                  ) : null}
-                </div>
+                </ArchEmptyState>
               ) : (
-                <p className="text-muted-foreground">{t("adv_no_bio")}</p>
+                <>
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    {listingsCount(shown.length, locale)}
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {shown.map((l) => (
+                      <ListingRow key={l.id} listing={l} showAdvertiser={false} locale={locale} />
+                    ))}
+                  </div>
+                </>
               )}
-            </div>
-          </TabsContent>
+            </TabsContent>
+
+            <TabsContent value="about" className="mt-6">
+              <div className="max-w-3xl border border-border bg-card p-5 md:p-6">
+                {hasAbout ? (
+                  <div className="flex flex-col gap-5">
+                    {page.bio ? (
+                      <p className="text-[15px] leading-relaxed whitespace-pre-line">{page.bio}</p>
+                    ) : null}
+                    {page.propertyTypes || page.areas || page.location || page.licenseNo ? (
+                      <dl className="grid gap-4 border-t border-border pt-5 text-[15px] sm:grid-cols-2">
+                        {page.propertyTypes ? (
+                          <Row label={t("adv_types")} value={page.propertyTypes} />
+                        ) : null}
+                        {page.areas ? <Row label={t("adv_areas")} value={page.areas} /> : null}
+                        {page.location ? (
+                          <Row
+                            label={t("adv_location")}
+                            value={
+                              <span className="flex items-start gap-1.5">
+                                <MapPin
+                                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                  aria-hidden
+                                />
+                                {page.location}
+                              </span>
+                            }
+                          />
+                        ) : null}
+                        {page.licenseNo ? (
+                          <Row
+                            label={t("ld_adv_license")}
+                            value={
+                              <span dir="ltr" className="tabular-nums">
+                                {page.licenseNo}
+                              </span>
+                            }
+                          />
+                        ) : null}
+                      </dl>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">{t("adv_no_bio")}</p>
+                )}
+              </div>
+            </TabsContent>
+          </div>
+
+          {requestForm ? (
+            <aside
+              id="request"
+              className="mt-6 scroll-mt-4 border border-border bg-card p-[22px] lg:sticky lg:top-4"
+            >
+              {requestForm}
+            </aside>
+          ) : null}
         </main>
       </Tabs>
     </div>
