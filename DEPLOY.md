@@ -19,6 +19,11 @@ Supabase dashboard → **Project Settings → API Keys**.
 - **Secret key** (`sb_secret_…`, or the legacy `service_role` key) → keep it for Cloudflare (B3).
   Never put it in `.env` or in git.
 
+Only `.env` is committed. Every other variant (`.env.production`, `.env.local`, `.env.*.local`) is
+git-ignored, because those are the files a secret ends up in — Vite loads `.env.production` on
+build, so that name invites pasting the secret key. Server secrets go in `.dev.vars` locally
+(also ignored) and in Cloudflare's secrets in production.
+
 ### A2. Create the database ✅
 
 In Terminal, from the project folder:

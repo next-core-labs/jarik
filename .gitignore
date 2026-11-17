@@ -18,6 +18,12 @@ dist-ssr
 
 # Package manager: npm (package-lock.json is committed; Cloudflare installs from it).
 
+# Env: `.env` itself is committed on purpose — it holds only public values (project URL and
+# publishable key), see DEPLOY.md A1. Every OTHER variant is where a real secret ends up: Vite
+# loads `.env.production` on build, so that name invites pasting the secret key. They stay out.
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
