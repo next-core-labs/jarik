@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { canListWithoutPaying, listingPaymentIdFromSearch, marketState } from "./listing-fee";
+import {
+  canListWithoutPaying,
+  featuredUntil,
+  listingPaymentIdFromSearch,
+  marketState,
+  requestPaymentIdFromSearch,
+} from "./listing-fee";
 import { isMoyasarCheckoutUrl } from "./moyasar-url";
 
 const now = new Date("2026-11-01T12:00:00Z");
@@ -57,6 +63,17 @@ describe("listingPaymentIdFromSearch", () => {
   });
 });
 
+describe("requestPaymentIdFromSearch", () => {
+  const id = "0f8b6a3e-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
+
+  it("reads the serious-request payment row id the same way", () => {
+    expect(requestPaymentIdFromSearch(`?request_payment=${id}`)).toBe(id);
+    expect(requestPaymentIdFromSearch(`?request_payment=${id}?id=pay_1&status=paid`)).toBe(id);
+    expect(requestPaymentIdFromSearch(`?listing_payment=${id}`)).toBeNull();
+    expect(requestPaymentIdFromSearch("?request_payment=abc")).toBeNull();
+  });
+});
+
 describe("isMoyasarCheckoutUrl", () => {
   it("accepts only https Moyasar pages", () => {
     expect(isMoyasarCheckoutUrl("https://checkout.moyasar.com/invoices/abc")).toBe(true);
@@ -64,5 +81,15 @@ describe("isMoyasarCheckoutUrl", () => {
     expect(isMoyasarCheckoutUrl("http://checkout.moyasar.com/invoices/abc")).toBe(false);
     expect(isMoyasarCheckoutUrl("https://moyasar.com.evil.example/x")).toBe(false);
     expect(isMoyasarCheckoutUrl("not a url")).toBe(false);
+  });
+});
+
+describe("featuredUntil", () => {
+  it("returns the end date only while the paid feature period still runs", () => {
+    expect(featuredUntil({ featured_until: future }, now)?.toISOString()).toBe(
+      new Date(future).toISOString(),
+    );
+    expect(featuredUntil({ featured_until: past }, now)).toBeNull();
+    expect(featuredUntil({ featured_until: null }, now)).toBeNull();
   });
 });

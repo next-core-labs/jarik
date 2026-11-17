@@ -5,7 +5,7 @@ import { ArrowLeft, Check, Heart, MessageCircle, Phone, Share2, Sofa } from "luc
 import { toast } from "sonner";
 
 import { AdvertiserCard, type AdvertiserView } from "@/components/advertiser-card";
-import { formatNumber } from "@/components/listing-detail/format";
+import { formatNumber, tf } from "@/components/listing-detail/format";
 import { SimilarCard } from "@/components/listing-detail/similar-card";
 import { inquiryText } from "@/components/listing-row";
 import { MortgageCalculator } from "@/components/mortgage-calculator";
@@ -15,9 +15,10 @@ import { SiteHeader } from "@/components/site-header";
 import { UnitRequestForm } from "@/components/unit-request-form";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { loadListingDistrictStat, vsDistrictPct, type PriceStat } from "@/lib/district-prices";
 import { useFavorites } from "@/lib/favorites";
 import { isNativeApp, nativeShare } from "@/lib/native";
-import { langSearch, localeFromSearch, translate, useLocale } from "@/lib/i18n";
+import { langSearch, localeFromSearch, translate, useLocale, type Locale } from "@/lib/i18n";
 import { trackListingEvent } from "@/lib/office-tools.functions";
 import { publicDate, publicNum, publicSar } from "@/lib/format";
 import {
@@ -44,6 +45,8 @@ type UnitPageData =
       photos: string[];
       similar: Listing[];
       advertiser: AdvertiserView;
+      /** إحصاءة حي الإعلان (نفس النوع والغرض) — مادة «مقارنة بمتوسط الحي»، أو null بلا بيانات كافية. */
+      districtStat: PriceStat | null;
     }
   | { status: "missing" }
   | { status: "error" };
@@ -64,37 +67,48 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
     const listing = row ? toListing(row) : null;
     if (!listing) return { status: "missing" };
 
-    const [photosRes, byTypeRes, byDistrictRes, ownerRes, officeRes] = await Promise.all([
-      supabase
-        .from("vacant_unit_photos_public")
-        .select("path, position")
-        .eq("unit_id", unitId)
-        .order("position"),
-      supabase
-        .from("vacant_units_public")
-        .select("*")
-        .eq("unit_type", listing.unitType)
-        .neq("id", unitId)
-        .limit(20),
-      listing.district
-        ? supabase
-            .from("vacant_units_public")
-            .select("*")
-            .eq("district", listing.district)
-            .neq("id", unitId)
-            .limit(20)
-        : Promise.resolve({ data: [] as ListingRowLike[] }),
-      listing.owner
-        ? supabase
-            .from("owner_pages_public")
-            .select("*")
-            .eq("owner_id", listing.owner.id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      listing.office.id
-        ? supabase.from("office_pages_public").select("*").eq("id", listing.office.id).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+    const [photosRes, byTypeRes, byDistrictRes, ownerRes, officeRes, districtStat] =
+      await Promise.all([
+        supabase
+          .from("vacant_unit_photos_public")
+          .select("path, position")
+          .eq("unit_id", unitId)
+          .order("position"),
+        supabase
+          .from("vacant_units_public")
+          .select("*")
+          .eq("unit_type", listing.unitType)
+          .neq("id", unitId)
+          .limit(20),
+        listing.district
+          ? supabase
+              .from("vacant_units_public")
+              .select("*")
+              .eq("district", listing.district)
+              .neq("id", unitId)
+              .limit(20)
+          : Promise.resolve({ data: [] as ListingRowLike[] }),
+        listing.owner
+          ? supabase
+              .from("owner_pages_public")
+              .select("*")
+              .eq("owner_id", listing.owner.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        listing.office.id
+          ? supabase
+              .from("office_pages_public")
+              .select("*")
+              .eq("id", listing.office.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        loadListingDistrictStat({
+          city: listing.city,
+          district: listing.district,
+          unitType: listing.unitType,
+          purpose: listing.purpose,
+        }).catch(() => null),
+      ]);
 
     const photos = (photosRes.data ?? []).map((p) => p.path).filter((p): p is string => Boolean(p));
     const candidates = new Map<string, Listing>();
@@ -133,7 +147,7 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
           ratingsCount: office?.ratings_count ?? null,
         };
 
-    return { status: "ok", listing, photos, similar, advertiser };
+    return { status: "ok", listing, photos, similar, advertiser, districtStat };
   } catch {
     return { status: "error" };
   }
@@ -213,6 +227,16 @@ export const Route = createFileRoute("/unit/$unitId")({
                 ? { floorSize: { "@type": "QuantitativeValue", value: l.area, unitCode: "MTK" } }
                 : {}),
               ...(image ? { image: mediaUrl(image) } : {}),
+              // رقم ترخيص الإعلان من الهيئة العامة للعقار — نفس الرقم الظاهر في الصفحة.
+              ...(l.adLicenseNo
+                ? {
+                    identifier: {
+                      "@type": "PropertyValue",
+                      name: "REGA ad license",
+                      value: l.adLicenseNo,
+                    },
+                  }
+                : {}),
               ...(streetAddress || l.city
                 ? {
                     address: {
@@ -327,7 +351,7 @@ function UnitPublic() {
 
   if (data.status !== "ok") return <UnitUnavailable error />;
 
-  const { listing: l, photos, similar, advertiser } = data;
+  const { listing: l, photos, similar, advertiser, districtStat } = data;
   const title = listingTitle(l);
   const location = listingLocation(l);
 
@@ -446,6 +470,15 @@ function UnitPublic() {
               {districtLine ? (
                 <p className="text-sm text-muted-foreground">{districtLine}</p>
               ) : null}
+              {l.adLicenseNo ? (
+                <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                  <Check className="size-4 text-brass" aria-hidden />
+                  {t("badge_licensed")}
+                  <span dir="ltr" className="tabular-nums">
+                    {l.adLicenseNo}
+                  </span>
+                </p>
+              ) : null}
               <h1 className="text-[28px] leading-[1.35] font-bold text-pretty sm:text-[32px]">
                 {title}
               </h1>
@@ -475,6 +508,8 @@ function UnitPublic() {
                 <p className="text-sm text-muted-foreground">{moreFacts.join(" · ")}</p>
               ) : null}
             </div>
+
+            <DistrictPriceLine listing={l} stat={districtStat} locale={locale} />
 
             {l.description ? (
               <section className="flex flex-col gap-2.5">
@@ -592,5 +627,60 @@ function UnitPublic() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** «هذا الإعلان مقارنة بمتوسط الحي» + رابط صفحة أسعار الحي — يظهر فقط حين للحي بيانات كافية. */
+function DistrictPriceLine({
+  listing: l,
+  stat,
+  locale,
+}: {
+  listing: Listing;
+  stat: PriceStat | null;
+  locale: Locale;
+}) {
+  if (!stat || !l.city || !l.district) return null;
+  const pct = vsDistrictPct(listingPrice(l), stat);
+  const purposeWord =
+    locale === "en"
+      ? l.purpose === "sale"
+        ? "for sale"
+        : "for rent"
+      : l.purpose === "sale"
+        ? "للبيع"
+        : "للإيجار";
+  const line =
+    pct === null
+      ? tf(locale, "ld_vs_district_near")
+      : tf(locale, pct > 0 ? "ld_vs_district_higher" : "ld_vs_district_lower", {
+          pct: publicNum(Math.abs(pct)),
+        });
+  return (
+    <section className="flex flex-col gap-1.5 border border-border bg-card p-4">
+      <p className="text-sm text-muted-foreground">
+        {tf(locale, "ld_vs_district_avg", {
+          type: l.unitType,
+          purpose: purposeWord,
+          district: l.district,
+          avg: publicSar(stat.avgPrice, locale),
+        })}
+      </p>
+      <p
+        className={`text-[15px] font-semibold ${
+          pct === null ? "" : pct > 0 ? "text-destructive" : "text-success"
+        }`}
+      >
+        {line}
+      </p>
+      <Link
+        to="/prices/$city/$district"
+        params={{ city: l.city, district: l.district }}
+        search={langSearch(locale)}
+        className="w-fit text-sm font-medium underline underline-offset-4 hover:text-red-text"
+      >
+        {tf(locale, "ld_vs_district_link", { district: l.district })}
+      </Link>
+    </section>
   );
 }

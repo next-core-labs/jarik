@@ -5,6 +5,31 @@ export const LISTING_PERIOD_DAYS = 30;
 
 export const LISTING_FEE_LABEL = `${LISTING_FEE_SAR} ريال لكل ${LISTING_PERIOD_DAYS} يومًا`;
 
+/** «تمييز الإعلان»: يظهر أولًا في الفرز الافتراضي للسوق — 85 ريالًا (شامل الضريبة) لكل 30 يومًا. */
+export const FEATURE_FEE_SAR = 85;
+export const FEATURE_FEE_HALALAS = FEATURE_FEE_SAR * 100;
+export const FEATURE_PERIOD_DAYS = 30;
+export const FEATURE_FEE_LABEL = `${FEATURE_FEE_SAR} ريالًا لكل ${FEATURE_PERIOD_DAYS} يومًا`;
+
+/**
+ * «الطلب الجاد» في سوق الطلبات (بنمط Serious Request عند dealapp.sa): صاحب الطلب يدفع فيُثبَّت
+ * طلبه أول السوق بشارة 30 يومًا وتُشعَر به كل المكاتب الظاهرة في الموقع — بضمان إعادة المبلغ إذا
+ * تواصل معه أقل من 3 مكاتب خلال الفترة (review_serious_request_guarantees).
+ */
+export const SERIOUS_REQUEST_FEE_SAR = 60;
+export const SERIOUS_REQUEST_FEE_HALALAS = SERIOUS_REQUEST_FEE_SAR * 100;
+export const SERIOUS_REQUEST_PERIOD_DAYS = 30;
+export const SERIOUS_REQUEST_MIN_CONTACTS = 3;
+
+/** نهاية فترة التمييز المدفوعة الجارية، أو null حين لا يوجد تمييز فعّال. */
+export function featuredUntil(
+  unit: { featured_until: string | null },
+  now: Date = new Date(),
+): Date | null {
+  const until = unit.featured_until ? new Date(unit.featured_until) : null;
+  return until && until > now ? until : null;
+}
+
 export type MarketState =
   | { kind: "paid"; until: Date }
   /** Listed before publishing was paid (none left since 2026-11-07: they got 30 paid days). */
@@ -39,6 +64,13 @@ export function canListWithoutPaying(state: MarketState): boolean {
 export function listingPaymentIdFromSearch(search: string): string | null {
   const match =
     /listing_payment=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(search);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+/** العودة من فاتورة «الطلب الجاد» إلى /requests-market تحمل معرّف صف الدفع بنفس الطريقة. */
+export function requestPaymentIdFromSearch(search: string): string | null {
+  const match =
+    /request_payment=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(search);
   return match?.[1]?.toLowerCase() ?? null;
 }
 

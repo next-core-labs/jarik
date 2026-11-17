@@ -49,6 +49,7 @@ import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as OfficeOfficeIdRouteImport } from './routes/office.$officeId'
 import { Route as OwnerOwnerIdRouteImport } from './routes/owner.$ownerId'
 import { Route as OwnerLoginRouteImport } from './routes/owner.login'
+import { Route as PricesIndexRouteImport } from './routes/prices.index'
 import { Route as TenantActivateRouteImport } from './routes/tenant.activate'
 import { Route as TenantLoginRouteImport } from './routes/tenant.login'
 import { Route as UnitUnitIdRouteImport } from './routes/unit.$unitId'
@@ -60,6 +61,7 @@ import { Route as AuthenticatedOwnerPropertiesRouteImport } from './routes/_auth
 import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authenticated/owner.settings'
 import { Route as AuthenticatedTenantSettingsRouteImport } from './routes/_authenticated/tenant.settings'
 import { Route as ApiAuthSendEmailRouteImport } from './routes/api/auth/send-email'
+import { Route as PricesCityDistrictRouteImport } from './routes/prices.$city.$district'
 import { Route as ApiPublicMoyasarWebhookRouteImport } from './routes/api/public/moyasar.webhook'
 import { Route as ApiPublicWhatsappChannelIdRouteImport } from './routes/api/public/whatsapp.$channelId'
 
@@ -269,6 +271,11 @@ const OwnerLoginRoute = OwnerLoginRouteImport.update({
   path: '/owner/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricesIndexRoute = PricesIndexRouteImport.update({
+  id: '/prices/',
+  path: '/prices/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TenantActivateRoute = TenantActivateRouteImport.update({
   id: '/tenant/activate',
   path: '/tenant/activate',
@@ -331,6 +338,11 @@ const ApiAuthSendEmailRoute = ApiAuthSendEmailRouteImport.update({
   path: '/api/auth/send-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricesCityDistrictRoute = PricesCityDistrictRouteImport.update({
+  id: '/prices/$city/$district',
+  path: '/prices/$city/$district',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicMoyasarWebhookRoute = ApiPublicMoyasarWebhookRouteImport.update({
   id: '/api/public/moyasar/webhook',
   path: '/api/public/moyasar/webhook',
@@ -386,6 +398,7 @@ export interface FileRoutesByFullPath {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
+  '/prices/': typeof PricesIndexRoute
   '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
@@ -393,6 +406,7 @@ export interface FileRoutesByFullPath {
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
+  '/prices/$city/$district': typeof PricesCityDistrictRoute
   '/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
@@ -440,6 +454,7 @@ export interface FileRoutesByTo {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
+  '/prices': typeof PricesIndexRoute
   '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
@@ -447,6 +462,7 @@ export interface FileRoutesByTo {
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
+  '/prices/$city/$district': typeof PricesCityDistrictRoute
   '/invoices': typeof AuthenticatedInvoicesIndexRoute
   '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
@@ -496,6 +512,7 @@ export interface FileRoutesById {
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
+  '/prices/': typeof PricesIndexRoute
   '/_authenticated/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/_authenticated/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/_authenticated/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
@@ -503,6 +520,7 @@ export interface FileRoutesById {
   '/_authenticated/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/_authenticated/tenant/settings': typeof AuthenticatedTenantSettingsRoute
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
+  '/prices/$city/$district': typeof PricesCityDistrictRoute
   '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
@@ -552,6 +570,7 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
+    | '/prices/'
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/owner/agreements'
@@ -559,6 +578,7 @@ export interface FileRouteTypes {
     | '/owner/settings'
     | '/tenant/settings'
     | '/api/auth/send-email'
+    | '/prices/$city/$district'
     | '/invoices/'
     | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
@@ -606,6 +626,7 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
+    | '/prices'
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/owner/agreements'
@@ -613,6 +634,7 @@ export interface FileRouteTypes {
     | '/owner/settings'
     | '/tenant/settings'
     | '/api/auth/send-email'
+    | '/prices/$city/$district'
     | '/invoices'
     | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
@@ -661,6 +683,7 @@ export interface FileRouteTypes {
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
+    | '/prices/'
     | '/_authenticated/invoices/$invoiceId'
     | '/_authenticated/invoices/new'
     | '/_authenticated/owner/agreements'
@@ -668,6 +691,7 @@ export interface FileRouteTypes {
     | '/_authenticated/owner/settings'
     | '/_authenticated/tenant/settings'
     | '/api/auth/send-email'
+    | '/prices/$city/$district'
     | '/_authenticated/invoices/'
     | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
@@ -689,7 +713,9 @@ export interface RootRouteChildren {
   TenantActivateRoute: typeof TenantActivateRoute
   TenantLoginRoute: typeof TenantLoginRoute
   UnitUnitIdRoute: typeof UnitUnitIdRoute
+  PricesIndexRoute: typeof PricesIndexRoute
   ApiAuthSendEmailRoute: typeof ApiAuthSendEmailRoute
+  PricesCityDistrictRoute: typeof PricesCityDistrictRoute
   ApiPublicMoyasarWebhookRoute: typeof ApiPublicMoyasarWebhookRoute
   ApiPublicWhatsappChannelIdRoute: typeof ApiPublicWhatsappChannelIdRoute
 }
@@ -976,6 +1002,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prices/': {
+      id: '/prices/'
+      path: '/prices'
+      fullPath: '/prices/'
+      preLoaderRoute: typeof PricesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tenant/activate': {
       id: '/tenant/activate'
       path: '/tenant/activate'
@@ -1051,6 +1084,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/send-email'
       fullPath: '/api/auth/send-email'
       preLoaderRoute: typeof ApiAuthSendEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prices/$city/$district': {
+      id: '/prices/$city/$district'
+      path: '/prices/$city/$district'
+      fullPath: '/prices/$city/$district'
+      preLoaderRoute: typeof PricesCityDistrictRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/moyasar/webhook': {
@@ -1165,7 +1205,9 @@ const rootRouteChildren: RootRouteChildren = {
   TenantActivateRoute: TenantActivateRoute,
   TenantLoginRoute: TenantLoginRoute,
   UnitUnitIdRoute: UnitUnitIdRoute,
+  PricesIndexRoute: PricesIndexRoute,
   ApiAuthSendEmailRoute: ApiAuthSendEmailRoute,
+  PricesCityDistrictRoute: PricesCityDistrictRoute,
   ApiPublicMoyasarWebhookRoute: ApiPublicMoyasarWebhookRoute,
   ApiPublicWhatsappChannelIdRoute: ApiPublicWhatsappChannelIdRoute,
 }

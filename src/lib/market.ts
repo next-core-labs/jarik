@@ -34,8 +34,10 @@ export type Listing = {
   description: string | null;
   amenities: string[];
   createdAt: string | null;
-  /** يميَّز بيدوي من لوحة المدير العام (/hq) — يظهر أولًا بالفرز الافتراضي بالسوق العام. */
+  /** تمييز يدوي من لوحة المدير العام (/hq) أو مدفوع (featured_until) — يظهر أولًا بالفرز الافتراضي. */
   featured: boolean;
+  /** رقم ترخيص الإعلان العقاري من الهيئة العامة للعقار — null حين لم يسجّله المعلن. */
+  adLicenseNo: string | null;
   coverPath: string | null;
   photosCount: number;
   /** إحداثية تقريبية (منزلتان عشريتان) لعرض خريطة الحي وأقرب الخدمات — null لو العقار بلا موقع. */
@@ -81,6 +83,7 @@ export function toListing(row: ListingRow): Listing | null {
     amenities: row.amenities ?? [],
     createdAt: row.created_at,
     featured: Boolean(row.featured),
+    adLicenseNo: row.ad_license_no ?? null,
     coverPath: row.cover_path,
     photosCount: row.photos_count ?? 0,
     lat: row.lat != null ? Number(row.lat) : null,

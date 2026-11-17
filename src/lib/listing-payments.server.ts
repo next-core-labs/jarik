@@ -2,7 +2,11 @@ import { getRequest } from "@tanstack/react-start/server";
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { SITE_URL } from "./auth-email.server";
-import { LISTING_FEE_HALALAS } from "./listing-fee";
+import {
+  FEATURE_FEE_HALALAS,
+  LISTING_FEE_HALALAS,
+  SERIOUS_REQUEST_FEE_HALALAS,
+} from "./listing-fee";
 import {
   MOYASAR_NOT_CONFIGURED,
   cancelMoyasarInvoice,
@@ -24,6 +28,10 @@ type ListingPaymentRow = {
   id: string;
   /** NULL once the unit was deleted; the row stays so a late payment is still recorded. */
   unit_id: string | null;
+  /** طلب سوق الطلبات الذي تُدفع له رسوم «طلب جاد» (kind=request)؛ NULL لرسوم الوحدات. */
+  request_id: string | null;
+  /** publish: رسوم نشر فترة في الموقع. feature: رسوم تمييز الإعلان. request: رسوم طلب جاد. */
+  kind: string;
   status: string;
   amount_halalas: number;
   currency: string;
@@ -35,12 +43,18 @@ type ListingPaymentRow = {
 };
 
 const ROW_COLUMNS =
-  "id, unit_id, status, amount_halalas, currency, moyasar_invoice_id, moyasar_payment_id, invoice_url, refund_reason, created_at";
+  "id, unit_id, request_id, kind, status, amount_halalas, currency, moyasar_invoice_id, moyasar_payment_id, invoice_url, refund_reason, created_at";
 
-/** Money taken for a unit that could no longer be published (settle_listing_payment: needs_refund). */
-function notPublishedError(reason: string | null): Error {
+/** Money taken for a unit/request that could no longer be published/featured (settle: needs_refund). */
+function notPublishedError(kind: string, reason: string | null): Error {
+  const what =
+    kind === "request"
+      ? "لم يُفعَّل الطلب الجاد"
+      : kind === "feature"
+        ? "لم يُميَّز الإعلان"
+        : "لم تُنشر الوحدة";
   return new Error(
-    `تم استلام الدفع لكن لم تُنشر الوحدة${reason ? `: ${reason}` : ""}. أبلغنا إدارة جارك وستعيد المبلغ.`,
+    `تم استلام الدفع لكن ${what}${reason ? `: ${reason}` : ""}. أبلغنا إدارة جارك وستعيد المبلغ.`,
   );
 }
 
@@ -88,7 +102,7 @@ export async function revokeListingPayment(
  * when the money arrived but the unit could no longer be published.
  */
 export async function settleIfInvoicePaid(row: ListingPaymentRow): Promise<string | null> {
-  if (row.status === "needs_refund") throw notPublishedError(row.refund_reason);
+  if (row.status === "needs_refund") throw notPublishedError(row.kind, row.refund_reason);
   if (row.status === "refunded" || row.status === "voided") return null;
   // A cancelled row is still checked: money Moyasar took for it must still be settled.
   if (!row.moyasar_invoice_id) return null;
@@ -107,7 +121,8 @@ export async function settleIfInvoicePaid(row: ListingPaymentRow): Promise<strin
   const paidUntil = await settleListingPayment(row.id, invoice.paymentIds[0] ?? "");
   if (paidUntil) return paidUntil;
   const settled = await findListingPayment({ id: row.id });
-  if (settled?.status === "needs_refund") throw notPublishedError(settled.refund_reason);
+  if (settled?.status === "needs_refund")
+    throw notPublishedError(settled.kind, settled.refund_reason);
   return null;
 }
 
@@ -137,14 +152,55 @@ export async function openListingInvoice(input: {
   userId: string;
   unitLabel: string;
 }): Promise<{ status: "paid"; paidUntil: string | null } | { status: "pending"; url: string }> {
+  return openInvoice("publish", input);
+}
+
+/** The payment link for featuring a unit's listing («تمييز الإعلان») for the next 30 days. */
+export async function openFeatureInvoice(input: {
+  unitId: string;
+  orgId: string;
+  userId: string;
+  unitLabel: string;
+}): Promise<{ status: "paid"; paidUntil: string | null } | { status: "pending"; url: string }> {
+  return openInvoice("feature", input);
+}
+
+/**
+ * رابط دفع «الطلب الجاد» لصاحب طلب في سوق الطلبات (زائر بلا حساب): 30 يومًا تثبيتًا أول السوق
+ * وإشعارًا لكل المكاتب الظاهرة في الموقع. label يظهر في وصف فاتورة ميسر وإشعارات المنصة.
+ */
+export async function openSeriousRequestInvoice(input: {
+  requestId: string;
+  label: string;
+}): Promise<{ status: "paid"; paidUntil: string | null } | { status: "pending"; url: string }> {
+  return openInvoice("request", { requestId: input.requestId, label: input.label });
+}
+
+type InvoiceTarget =
+  | { unitId: string; orgId: string; userId: string; unitLabel: string }
+  | { requestId: string; label: string };
+
+async function openInvoice(
+  kind: "publish" | "feature" | "request",
+  input: InvoiceTarget,
+): Promise<{ status: "paid"; paidUntil: string | null } | { status: "pending"; url: string }> {
   if (!moyasarConfigured()) throw new Error(MOYASAR_NOT_CONFIGURED);
 
-  const { data: open, error: openError } = await supabaseAdmin
+  const forRequest = "requestId" in input;
+  const amountHalalas = forRequest
+    ? SERIOUS_REQUEST_FEE_HALALAS
+    : kind === "feature"
+      ? FEATURE_FEE_HALALAS
+      : LISTING_FEE_HALALAS;
+
+  const openQuery = supabaseAdmin
     .from("listing_payments")
     .select(ROW_COLUMNS)
-    .eq("unit_id", input.unitId)
-    .eq("status", "initiated")
-    .maybeSingle();
+    .eq("kind", kind)
+    .eq("status", "initiated");
+  const { data: open, error: openError } = await (
+    forRequest ? openQuery.eq("request_id", input.requestId) : openQuery.eq("unit_id", input.unitId)
+  ).maybeSingle();
   if (openError) throw openError;
 
   if (open) {
@@ -163,24 +219,34 @@ export async function openListingInvoice(input: {
     } else if (Date.now() - new Date(open.created_at).getTime() > STALE_OPEN_ROW_MS) {
       await cancelRow(open.id);
     } else {
-      throw new Error("جارٍ إنشاء رابط الدفع لهذه الوحدة. حاول بعد لحظات.");
+      throw new Error("جارٍ إنشاء رابط الدفع. حاول بعد لحظات.");
     }
   }
 
   const { data: row, error: insertError } = await supabaseAdmin
     .from("listing_payments")
-    .insert({
-      unit_id: input.unitId,
-      org_id: input.orgId,
-      created_by: input.userId,
-      amount_halalas: LISTING_FEE_HALALAS,
-      unit_label: input.unitLabel,
-    })
+    .insert(
+      forRequest
+        ? {
+            request_id: input.requestId,
+            kind,
+            amount_halalas: amountHalalas,
+            unit_label: input.label,
+          }
+        : {
+            unit_id: input.unitId,
+            org_id: input.orgId,
+            created_by: input.userId,
+            kind,
+            amount_halalas: amountHalalas,
+            unit_label: input.unitLabel,
+          },
+    )
     .select("id")
     .single();
   if (insertError) {
     if (insertError.code === "23505") {
-      throw new Error("جارٍ إنشاء رابط الدفع لهذه الوحدة. حاول بعد لحظات.");
+      throw new Error("جارٍ إنشاء رابط الدفع. حاول بعد لحظات.");
     }
     throw insertError;
   }
@@ -189,14 +255,20 @@ export async function openListingInvoice(input: {
   let invoice;
   try {
     invoice = await createMoyasarInvoice({
-      amountHalalas: LISTING_FEE_HALALAS,
-      description: `نشر عرض في جارك لمدة 30 يومًا — ${input.unitLabel}`,
-      successUrl: `${origin}/properties?listing_payment=${row.id}`,
-      backUrl: `${origin}/properties`,
+      amountHalalas,
+      description: forRequest
+        ? `طلب جاد في سوق طلبات جارك لمدة 30 يومًا — ${input.label}`
+        : kind === "feature"
+          ? `تمييز إعلان في جارك لمدة 30 يومًا — ${input.unitLabel}`
+          : `نشر عرض في جارك لمدة 30 يومًا — ${input.unitLabel}`,
+      successUrl: forRequest
+        ? `${origin}/requests-market?request_payment=${row.id}`
+        : `${origin}/properties?listing_payment=${row.id}`,
+      backUrl: forRequest ? `${origin}/requests-market` : `${origin}/properties`,
       metadata: {
         source: LISTING_METADATA_SOURCE,
         listing_payment_id: row.id,
-        unit_id: input.unitId,
+        ...(forRequest ? { request_id: input.requestId } : { unit_id: input.unitId }),
       },
     });
   } catch (e) {

@@ -418,6 +418,45 @@ export type Database = {
           },
         ];
       };
+      district_price_history: {
+        Row: {
+          avg_area: number | null;
+          avg_price: number;
+          city: string;
+          district: string;
+          listing_purpose: string;
+          listings: number;
+          max_price: number;
+          min_price: number;
+          snapshot_date: string;
+          unit_type: string;
+        };
+        Insert: {
+          avg_area?: number | null;
+          avg_price: number;
+          city: string;
+          district: string;
+          listing_purpose: string;
+          listings: number;
+          max_price: number;
+          min_price: number;
+          snapshot_date?: string;
+          unit_type: string;
+        };
+        Update: {
+          avg_area?: number | null;
+          avg_price?: number;
+          city?: string;
+          district?: string;
+          listing_purpose?: string;
+          listings?: number;
+          max_price?: number;
+          min_price?: number;
+          snapshot_date?: string;
+          unit_type?: string;
+        };
+        Relationships: [];
+      };
       expenses: {
         Row: {
           amount: number;
@@ -1032,6 +1071,7 @@ export type Database = {
           currency: string;
           id: string;
           invoice_url: string | null;
+          kind: string;
           moyasar_invoice_id: string | null;
           moyasar_payment_id: string | null;
           org_id: string | null;
@@ -1039,6 +1079,7 @@ export type Database = {
           period_days: number;
           refund_reason: string | null;
           refunded_at: string | null;
+          request_id: string | null;
           status: string;
           unit_id: string | null;
           unit_label: string | null;
@@ -1050,6 +1091,7 @@ export type Database = {
           currency?: string;
           id?: string;
           invoice_url?: string | null;
+          kind?: string;
           moyasar_invoice_id?: string | null;
           moyasar_payment_id?: string | null;
           org_id?: string | null;
@@ -1057,6 +1099,7 @@ export type Database = {
           period_days?: number;
           refund_reason?: string | null;
           refunded_at?: string | null;
+          request_id?: string | null;
           status?: string;
           unit_id?: string | null;
           unit_label?: string | null;
@@ -1068,6 +1111,7 @@ export type Database = {
           currency?: string;
           id?: string;
           invoice_url?: string | null;
+          kind?: string;
           moyasar_invoice_id?: string | null;
           moyasar_payment_id?: string | null;
           org_id?: string | null;
@@ -1075,6 +1119,7 @@ export type Database = {
           period_days?: number;
           refund_reason?: string | null;
           refunded_at?: string | null;
+          request_id?: string | null;
           status?: string;
           unit_id?: string | null;
           unit_label?: string | null;
@@ -1107,6 +1152,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "listing_payments_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "market_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "market_requests_public";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "listing_payments_unit_id_fkey";
@@ -1362,6 +1421,70 @@ export type Database = {
           },
         ];
       };
+      market_request_contacts: {
+        Row: {
+          created_at: string;
+          org_id: string;
+          request_id: string;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          org_id: string;
+          request_id: string;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          org_id?: string;
+          request_id?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "market_request_contacts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "market_request_contacts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "market_request_contacts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "market_request_contacts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "market_request_contacts_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "market_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "market_request_contacts_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "market_requests_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       market_requests: {
         Row: {
           budget_max: number | null;
@@ -1375,6 +1498,8 @@ export type Database = {
           notes: string | null;
           phone: string;
           purpose: string;
+          serious_reviewed_at: string | null;
+          serious_until: string | null;
           status: string;
           unit_type: string | null;
           updated_at: string;
@@ -1391,6 +1516,8 @@ export type Database = {
           notes?: string | null;
           phone: string;
           purpose?: string;
+          serious_reviewed_at?: string | null;
+          serious_until?: string | null;
           status?: string;
           unit_type?: string | null;
           updated_at?: string;
@@ -1407,6 +1534,8 @@ export type Database = {
           notes?: string | null;
           phone?: string;
           purpose?: string;
+          serious_reviewed_at?: string | null;
+          serious_until?: string | null;
           status?: string;
           unit_type?: string | null;
           updated_at?: string;
@@ -2704,6 +2833,45 @@ export type Database = {
           },
         ];
       };
+      saved_searches: {
+        Row: {
+          created_at: string;
+          furnished: string;
+          id: string;
+          last_notified_at: string;
+          max_price: number | null;
+          min_rooms: number;
+          purpose: string;
+          text_query: string;
+          unit_type: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          furnished?: string;
+          id?: string;
+          last_notified_at?: string;
+          max_price?: number | null;
+          min_rooms?: number;
+          purpose?: string;
+          text_query?: string;
+          unit_type?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          furnished?: string;
+          id?: string;
+          last_notified_at?: string;
+          max_price?: number | null;
+          min_rooms?: number;
+          purpose?: string;
+          text_query?: string;
+          unit_type?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       site_visits: {
         Row: {
           created_at: string;
@@ -2992,7 +3160,50 @@ export type Database = {
           unit_id?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "unit_photo_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       unit_photos: {
         Row: {
@@ -3141,6 +3352,7 @@ export type Database = {
       };
       units: {
         Row: {
+          ad_license_no: string | null;
           amenities: string[];
           annual_rent: number;
           area: number | null;
@@ -3152,6 +3364,7 @@ export type Database = {
           electricity_meter_no: string | null;
           featured: boolean;
           featured_at: string | null;
+          featured_until: string | null;
           floor_no: string | null;
           furnished: boolean;
           furnishing: string;
@@ -3185,6 +3398,7 @@ export type Database = {
           water_meter_no: string | null;
         };
         Insert: {
+          ad_license_no?: string | null;
           amenities?: string[];
           annual_rent?: number;
           area?: number | null;
@@ -3196,6 +3410,7 @@ export type Database = {
           electricity_meter_no?: string | null;
           featured?: boolean;
           featured_at?: string | null;
+          featured_until?: string | null;
           floor_no?: string | null;
           furnished?: boolean;
           furnishing?: string;
@@ -3229,6 +3444,7 @@ export type Database = {
           water_meter_no?: string | null;
         };
         Update: {
+          ad_license_no?: string | null;
           amenities?: string[];
           annual_rent?: number;
           area?: number | null;
@@ -3240,6 +3456,7 @@ export type Database = {
           electricity_meter_no?: string | null;
           featured?: boolean;
           featured_at?: string | null;
+          featured_until?: string | null;
           floor_no?: string | null;
           furnished?: boolean;
           furnishing?: string;
@@ -3496,38 +3713,58 @@ export type Database = {
       };
     };
     Views: {
+      district_price_stats: {
+        Row: {
+          avg_area: number | null;
+          avg_price: number | null;
+          city: string | null;
+          district: string | null;
+          listing_purpose: string | null;
+          listings: number | null;
+          max_price: number | null;
+          min_price: number | null;
+          unit_type: string | null;
+        };
+        Relationships: [];
+      };
       market_requests_public: {
         Row: {
           budget_max: number | null;
           budget_min: number | null;
           city: string | null;
+          contacts_count: number | null;
           created_at: string | null;
           district: string | null;
           id: string | null;
           notes: string | null;
           purpose: string | null;
+          serious: boolean | null;
           unit_type: string | null;
         };
         Insert: {
           budget_max?: number | null;
           budget_min?: number | null;
           city?: string | null;
+          contacts_count?: never;
           created_at?: string | null;
           district?: string | null;
           id?: string | null;
           notes?: string | null;
           purpose?: string | null;
+          serious?: never;
           unit_type?: string | null;
         };
         Update: {
           budget_max?: number | null;
           budget_min?: number | null;
           city?: string | null;
+          contacts_count?: never;
           created_at?: string | null;
           district?: string | null;
           id?: string | null;
           notes?: string | null;
           purpose?: string | null;
+          serious?: never;
           unit_type?: string | null;
         };
         Relationships: [];
@@ -3652,6 +3889,7 @@ export type Database = {
       };
       vacant_units_public: {
         Row: {
+          ad_license_no: string | null;
           amenities: string[] | null;
           annual_rent: number | null;
           area: number | null;
@@ -3833,12 +4071,42 @@ export type Database = {
           whatsapp_locked: boolean;
         }[];
       };
+      hq_photo_requests: {
+        Args: never;
+        Returns: {
+          city: string;
+          created_at: string;
+          district: string;
+          hq_note: string;
+          id: string;
+          lat: number;
+          lng: number;
+          notes: string;
+          office_name: string;
+          office_phone: string;
+          requested_by_name: string;
+          requested_by_phone: string;
+          scheduled_for: string;
+          status: string;
+          unit_id: string;
+          unit_label: string;
+        }[];
+      };
       hq_set_office_flags: {
         Args: { _org: string; _whatsapp_locked: boolean };
         Returns: undefined;
       };
       hq_set_office_verified: {
         Args: { _org: string; _verified: boolean };
+        Returns: undefined;
+      };
+      hq_set_photo_request: {
+        Args: {
+          _id: string;
+          _note?: string;
+          _scheduled_for?: string;
+          _status: string;
+        };
         Returns: undefined;
       };
       hq_set_unit_featured: {
@@ -3875,39 +4143,6 @@ export type Database = {
           org_id: string;
           unit_label: string;
         }[];
-      };
-      hq_photo_requests: {
-        Args: never;
-        Returns: {
-          city: string;
-          created_at: string;
-          district: string;
-          hq_note: string;
-          id: string;
-          lat: number;
-          lng: number;
-          notes: string;
-          office_name: string;
-          office_phone: string;
-          requested_by_name: string;
-          requested_by_phone: string;
-          scheduled_for: string;
-          status: string;
-          unit_id: string;
-          unit_label: string;
-        }[];
-      };
-      hq_set_photo_request: {
-        Args: { _id: string; _note?: string; _scheduled_for?: string; _status: string };
-        Returns: undefined;
-      };
-      request_unit_photos: {
-        Args: { _notes?: string; _unit_id: string };
-        Returns: string;
-      };
-      office_invite_tenant_by_code: {
-        Args: { _code: string; _lease_id: string };
-        Returns: string;
       };
       lookup_account_by_code: {
         Args: { _code: string };
@@ -4003,6 +4238,7 @@ export type Database = {
         Returns: undefined;
       };
       notify_overdue_lease_decisions: { Args: never; Returns: number };
+      notify_saved_search_matches: { Args: never; Returns: number };
       notify_unit: {
         Args: { _body: string; _kind: string; _title: string; _unit_id: string };
         Returns: undefined;
@@ -4062,6 +4298,10 @@ export type Database = {
           kind: string;
           role: string;
         }[];
+      };
+      office_invite_tenant_by_code: {
+        Args: { _code: string; _lease_id: string };
+        Returns: string;
       };
       office_link_client: {
         Args: { _email: string; _kind: string };
@@ -4196,6 +4436,14 @@ export type Database = {
         }[];
       };
       owner_finance_summary: { Args: never; Returns: Json };
+      owner_listing_stats: {
+        Args: never;
+        Returns: {
+          contacts: number;
+          unit_id: string;
+          views: number;
+        }[];
+      };
       owner_offices: {
         Args: never;
         Returns: {
@@ -4316,6 +4564,10 @@ export type Database = {
           vacant_since: string;
         }[];
       };
+      record_market_request_contact: {
+        Args: { _request_id: string };
+        Returns: undefined;
+      };
       record_payment: {
         Args: {
           _amount: number;
@@ -4377,6 +4629,11 @@ export type Database = {
         Args: { _payment_id: string };
         Returns: undefined;
       };
+      request_unit_photos: {
+        Args: { _notes?: string; _unit_id: string };
+        Returns: string;
+      };
+      review_serious_request_guarantees: { Args: never; Returns: number };
       revoke_hq_invitation: { Args: { _id: string }; Returns: undefined };
       revoke_listing_payment: {
         Args: { _payment_id: string; _status: string };
@@ -4404,6 +4661,7 @@ export type Database = {
         }[];
       };
       smart_payment_reminders: { Args: never; Returns: number };
+      snapshot_district_prices: { Args: never; Returns: number };
       staff_resolve_rent_request: {
         Args: { _reply?: string; _request_id: string; _status: string };
         Returns: undefined;

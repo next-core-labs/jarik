@@ -41,22 +41,65 @@ export const submitMarketRequest = createServerFn({ method: "POST" })
       throw new Error("نشرت طلبات كافية خلال الساعة الماضية — حاول لاحقًا");
     }
 
-    const { error } = await supabaseAdmin.from("market_requests").insert({
-      full_name: data.fullName,
-      phone: data.phone,
-      purpose: data.purpose,
-      unit_type: data.unitType ?? null,
-      city: data.city ?? null,
-      district: data.district ?? null,
-      budget_min: data.budgetMin ?? null,
-      budget_max: data.budgetMax ?? null,
-      notes: data.notes ?? null,
-    });
-    if (error) {
-      if (error.message?.includes("MARKET_REQUEST_RATE_LIMIT")) {
+    const { data: row, error } = await supabaseAdmin
+      .from("market_requests")
+      .insert({
+        full_name: data.fullName,
+        phone: data.phone,
+        purpose: data.purpose,
+        unit_type: data.unitType ?? null,
+        city: data.city ?? null,
+        district: data.district ?? null,
+        budget_min: data.budgetMin ?? null,
+        budget_max: data.budgetMax ?? null,
+        notes: data.notes ?? null,
+      })
+      .select("id")
+      .single();
+    if (error || !row) {
+      if (error?.message?.includes("MARKET_REQUEST_RATE_LIMIT")) {
         throw new Error("نشرت طلبات كافية خلال الساعة الماضية — حاول لاحقًا");
       }
       throw new Error("تعذّر نشر الطلب — حاول مرة أخرى");
     }
-    return { ok: true };
+    // المعرّف يفتح ترقية «الطلب الجاد» بعد النشر مباشرة؛ وهو معلومة عامة أصلًا في السوق.
+    return { ok: true, id: row.id };
+  });
+
+/**
+ * «الطلب الجاد»: فاتورة ميسر من صاحب الطلب نفسه (زائر بلا حساب) تثبّت طلبه أول السوق بشارة
+ * 30 يومًا وتُشعر كل المكاتب الظاهرة في الموقع — بضمان إعادة المبلغ إذا تواصل معه أقل من 3
+ * مكاتب خلال الفترة. بلا تسجيل دخول عمدًا: الدفع نفسه هو الحارس، وفاتورة واحدة مفتوحة لكل طلب.
+ */
+export const startSeriousRequestPayment = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ requestId: z.guid() }).parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: req, error } = await supabaseAdmin
+      .from("market_requests")
+      .select("id, status, purpose, unit_type, city, district")
+      .eq("id", data.requestId)
+      .maybeSingle();
+    if (error) throw new Error("تعذّر فتح الدفع — حاول مرة أخرى");
+    if (!req || req.status !== "open") throw new Error("الطلب غير موجود أو أُغلق");
+
+    const label =
+      (req.unit_type || (req.purpose === "sale" ? "طلب شراء" : "طلب إيجار")) +
+      (req.district ? ` في حي ${req.district}` : req.city ? ` في ${req.city}` : "");
+    const { openSeriousRequestInvoice } = await import("./listing-payments.server");
+    return openSeriousRequestInvoice({ requestId: req.id, label });
+  });
+
+/** العودة من ميسر: الخادم يسأل ميسر إن دُفعت الفاتورة ويفعّل «الطلب الجاد» — الرابط وحده لا يثبت شيئًا. */
+export const confirmSeriousRequestPayment = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ paymentId: z.guid() }).parse(input))
+  .handler(async ({ data }) => {
+    const { findListingPayment, settleIfInvoicePaid } = await import("./listing-payments.server");
+    const row = await findListingPayment({ id: data.paymentId });
+    if (!row || row.kind !== "request") throw new Error("عملية الدفع غير موجودة");
+    const paidUntil = await settleIfInvoicePaid(row);
+    if (paidUntil) return { status: "paid" as const, paidUntil };
+    return ["cancelled", "refunded", "voided"].includes(row.status)
+      ? { status: "cancelled" as const }
+      : { status: "pending" as const };
   });

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Lock, MessageCircle, Phone, Plus, Search } from "lucide-react";
+import { Check, Lock, MessageCircle, Phone, Plus, Search, Star } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
@@ -13,13 +13,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { SERIOUS_REQUEST_FEE_SAR, requestPaymentIdFromSearch } from "@/lib/listing-fee";
+import { shortDate } from "@/lib/format";
 import { phoneHref, whatsappHref } from "@/lib/market";
 import {
   searchRequests,
+  sortRequests,
   toPublicMarketRequest,
   type PublicMarketRequest,
 } from "@/lib/market-requests";
-import { submitMarketRequest } from "@/lib/market-requests.functions";
+import {
+  confirmSeriousRequestPayment,
+  startSeriousRequestPayment,
+  submitMarketRequest,
+} from "@/lib/market-requests.functions";
 import { PROPERTY_TYPE_GROUPS, type ListingPurpose } from "@/lib/property-types";
 import { parseAmount, parseSaudiMobile } from "@/lib/public-form";
 import { isStaffRole, useMyRoles } from "@/lib/use-role";
@@ -62,9 +69,10 @@ function usePublicRequests() {
         .order("created_at", { ascending: false })
         .limit(300);
       if (error) throw error;
-      return (data ?? [])
-        .map(toPublicMarketRequest)
-        .filter((r): r is PublicMarketRequest => r !== null);
+      // الجاد أولًا (وعد «الطلب الجاد»)، ثم الأحدث.
+      return sortRequests(
+        (data ?? []).map(toPublicMarketRequest).filter((r): r is PublicMarketRequest => r !== null),
+      );
     },
   });
 }
@@ -141,6 +149,30 @@ function RequestsMarket() {
   const contacts = useStaffContacts(isStaff);
   const [text, setText] = useState("");
   const [purposeFilter, setPurposeFilter] = useState<ListingPurpose | "all">("all");
+  const queryClient = useQueryClient();
+
+  // Back from Moyasar: the server asks Moyasar whether it was paid; the URL itself proves nothing.
+  useEffect(() => {
+    const paymentId = requestPaymentIdFromSearch(window.location.search);
+    if (!paymentId) return;
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+    confirmSeriousRequestPayment({ data: { paymentId } })
+      .then((res) => {
+        if (res.status === "paid") {
+          toast.success(tf(locale, "rq_serious_paid", { date: shortDate(res.paidUntil) }));
+        } else if (res.status === "pending") {
+          toast.info(tf(locale, "rq_serious_pending"));
+        } else {
+          toast.warning(tf(locale, "rq_serious_cancelled"));
+        }
+        void queryClient.invalidateQueries({ queryKey: ["market-requests-public"] });
+      })
+      .catch((e: Error) =>
+        toast.error(userErrorMessage(e, tf(locale, "rq_serious_confirm_error"))),
+      );
+    // مرة واحدة عند الفتح: المعامل يُحذف من الرابط قبل أي إعادة تشغيل.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const shown = useMemo(() => {
     const base = requests.data ?? [];
@@ -308,9 +340,23 @@ function RequestRow({
   const wa = contact
     ? whatsappHref(contact.phone, `مرحبًا ${contact.fullName}، بخصوص طلبك في سوق طلبات جارك`)
     : null;
+  // ضمان «الطلب الجاد» يُحتسب من هذه السجلات: مكتب واحد لكل طلب مهما تكررت النقرات.
+  const recordContact = () => {
+    if (staff) void supabase.rpc("record_market_request_contact", { _request_id: r.id });
+  };
 
   return (
-    <article className="flex flex-wrap items-center gap-x-4 gap-y-3 border border-border bg-card px-[18px] py-4">
+    <article
+      className={`flex flex-wrap items-center gap-x-4 gap-y-3 border bg-card px-[18px] py-4 ${
+        r.serious ? "border-brass" : "border-border"
+      }`}
+    >
+      {r.serious ? (
+        <span className="flex h-7 shrink-0 items-center gap-1 bg-brass px-2.5 text-[13px] font-semibold text-brass-foreground">
+          <Star className="size-3.5" aria-hidden />
+          {t("rq_serious_badge")}
+        </span>
+      ) : null}
       {/* Same pill language as the listing badges: ink for rent, outlined for sale. */}
       <Badge
         variant={r.purpose === "sale" ? "outline" : "default"}
@@ -325,6 +371,16 @@ function RequestRow({
         </h2>
         <p className="text-[13px] text-muted-foreground">
           {where} · {postedAgo(r.createdAt, locale)}
+          {r.serious && r.contactsCount > 0
+            ? ` · ${tf(locale, "rq_serious_contacts", {
+                n: publicCount(
+                  r.contactsCount,
+                  locale,
+                  { one: "مكتب واحد", two: "مكتبان", few: "مكاتب", many: "مكتبًا" },
+                  { one: "office", many: "offices" },
+                ),
+              })}`
+            : null}
         </p>
         {r.notes ? (
           <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">{r.notes}</p>
@@ -338,7 +394,7 @@ function RequestRow({
           <span className="max-w-40 truncate text-sm font-medium">{contact.fullName}</span>
           {wa ? (
             <Button size="sm" variant="whatsapp" asChild>
-              <a href={wa} target="_blank" rel="noreferrer">
+              <a href={wa} target="_blank" rel="noreferrer" onClick={recordContact}>
                 <MessageCircle aria-hidden />
                 {t("card_whatsapp")}
               </a>
@@ -346,7 +402,7 @@ function RequestRow({
           ) : null}
           {tel ? (
             <Button size="sm" variant="outline" asChild>
-              <a href={tel}>
+              <a href={tel} onClick={recordContact}>
                 <Phone aria-hidden />
                 {t("card_call")}
               </a>
@@ -373,6 +429,8 @@ function RequestForm({ locale }: { locale: Locale }) {
   const id = useId();
   const queryClient = useQueryClient();
   const [sent, setSent] = useState(false);
+  /** معرّف الطلب المنشور للتو — يفتح ترقية «الطلب الجاد» في لوحة النجاح. */
+  const [sentId, setSentId] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [purpose, setPurpose] = useState<ListingPurpose>("rent");
@@ -422,12 +480,30 @@ function RequestForm({ locale }: { locale: Locale }) {
           notes: notes || undefined,
         },
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       reset();
       setSent(true);
+      setSentId(res.id);
       void queryClient.invalidateQueries({ queryKey: ["market-requests-public"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, t("rq_send_error"))),
+  });
+
+  const paySerious = useMutation({
+    mutationFn: async () => {
+      if (!sentId) throw new Error(t("rq_serious_pay_error"));
+      return await startSeriousRequestPayment({ data: { requestId: sentId } });
+    },
+    onSuccess: (res) => {
+      if (res.status === "pending") {
+        // فاتورة ميسر المستضافة؛ العودة إلى /requests-market?request_payment=… تؤكّد الدفع.
+        window.location.assign(res.url);
+        return;
+      }
+      toast.success(tf(locale, "rq_serious_paid", { date: shortDate(res.paidUntil) }));
+      void queryClient.invalidateQueries({ queryKey: ["market-requests-public"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, t("rq_serious_pay_error"))),
   });
 
   if (sent) {
@@ -438,6 +514,27 @@ function RequestForm({ locale }: { locale: Locale }) {
         </span>
         <p className="text-lg font-bold">{t("rq_sent_title")}</p>
         <p className="text-sm leading-relaxed text-muted-foreground">{t("rq_sent_body")}</p>
+        {sentId ? (
+          <div className="mt-1.5 flex flex-col gap-2 border border-brass bg-brass/10 p-3.5">
+            <p className="flex items-center gap-1.5 text-[15px] font-bold">
+              <Star className="size-4 text-brass" aria-hidden />
+              {t("rq_serious_upsell_title")}
+            </p>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              {t("rq_serious_upsell_body")}
+            </p>
+            <Button
+              className="w-full"
+              disabled={paySerious.isPending}
+              onClick={() => paySerious.mutate()}
+            >
+              <Star aria-hidden />
+              {paySerious.isPending
+                ? t("rq_serious_paying")
+                : tf(locale, "rq_serious_cta", { fee: SERIOUS_REQUEST_FEE_SAR })}
+            </Button>
+          </div>
+        ) : null}
         <Button variant="link" className="h-auto w-fit px-0" onClick={() => setSent(false)}>
           {t("rq_send_another")}
         </Button>

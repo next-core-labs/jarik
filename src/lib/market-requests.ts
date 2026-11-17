@@ -12,6 +12,10 @@ export type PublicMarketRequest = {
   budgetMin: number | null;
   budgetMax: number | null;
   notes: string | null;
+  /** «طلب جاد» مدفوع: يُثبَّت أول السوق بشارة طوال فترته. */
+  serious: boolean;
+  /** عدد المكاتب التي سجّلت تواصلًا مع الطلب — دليل ضمان «3 مكاتب على الأقل». */
+  contactsCount: number;
 };
 
 /** ما يضيفه الموظف المسجَّل فوق النسخة العامة: بيانات التواصل. */
@@ -30,6 +34,8 @@ type PublicRow = {
   budget_min: number | null;
   budget_max: number | null;
   notes: string | null;
+  serious?: boolean | null;
+  contacts_count?: number | null;
 };
 
 export function toPublicMarketRequest(row: PublicRow): PublicMarketRequest | null {
@@ -44,7 +50,18 @@ export function toPublicMarketRequest(row: PublicRow): PublicMarketRequest | nul
     budgetMin: row.budget_min,
     budgetMax: row.budget_max,
     notes: row.notes,
+    serious: row.serious === true,
+    contactsCount: row.contacts_count ?? 0,
   };
+}
+
+/** الجاد أولًا (وعد «الطلب الجاد»)، ثم الأحدث — فرز السوق الافتراضي. */
+export function sortRequests(list: PublicMarketRequest[]): PublicMarketRequest[] {
+  return [...list].sort(
+    (a, b) =>
+      Number(b.serious) - Number(a.serious) ||
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 }
 
 /** «أبحث عن شقة للإيجار في حي الملقا» */

@@ -44,6 +44,7 @@ const row = (over: Partial<ListingRow> = {}): ListingRow => ({
   listing_description: null,
   featured: null,
   list_price: null,
+  ad_license_no: null,
   amenities: [],
   created_at: "2026-09-01T10:00:00Z",
   cover_path: null,

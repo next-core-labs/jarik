@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getRouterInstance } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { districtPricesPath, MIN_LISTINGS_FOR_STATS } from "@/lib/district-prices";
 import {
   sitemapRecordEntries,
   sitemapStaticPaths,
@@ -45,6 +46,23 @@ export const Route = createFileRoute("/sitemap.xml")({
             publicIds("office_pages_public"),
           ]);
           entries.push(...sitemapRecordEntries(unitIds, officeIds));
+        } catch {
+          complete = false;
+        }
+        // صفحات أسعار الأحياء /prices/… — من نفس الـ VIEW الذي تقرأه الصفحات، فما يدخل الخريطة
+        // إلا حي له صفحة حيّة فعلًا (3 عروض فأكثر في صف واحد على الأقل).
+        try {
+          const { data, error } = await supabase
+            .from("district_price_stats")
+            .select("city, district, listings")
+            .limit(2000);
+          if (error) throw error;
+          const paths = new Set<string>();
+          for (const r of data ?? []) {
+            if (!r.city || !r.district || (r.listings ?? 0) < MIN_LISTINGS_FOR_STATS) continue;
+            paths.add(districtPricesPath(r.city, r.district));
+          }
+          entries.push(...[...paths].sort().map((path) => ({ path })));
         } catch {
           complete = false;
         }
