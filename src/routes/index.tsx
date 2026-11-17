@@ -6,6 +6,7 @@ import { Check, Heart, List, LocateFixed, Map as MapIcon, Search, X } from "luci
 import { DemoRequestDialog } from "@/components/demo-request-dialog";
 import { JarakSymbol } from "@/components/jarak-logo";
 import { MarketCard, MarketCardSkeleton } from "@/components/market-card";
+import { SavedSearchBell } from "@/components/saved-search-bell";
 import type { MapBounds } from "@/components/market-map";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
@@ -561,6 +562,7 @@ function Market() {
                 </h2>
                 <span className="truncate text-[13px] text-muted-foreground">{note}</span>
               </div>
+              <SavedSearchBell filters={filters} locale={locale} />
               <Select
                 value={origin && byNearest ? "nearest" : filters.sort}
                 onValueChange={(v) => {

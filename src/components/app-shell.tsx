@@ -95,6 +95,7 @@ const staffNavGroups: { key: string; label: string; items: NavLink[] }[] = [
     label: "السوق والمبيعات",
     items: [
       { to: "/", label: "سوق العروض", icon: Store },
+      { to: "/office-projects", label: "المشاريع العقارية", icon: Building2 },
       { to: "/requests", label: "طلبات الوحدات", icon: ClipboardList },
       { to: "/deals", label: "المبيعات والصفقات", icon: Handshake },
       { to: "/whatsapp", label: "مساعد واتساب", icon: MessageSquare },

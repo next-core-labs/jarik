@@ -19,6 +19,7 @@ import { parseSaudiMobile } from "@/lib/public-form";
 import { toLatinDigits, validateFalLicense } from "@/lib/saudi-id";
 import { compressImage, mediaUrl, uploadListingImage, validateImageFile } from "@/lib/unit-photos";
 import { useOrgBranding } from "@/lib/use-org-branding";
+import { fillAccountPhotoIfEmpty } from "@/lib/photo-sync";
 import { useMyRoles, isStaffRole } from "@/lib/use-role";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -145,10 +146,13 @@ function Settings() {
       if (up.error) throw up.error;
       const { error } = await supabase.from("org_settings").update({ logo_url: path }).eq("id", id);
       if (error) throw error;
+      // No account photo yet: the logo becomes it too (one upload instead of two).
+      return fillAccountPhotoIfEmpty(file);
     },
-    onSuccess: () => {
-      toast.success("تم رفع الشعار");
+    onSuccess: (alsoPhoto) => {
+      toast.success(alsoPhoto ? "تم رفع الشعار — وصار صورة حسابك أيضًا" : "تم رفع الشعار");
       queryClient.invalidateQueries({ queryKey: ["org-branding"] });
+      if (alsoPhoto) queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الشعار")),
   });

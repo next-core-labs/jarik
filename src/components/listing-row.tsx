@@ -100,6 +100,11 @@ export function ListingRow({
         <span className="absolute start-2.5 bottom-2.5 flex flex-wrap gap-1">
           {/* Red is reserved for price, the primary action and the "available" mark — the rent/sale
               purpose label is neither, so both read in ink/plaster, distinguished by text only. */}
+          {l.featured ? (
+            <Badge className="bg-foreground text-background hover:bg-foreground">
+              {t("badge_featured")}
+            </Badge>
+          ) : null}
           <Badge className="bg-brass text-brass-foreground hover:bg-brass">
             {t(l.purpose === "rent" ? "tab_rent" : "tab_sale")}
           </Badge>

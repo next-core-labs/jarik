@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 // Only the pure helpers are imported; the module also imports the Supabase client, which is a
 // lazy proxy and is never touched here.
-import { planPhotoSync, validateImageFile } from "./unit-photos";
+import { photoFolder, planPhotoSync, validateImageFile } from "./unit-photos";
 
 const ex = (id: string, position: number) => ({ id, path: `u/${id}.jpg`, position });
 
@@ -84,5 +84,27 @@ describe("validateImageFile", () => {
     expect(validateImageFile({ type: "application/pdf", size: 1000 })).toMatch(/غير مدعومة/);
     expect(validateImageFile({ type: "image/jpeg", size: 0 })).toMatch(/فارغ/);
     expect(validateImageFile({ type: "image/jpeg", size: 30 * 1024 * 1024 })).toMatch(/كبيرة/);
+  });
+});
+
+describe("photo storage folders", () => {
+  // العقد مع القاعدة: قيد project_photos_path_in_project_folder يشترط أن يبدأ المسار بـ
+  // «projects/<id>/»، وقيد unit_photos_path_in_unit_folder يشترط «<unit id>/». ومجلّد المشروع هو
+  // أيضًا ما يترجمه private.media_folder_org إلى مكتب المشروع في سياسة التخزين — فلو تغيّر البادئة
+  // هنا، يرفض التخزين الرفع ويرفض الجدول الصف، وكلاهما يظهر كخطأ غامض للمكتب.
+  const unitId = "11111111-1111-4111-8111-111111111111";
+  const projectId = "22222222-2222-4222-8222-222222222222";
+
+  it("keeps a unit's files directly under its own id", () => {
+    expect(photoFolder({ kind: "unit", unitId })).toBe(unitId);
+  });
+
+  it("keeps a project's files under projects/<id>", () => {
+    expect(photoFolder({ kind: "project", projectId })).toBe(`projects/${projectId}`);
+  });
+
+  it("never lets a project folder collide with a unit folder", () => {
+    // لو صار مجلّد المشروع هو معرّفه مجرّدًا، لاصطدم بفضاء أسماء الوحدات في نفس الدلو.
+    expect(photoFolder({ kind: "project", projectId })).not.toBe(projectId);
   });
 });

@@ -49,6 +49,19 @@ export const Route = createFileRoute("/sitemap.xml")({
         } catch {
           complete = false;
         }
+        // صفحات المشاريع /project/… — من نفس العرض العام الذي تقرأه الصفحة.
+        try {
+          const { data, error } = await supabase
+            .from("projects_public")
+            .select("id")
+            .order("id")
+            .limit(MAX_ROWS);
+          if (error) throw error;
+          const ids = (data ?? []).map((r) => r.id).filter((id): id is string => Boolean(id));
+          entries.push(...[...new Set(ids)].sort().map((id) => ({ path: `/project/${id}` })));
+        } catch {
+          complete = false;
+        }
         // صفحات أسعار الأحياء /prices/… — من نفس الـ VIEW الذي تقرأه الصفحات، فما يدخل الخريطة
         // إلا حي له صفحة حيّة فعلًا (3 عروض فأكثر في صف واحد على الأقل).
         try {

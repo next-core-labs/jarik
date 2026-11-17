@@ -26,10 +26,16 @@ export function UnitPhotosEditor({
   items,
   onChange,
   disabled = false,
+  max = MAX_UNIT_PHOTOS,
+  hint,
 }: {
   items: PhotoItem[];
   onChange: (items: PhotoItem[]) => void;
   disabled?: boolean;
+  /** سقف الصور — المشروع يحتاج أكثر من الوحدة (مخطط عام، رندرات، موقع). */
+  max?: number;
+  /** السطر تحت الشبكة؛ الافتراضي يتحدّث عن سوق العروض. */
+  hint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef(items);
@@ -45,7 +51,7 @@ export function UnitPhotosEditor({
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
-    const room = MAX_UNIT_PHOTOS - items.length;
+    const room = max - items.length;
     const added: PhotoItem[] = [];
     for (const file of Array.from(files)) {
       const problem = validateImageFile(file);
@@ -54,7 +60,7 @@ export function UnitPhotosEditor({
         continue;
       }
       if (added.length >= room) {
-        toast.warning(`الحد الأقصى ${MAX_UNIT_PHOTOS} صور لكل وحدة`);
+        toast.warning(`الحد الأقصى ${max} صور`);
         break;
       }
       added.push({
@@ -123,7 +129,7 @@ export function UnitPhotosEditor({
           </div>
         ))}
 
-        {items.length < MAX_UNIT_PHOTOS && !disabled ? (
+        {items.length < max && !disabled ? (
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -146,7 +152,7 @@ export function UnitPhotosEditor({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          {items.length} من {MAX_UNIT_PHOTOS} صور — الصورة الأولى هي التي تظهر في سوق العروض.
+          {hint ?? `${items.length} من ${max} صور — الصورة الأولى هي التي تظهر في سوق العروض.`}
           تُصغَّر الصور تلقائيًا قبل الرفع.
         </p>
         {items.length === 0 && !disabled ? (

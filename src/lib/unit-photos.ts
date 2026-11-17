@@ -110,13 +110,31 @@ export async function uploadListingImage(
 }
 
 /**
+ * أين تُحفظ صور هذا الشيء: جدولها، وعمود انتمائها، ومجلّد ملفاتها في listing-media. الوحدة تحفظ
+ * ملفاتها تحت `<unit id>/` والمشروع تحت `projects/<project id>/` — وهذا ما تشترطه قيود الجدولين
+ * وما يفهمه private.media_folder_org في سياسة التخزين.
+ */
+export type PhotoTarget = { kind: "unit"; unitId: string } | { kind: "project"; projectId: string };
+
+/**
+ * مجلّد ملفات هذا الشيء في listing-media. يجب أن يطابق قيدَي المسار في الجدولين
+ * (unit_photos_path_in_unit_folder و project_photos_path_in_project_folder) وما يترجمه
+ * private.media_folder_org إلى مكتب في سياسة التخزين — فأي تغيير هنا يُرفض من الطرفين.
+ */
+export const photoFolder = (t: PhotoTarget) =>
+  t.kind === "unit" ? t.unitId : `projects/${t.projectId}`;
+
+/**
  * Make the database match the editor: upload new photos, then insert/re-order rows, then delete the
  * removed ones (so a failure part-way never loses a photo that was kept). Files uploaded by a failed
  * run are removed again.
+ *
+ * الوحدات والمشاريع تتشاركان هذا المنطق بالضبط — وهو الجزء الدقيق (ترتيب العمليات والتنظيف عند
+ * الفشل)، فيبقى في مكان واحد ولا يُنسخ. ما يختلف هو الجدول وعمود الانتماء فقط.
  */
-export async function syncUnitPhotos(
+export async function syncPhotos(
   client: SupabaseClient<Database>,
-  unitId: string,
+  target: PhotoTarget,
   existing: ExistingPhoto[],
   desired: PhotoItem[],
 ): Promise<void> {
@@ -125,23 +143,34 @@ export async function syncUnitPhotos(
   const uploaded: string[] = [];
 
   try {
-    const rows: { unit_id: string; path: string; position: number }[] = [];
+    const rows: { path: string; position: number }[] = [];
     for (const item of plan.toInsert) {
       const file = byKey.get(item.key)?.file;
       if (!file) continue;
-      const path = await uploadListingImage(client, unitId, await compressImage(file));
+      const path = await uploadListingImage(client, photoFolder(target), await compressImage(file));
       uploaded.push(path);
-      rows.push({ unit_id: unitId, path, position: item.position });
+      rows.push({ path, position: item.position });
     }
     if (rows.length > 0) {
-      const { error } = await client.from("unit_photos").insert(rows);
+      // الفرع هنا من أجل أنواع Supabase المولَّدة لكل جدول — لا لاختلاف في المنطق.
+      const { error } =
+        target.kind === "unit"
+          ? await client
+              .from("unit_photos")
+              .insert(rows.map((r) => ({ ...r, unit_id: target.unitId })))
+          : await client
+              .from("project_photos")
+              .insert(rows.map((r) => ({ ...r, project_id: target.projectId })));
       if (error) throw new Error("تعذّر حفظ الصور");
     }
     for (const move of plan.toMove) {
-      const { error } = await client
-        .from("unit_photos")
-        .update({ position: move.position })
-        .eq("id", move.id);
+      const { error } =
+        target.kind === "unit"
+          ? await client.from("unit_photos").update({ position: move.position }).eq("id", move.id)
+          : await client
+              .from("project_photos")
+              .update({ position: move.position })
+              .eq("id", move.id);
       if (error) throw new Error("تعذّر حفظ ترتيب الصور");
     }
   } catch (e) {
@@ -152,15 +181,36 @@ export async function syncUnitPhotos(
   }
 
   if (plan.toDelete.length > 0) {
-    const { error } = await client
-      .from("unit_photos")
-      .delete()
-      .in(
-        "id",
-        plan.toDelete.map((p) => p.id),
-      );
+    const ids = plan.toDelete.map((p) => p.id);
+    const { error } =
+      target.kind === "unit"
+        ? await client.from("unit_photos").delete().in("id", ids)
+        : await client.from("project_photos").delete().in("id", ids);
     if (error) throw new Error("تعذّر حذف الصور");
     // Best effort: an orphaned file is harmless, a failed cleanup must not fail the save.
     await client.storage.from(LISTING_MEDIA_BUCKET).remove(plan.toDelete.map((p) => p.path));
   }
 }
+
+/** صور وحدة — غلاف رقيق حول syncPhotos، أُبقي باسمه لأنه مستخدم في نافذة الوحدة. */
+export async function syncUnitPhotos(
+  client: SupabaseClient<Database>,
+  unitId: string,
+  existing: ExistingPhoto[],
+  desired: PhotoItem[],
+): Promise<void> {
+  return syncPhotos(client, { kind: "unit", unitId }, existing, desired);
+}
+
+/** صور مشروع عقاري. */
+export async function syncProjectPhotos(
+  client: SupabaseClient<Database>,
+  projectId: string,
+  existing: ExistingPhoto[],
+  desired: PhotoItem[],
+): Promise<void> {
+  return syncPhotos(client, { kind: "project", projectId }, existing, desired);
+}
+
+/** سقف صور المشروع — أعلى من الوحدة: مخطط عام ورندرات وصور موقع. */
+export const MAX_PROJECT_PHOTOS = 15;

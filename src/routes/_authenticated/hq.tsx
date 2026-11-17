@@ -63,6 +63,7 @@ import {
 import { exportWorkbook } from "@/lib/export-excel";
 import { PageHeader } from "@/components/app-shell";
 import { HqDemoRequests } from "@/components/hq-demo-requests";
+import { HqOfficeActivation } from "@/components/hq-office-activation";
 import { HqOfficesPanel } from "@/components/hq-offices-panel";
 import { DirectMessagesTab } from "@/components/direct-messages-tab";
 import { StatCard } from "@/components/stat-card";
@@ -362,6 +363,10 @@ function HqPage() {
 
         {canOffices ? (
           <TabsContent value="offices">
+            {/* أولًا: ما الذي يوقف نشر العروض — قائمة عمل التفعيل قبل إدارة المكاتب نفسها. */}
+            <div className="mb-6">
+              <HqOfficeActivation />
+            </div>
             <HqOfficesPanel />
             <HqDemoRequests />
           </TabsContent>

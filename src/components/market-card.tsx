@@ -8,6 +8,7 @@ import {
   MessageCircle,
   Phone,
   Ruler,
+  Star,
 } from "lucide-react";
 
 import { JarakSymbol } from "@/components/jarak-logo";
@@ -92,6 +93,13 @@ export function MarketCard({
             {t("card_no_photos")}
           </span>
         )}
+        {/* إعلان مميز (يدوي من /hq أو مدفوع): شارة نحاسية أعلى الصورة، والفرز الافتراضي يقدّمه. */}
+        {l.featured ? (
+          <span className="absolute start-1.5 top-1.5 flex h-[22px] items-center gap-1 bg-brass px-[7px] text-xs font-semibold text-brass-foreground">
+            <Star className="size-3 fill-current" aria-hidden />
+            {t("badge_featured")}
+          </span>
+        ) : null}
         <span
           className={cn(
             "absolute start-1.5 bottom-1.5 flex h-[22px] items-center px-[7px] text-xs font-semibold",

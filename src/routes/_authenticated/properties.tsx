@@ -18,6 +18,7 @@ import {
   FileText,
   Handshake,
   Globe,
+  Star,
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -64,8 +65,14 @@ import { buildingSpecsLine, UnitFurnishingLine } from "@/components/unit-specs-s
 import { sar, shortDate, unitStatusLabel } from "@/lib/format";
 import { listClientAccounts } from "@/lib/admin-users.functions";
 import { generateAdText } from "@/lib/pricing.functions";
-import { confirmListingPayment } from "@/lib/listing-payments.functions";
-import { listingPaymentIdFromSearch, marketState, officeListingBlock } from "@/lib/listing-fee";
+import { confirmListingPayment, startFeaturePayment } from "@/lib/listing-payments.functions";
+import {
+  FEATURE_FEE_LABEL,
+  featuredUntil,
+  listingPaymentIdFromSearch,
+  marketState,
+  officeListingBlock,
+} from "@/lib/listing-fee";
 import { useMyRoles } from "@/lib/use-role";
 import { myOrgId } from "@/lib/use-org-branding";
 import { useUnitManagement, type UnitManagement } from "@/lib/unit-management";
@@ -238,14 +245,25 @@ function Properties() {
     window.history.replaceState(window.history.state, "", window.location.pathname);
     confirmPayment({ data: { paymentId } })
       .then((res) => {
+        const feature = res.kind === "feature";
         if (res.status === "paid") {
-          toast.success(`تم الدفع ونُشرت الوحدة في الموقع حتى ${shortDate(res.paidUntil)}`);
+          toast.success(
+            feature
+              ? `تم الدفع وصار الإعلان مميزًا حتى ${shortDate(res.paidUntil)}`
+              : `تم الدفع ونُشرت الوحدة في الموقع حتى ${shortDate(res.paidUntil)}`,
+          );
         } else if (res.status === "pending") {
           toast.info(
-            "لم يتأكد الدفع بعد. إن أتممته فاضغط «نشر في الموقع» على الوحدة مرة أخرى للتحقق.",
+            feature
+              ? "لم يتأكد الدفع بعد. إن أتممته فاضغط «تمييز الإعلان» على الوحدة مرة أخرى للتحقق."
+              : "لم يتأكد الدفع بعد. إن أتممته فاضغط «نشر في الموقع» على الوحدة مرة أخرى للتحقق.",
           );
         } else {
-          toast.warning("أُلغيت عملية الدفع ولم تُنشر الوحدة.");
+          toast.warning(
+            feature
+              ? "أُلغيت عملية الدفع ولم يُميَّز الإعلان."
+              : "أُلغيت عملية الدفع ولم تُنشر الوحدة.",
+          );
         }
         queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
       })
@@ -258,7 +276,7 @@ function Properties() {
       const { data, error } = await supabase
         .from("properties")
         .select(
-          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, owner_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, market_org_id, leases(status, tenants(full_name)))",
+          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, owner_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, market_org_id, featured_until, leases(status, tenants(full_name)))",
         )
         .order("created_at");
       if (error) throw error;
@@ -838,7 +856,7 @@ function Properties() {
   );
 }
 
-/** Whether the unit is on the website, with the (free) publish / hide button. */
+/** Whether the unit is on the website, with the (free) publish / hide button and paid featuring. */
 function UnitMarketStatus({
   unit,
   officeId,
@@ -848,10 +866,16 @@ function UnitMarketStatus({
   onToggle,
 }: {
   unit: {
+    id: string;
     status: string;
     market_listed: boolean;
     market_paid_until: string | null;
     market_org_id: string | null;
+    featured_until: string | null;
+    /** بلا سعر لا تُنشر (guard_market_publish) ولا تظهر في vacant_units_public. */
+    annual_rent: number | null;
+    sale_price: number | null;
+    listing_purpose: string | null;
   };
   /** The viewing office: another office's publication is not this office's. */
   officeId: string | null;
@@ -862,10 +886,29 @@ function UnitMarketStatus({
   publishing: boolean;
   onToggle: (listed: boolean) => void;
 }) {
+  const queryClient = useQueryClient();
   const market = marketState(unit, undefined, officeId);
   const listed = unit.market_listed && (market.kind === "free" || market.kind === "paid");
   // An occupied unit never shows on the website: nothing to publish until it is vacant again.
   const canToggle = canPublish && (listed || unit.status === "vacant");
+  // «0 ر.س» ليس سعرًا: القاعدة ترفض النشر وتخفيه من السوق، فنقول السبب قبل المحاولة لا بعدها.
+  const forSale = unit.listing_purpose === "sale";
+  const hasPrice = Number((forSale ? unit.sale_price : unit.annual_rent) ?? 0) > 0;
+  const featuredTo = featuredUntil(unit);
+  const startFeature = useServerFn(startFeaturePayment);
+  const feature = useMutation({
+    mutationFn: async () => await startFeature({ data: { unitId: unit.id } }),
+    onSuccess: (res) => {
+      if (res.status === "pending") {
+        // فاتورة ميسر المستضافة؛ العودة إلى /properties?listing_payment=… تؤكّد الدفع.
+        window.location.assign(res.url);
+        return;
+      }
+      toast.success(`الإعلان مميز حتى ${shortDate(res.paidUntil)}`);
+      queryClient.invalidateQueries({ queryKey: ["properties-with-units"] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر بدء دفع رسوم التمييز")),
+  });
   return (
     <>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -884,16 +927,42 @@ function UnitMarketStatus({
           </Link>
         </p>
       ) : null}
+      {canToggle && !listed && !hasPrice ? (
+        <p className="rounded-sm border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          أضف {forSale ? "سعر البيع" : "الإيجار السنوي"} قبل النشر — العروض بلا سعر لا تظهر في
+          الموقع.
+        </p>
+      ) : null}
       {canToggle ? (
         <Button
           variant={listed ? "outline" : "default"}
           className="w-full"
-          disabled={publishing}
+          // الإخفاء متاح دائمًا؛ النشر يحتاج سعرًا (القاعدة ترفضه بلا سعر).
+          disabled={publishing || (!listed && !hasPrice)}
           onClick={() => onToggle(!listed)}
         >
           <Globe className="size-4" />
           {publishing ? "جارٍ الحفظ…" : listed ? "إخفاء من الموقع" : "نشر في الموقع — مجانًا"}
         </Button>
+      ) : null}
+      {/* تمييز الإعلان: لعرض منشور فعلًا. المميز يظهر أولًا في الفرز الافتراضي للسوق العام. */}
+      {listed && unit.status === "vacant" && canPublish && !publishBlock ? (
+        featuredTo ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Star className="size-3.5 fill-brass text-brass" />
+            إعلان مميز حتى {shortDate(featuredTo.toISOString())}
+          </p>
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={feature.isPending}
+            onClick={() => feature.mutate()}
+          >
+            <Star className="size-4" />
+            {feature.isPending ? "جارٍ فتح الدفع…" : `تمييز الإعلان — ${FEATURE_FEE_LABEL}`}
+          </Button>
+        )
       ) : null}
     </>
   );

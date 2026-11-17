@@ -6,6 +6,7 @@ import {
   Clock,
   DoorOpen,
   ExternalLink,
+  Eye,
   EyeOff,
   ImageOff,
   TrendingDown,
@@ -164,6 +165,13 @@ function VacancyRow({
           ) : null}
         </p>
         <Advice v={v} />
+        {/* أداء الإعلان (آخر 30 يومًا) — نفس الأحداث التي يراها المكتب في إحصاءاته. */}
+        {v.publiclyListed && v.views !== null ? (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Eye className="size-3.5" aria-hidden />
+            {arNum(v.views)} مشاهدة · {arNum(v.contacts ?? 0)} تواصل خلال آخر ٣٠ يومًا
+          </p>
+        ) : null}
         {v.rentRequest ? <RequestStatus r={v.rentRequest} /> : null}
       </div>
 

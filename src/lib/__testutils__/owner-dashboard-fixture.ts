@@ -322,6 +322,7 @@ export const OWNER_FIXTURE: OwnerDashboardData = {
       peer_units: 1,
     },
   ],
+  adStats: null,
   autoApproveLimit: null,
 };
 

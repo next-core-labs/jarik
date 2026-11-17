@@ -143,9 +143,13 @@ export type OwnerDashboardData = {
   forecast: ForecastMonth[] | null;
   expenses: ExpenseRow[] | null;
   vacancies: VacancyRow[] | null;
+  /** مشاهدات ونقرات تواصل آخر 30 يومًا لإعلانات المالك (owner_listing_stats) — null لو تعذّرت. */
+  adStats: AdStatRow[] | null;
   /** The owner's auto-approve limit for maintenance; null = always ask. */
   autoApproveLimit: number | null;
 };
+
+export type AdStatRow = { unit_id: string; views: number; contacts: number };
 
 export async function loadOwnerDashboard(): Promise<OwnerDashboardData> {
   const [
@@ -159,6 +163,7 @@ export async function loadOwnerDashboard(): Promise<OwnerDashboardData> {
     forecast,
     expenses,
     vacancies,
+    adStats,
     prefs,
   ] = await Promise.all([
     supabase.rpc("owner_units"),
@@ -171,6 +176,7 @@ export async function loadOwnerDashboard(): Promise<OwnerDashboardData> {
     supabase.rpc("owner_cashflow_forecast"),
     supabase.rpc("owner_expenses_12m"),
     supabase.rpc("owner_vacancies"),
+    supabase.rpc("owner_listing_stats"),
     supabase.from("owner_preferences").select("auto_approve_limit").maybeSingle(),
   ]);
   // A failed query must surface as an error, not render as zeros — on a money screen "0 ر.س
@@ -223,6 +229,14 @@ export async function loadOwnerDashboard(): Promise<OwnerDashboardData> {
           peer_units: Number(v.peer_units),
           peer_avg_rent: v.peer_avg_rent === null ? null : Number(v.peer_avg_rent),
           rent_request_rent: v.rent_request_rent === null ? null : Number(v.rent_request_rent),
+        })),
+    // إحصاءات الإعلان مكمّلة: فشلها يسقط السطر فقط، لا الصفحة.
+    adStats: adStats.error
+      ? null
+      : (adStats.data ?? []).map((s) => ({
+          unit_id: s.unit_id,
+          views: Number(s.views),
+          contacts: Number(s.contacts),
         })),
     autoApproveLimit:
       prefs.data?.auto_approve_limit == null ? null : Number(prefs.data.auto_approve_limit),
@@ -330,6 +344,10 @@ export type VacancyInsight = {
   advice: RentAdvice;
   /** The owner's latest request to the office to change this unit's rent, if any. */
   rentRequest: RentRequestStatus | null;
+  /** مشاهدات صفحة الإعلان آخر 30 يومًا — null لو تعذّر جلب الإحصاءات. */
+  views: number | null;
+  /** نقرات الاتصال/الواتساب على الإعلان آخر 30 يومًا. */
+  contacts: number | null;
 };
 
 export type RentRequestStatus = {
@@ -549,7 +567,12 @@ export function deriveDashboard(
       : null,
     ...expenseBreakdown(data.expenses ?? []),
     ...forecastPoints(data.forecast ?? []),
-    vacancies: vacancyInsights(units, data.vacancies ?? [], finance.today || todayRiyadh()),
+    vacancies: vacancyInsights(
+      units,
+      data.vacancies ?? [],
+      finance.today || todayRiyadh(),
+      data.adStats,
+    ),
   };
 }
 
@@ -602,8 +625,14 @@ export function rentAdvice(
   return { kind: "hold" };
 }
 
-function vacancyInsights(units: OwnerUnit[], rows: VacancyRow[], today: string): VacancyInsight[] {
+function vacancyInsights(
+  units: OwnerUnit[],
+  rows: VacancyRow[],
+  today: string,
+  adStats: AdStatRow[] | null,
+): VacancyInsight[] {
   const byId = new Map(rows.map((r) => [r.unit_id, r]));
+  const statsById = new Map((adStats ?? []).map((s) => [s.unit_id, s]));
   return (
     units
       .filter((u) => u.status === "vacant")
@@ -632,6 +661,9 @@ function vacancyInsights(units: OwnerUnit[], rows: VacancyRow[], today: string):
           deltaPct: peerAvg && asking ? Math.round(((asking - peerAvg) / peerAvg) * 100) : null,
           advice: rentAdvice(asking, peerAvg, daysVacant),
           rentRequest: rentRequestOf(v),
+          // بلا إحصاءات (فشل الجلب) يبقى السطر مخفيًا؛ إعلان بلا أحداث يعرض أصفارًا صادقة.
+          views: adStats ? (statsById.get(u.unit_id)?.views ?? 0) : null,
+          contacts: adStats ? (statsById.get(u.unit_id)?.contacts ?? 0) : null,
         };
       })
       // Longest-vacant first: that is where the money is being lost.

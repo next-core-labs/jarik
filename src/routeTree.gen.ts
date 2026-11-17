@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChooseRoleRouteImport } from './routes/choose-role'
 import { Route as OfficesRouteImport } from './routes/offices'
+import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RequestsMarketRouteImport } from './routes/requests-market'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -30,6 +31,7 @@ import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenti
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
+import { Route as AuthenticatedOfficeProjectsRouteImport } from './routes/_authenticated/office-projects'
 import { Route as AuthenticatedOfficeStatsRouteImport } from './routes/_authenticated/office-stats'
 import { Route as AuthenticatedOfficeTeamRouteImport } from './routes/_authenticated/office-team'
 import { Route as AuthenticatedOwnerDashboardRouteImport } from './routes/_authenticated/owner-dashboard'
@@ -50,6 +52,7 @@ import { Route as OfficeOfficeIdRouteImport } from './routes/office.$officeId'
 import { Route as OwnerOwnerIdRouteImport } from './routes/owner.$ownerId'
 import { Route as OwnerLoginRouteImport } from './routes/owner.login'
 import { Route as PricesIndexRouteImport } from './routes/prices.index'
+import { Route as ProjectProjectIdRouteImport } from './routes/project.$projectId'
 import { Route as TenantActivateRouteImport } from './routes/tenant.activate'
 import { Route as TenantLoginRouteImport } from './routes/tenant.login'
 import { Route as UnitUnitIdRouteImport } from './routes/unit.$unitId'
@@ -62,6 +65,7 @@ import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedTenantSettingsRouteImport } from './routes/_authenticated/tenant.settings'
 import { Route as ApiAuthSendEmailRouteImport } from './routes/api/auth/send-email'
 import { Route as PricesCityDistrictRouteImport } from './routes/prices.$city.$district'
+import { Route as ApiPublicCronOfficeRemindersRouteImport } from './routes/api/public/cron.office-reminders'
 import { Route as ApiPublicMoyasarWebhookRouteImport } from './routes/api/public/moyasar.webhook'
 import { Route as ApiPublicWhatsappChannelIdRouteImport } from './routes/api/public/whatsapp.$channelId'
 
@@ -87,6 +91,11 @@ const ChooseRoleRoute = ChooseRoleRouteImport.update({
 const OfficesRoute = OfficesRouteImport.update({
   id: '/offices',
   path: '/offices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RequestsMarketRoute = RequestsMarketRouteImport.update({
@@ -170,6 +179,12 @@ const AuthenticatedNotificationsRoute =
   AuthenticatedNotificationsRouteImport.update({
     id: '/notifications',
     path: '/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOfficeProjectsRoute =
+  AuthenticatedOfficeProjectsRouteImport.update({
+    id: '/office-projects',
+    path: '/office-projects',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOfficeStatsRoute =
@@ -276,6 +291,11 @@ const PricesIndexRoute = PricesIndexRouteImport.update({
   path: '/prices/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectProjectIdRoute = ProjectProjectIdRouteImport.update({
+  id: '/project/$projectId',
+  path: '/project/$projectId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TenantActivateRoute = TenantActivateRouteImport.update({
   id: '/tenant/activate',
   path: '/tenant/activate',
@@ -343,6 +363,12 @@ const PricesCityDistrictRoute = PricesCityDistrictRouteImport.update({
   path: '/prices/$city/$district',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronOfficeRemindersRoute =
+  ApiPublicCronOfficeRemindersRouteImport.update({
+    id: '/api/public/cron/office-reminders',
+    path: '/api/public/cron/office-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicMoyasarWebhookRoute = ApiPublicMoyasarWebhookRouteImport.update({
   id: '/api/public/moyasar/webhook',
   path: '/api/public/moyasar/webhook',
@@ -360,6 +386,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/choose-role': typeof ChooseRoleRoute
   '/offices': typeof OfficesRoute
+  '/projects': typeof ProjectsRoute
   '/requests-market': typeof RequestsMarketRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -376,6 +403,7 @@ export interface FileRoutesByFullPath {
   '/map': typeof AuthenticatedMapRoute
   '/messages': typeof AuthenticatedMessagesRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
+  '/office-projects': typeof AuthenticatedOfficeProjectsRoute
   '/office-stats': typeof AuthenticatedOfficeStatsRoute
   '/office-team': typeof AuthenticatedOfficeTeamRoute
   '/owner-dashboard': typeof AuthenticatedOwnerDashboardRoute
@@ -395,6 +423,7 @@ export interface FileRoutesByFullPath {
   '/office/$officeId': typeof OfficeOfficeIdRoute
   '/owner/$ownerId': typeof OwnerOwnerIdRoute
   '/owner/login': typeof OwnerLoginRoute
+  '/project/$projectId': typeof ProjectProjectIdRoute
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
@@ -408,6 +437,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/prices/$city/$district': typeof PricesCityDistrictRoute
   '/invoices/': typeof AuthenticatedInvoicesIndexRoute
+  '/api/public/cron/office-reminders': typeof ApiPublicCronOfficeRemindersRoute
   '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
@@ -416,6 +446,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/choose-role': typeof ChooseRoleRoute
   '/offices': typeof OfficesRoute
+  '/projects': typeof ProjectsRoute
   '/requests-market': typeof RequestsMarketRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -432,6 +463,7 @@ export interface FileRoutesByTo {
   '/map': typeof AuthenticatedMapRoute
   '/messages': typeof AuthenticatedMessagesRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
+  '/office-projects': typeof AuthenticatedOfficeProjectsRoute
   '/office-stats': typeof AuthenticatedOfficeStatsRoute
   '/office-team': typeof AuthenticatedOfficeTeamRoute
   '/owner-dashboard': typeof AuthenticatedOwnerDashboardRoute
@@ -451,6 +483,7 @@ export interface FileRoutesByTo {
   '/office/$officeId': typeof OfficeOfficeIdRoute
   '/owner/$ownerId': typeof OwnerOwnerIdRoute
   '/owner/login': typeof OwnerLoginRoute
+  '/project/$projectId': typeof ProjectProjectIdRoute
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
@@ -464,6 +497,7 @@ export interface FileRoutesByTo {
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/prices/$city/$district': typeof PricesCityDistrictRoute
   '/invoices': typeof AuthenticatedInvoicesIndexRoute
+  '/api/public/cron/office-reminders': typeof ApiPublicCronOfficeRemindersRoute
   '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
@@ -474,6 +508,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/choose-role': typeof ChooseRoleRoute
   '/offices': typeof OfficesRoute
+  '/projects': typeof ProjectsRoute
   '/requests-market': typeof RequestsMarketRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -490,6 +525,7 @@ export interface FileRoutesById {
   '/_authenticated/map': typeof AuthenticatedMapRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
+  '/_authenticated/office-projects': typeof AuthenticatedOfficeProjectsRoute
   '/_authenticated/office-stats': typeof AuthenticatedOfficeStatsRoute
   '/_authenticated/office-team': typeof AuthenticatedOfficeTeamRoute
   '/_authenticated/owner-dashboard': typeof AuthenticatedOwnerDashboardRoute
@@ -509,6 +545,7 @@ export interface FileRoutesById {
   '/office/$officeId': typeof OfficeOfficeIdRoute
   '/owner/$ownerId': typeof OwnerOwnerIdRoute
   '/owner/login': typeof OwnerLoginRoute
+  '/project/$projectId': typeof ProjectProjectIdRoute
   '/tenant/activate': typeof TenantActivateRoute
   '/tenant/login': typeof TenantLoginRoute
   '/unit/$unitId': typeof UnitUnitIdRoute
@@ -522,6 +559,7 @@ export interface FileRoutesById {
   '/api/auth/send-email': typeof ApiAuthSendEmailRoute
   '/prices/$city/$district': typeof PricesCityDistrictRoute
   '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
+  '/api/public/cron/office-reminders': typeof ApiPublicCronOfficeRemindersRoute
   '/api/public/moyasar/webhook': typeof ApiPublicMoyasarWebhookRoute
   '/api/public/whatsapp/$channelId': typeof ApiPublicWhatsappChannelIdRoute
 }
@@ -532,6 +570,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/choose-role'
     | '/offices'
+    | '/projects'
     | '/requests-market'
     | '/reset-password'
     | '/sitemap.xml'
@@ -548,6 +587,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/messages'
     | '/notifications'
+    | '/office-projects'
     | '/office-stats'
     | '/office-team'
     | '/owner-dashboard'
@@ -567,6 +607,7 @@ export interface FileRouteTypes {
     | '/office/$officeId'
     | '/owner/$ownerId'
     | '/owner/login'
+    | '/project/$projectId'
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
@@ -580,6 +621,7 @@ export interface FileRouteTypes {
     | '/api/auth/send-email'
     | '/prices/$city/$district'
     | '/invoices/'
+    | '/api/public/cron/office-reminders'
     | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
   fileRoutesByTo: FileRoutesByTo
@@ -588,6 +630,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/choose-role'
     | '/offices'
+    | '/projects'
     | '/requests-market'
     | '/reset-password'
     | '/sitemap.xml'
@@ -604,6 +647,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/messages'
     | '/notifications'
+    | '/office-projects'
     | '/office-stats'
     | '/office-team'
     | '/owner-dashboard'
@@ -623,6 +667,7 @@ export interface FileRouteTypes {
     | '/office/$officeId'
     | '/owner/$ownerId'
     | '/owner/login'
+    | '/project/$projectId'
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
@@ -636,6 +681,7 @@ export interface FileRouteTypes {
     | '/api/auth/send-email'
     | '/prices/$city/$district'
     | '/invoices'
+    | '/api/public/cron/office-reminders'
     | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
   id:
@@ -645,6 +691,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/choose-role'
     | '/offices'
+    | '/projects'
     | '/requests-market'
     | '/reset-password'
     | '/sitemap.xml'
@@ -661,6 +708,7 @@ export interface FileRouteTypes {
     | '/_authenticated/map'
     | '/_authenticated/messages'
     | '/_authenticated/notifications'
+    | '/_authenticated/office-projects'
     | '/_authenticated/office-stats'
     | '/_authenticated/office-team'
     | '/_authenticated/owner-dashboard'
@@ -680,6 +728,7 @@ export interface FileRouteTypes {
     | '/office/$officeId'
     | '/owner/$ownerId'
     | '/owner/login'
+    | '/project/$projectId'
     | '/tenant/activate'
     | '/tenant/login'
     | '/unit/$unitId'
@@ -693,6 +742,7 @@ export interface FileRouteTypes {
     | '/api/auth/send-email'
     | '/prices/$city/$district'
     | '/_authenticated/invoices/'
+    | '/api/public/cron/office-reminders'
     | '/api/public/moyasar/webhook'
     | '/api/public/whatsapp/$channelId'
   fileRoutesById: FileRoutesById
@@ -703,6 +753,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ChooseRoleRoute: typeof ChooseRoleRoute
   OfficesRoute: typeof OfficesRoute
+  ProjectsRoute: typeof ProjectsRoute
   RequestsMarketRoute: typeof RequestsMarketRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -710,12 +761,14 @@ export interface RootRouteChildren {
   OfficeOfficeIdRoute: typeof OfficeOfficeIdRoute
   OwnerOwnerIdRoute: typeof OwnerOwnerIdRoute
   OwnerLoginRoute: typeof OwnerLoginRoute
+  ProjectProjectIdRoute: typeof ProjectProjectIdRoute
   TenantActivateRoute: typeof TenantActivateRoute
   TenantLoginRoute: typeof TenantLoginRoute
   UnitUnitIdRoute: typeof UnitUnitIdRoute
   PricesIndexRoute: typeof PricesIndexRoute
   ApiAuthSendEmailRoute: typeof ApiAuthSendEmailRoute
   PricesCityDistrictRoute: typeof PricesCityDistrictRoute
+  ApiPublicCronOfficeRemindersRoute: typeof ApiPublicCronOfficeRemindersRoute
   ApiPublicMoyasarWebhookRoute: typeof ApiPublicMoyasarWebhookRoute
   ApiPublicWhatsappChannelIdRoute: typeof ApiPublicWhatsappChannelIdRoute
 }
@@ -755,6 +808,13 @@ declare module '@tanstack/react-router' {
       path: '/offices'
       fullPath: '/offices'
       preLoaderRoute: typeof OfficesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/requests-market': {
@@ -867,6 +927,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/office-projects': {
+      id: '/_authenticated/office-projects'
+      path: '/office-projects'
+      fullPath: '/office-projects'
+      preLoaderRoute: typeof AuthenticatedOfficeProjectsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/office-stats': {
@@ -1009,6 +1076,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/project/$projectId': {
+      id: '/project/$projectId'
+      path: '/project/$projectId'
+      fullPath: '/project/$projectId'
+      preLoaderRoute: typeof ProjectProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tenant/activate': {
       id: '/tenant/activate'
       path: '/tenant/activate'
@@ -1093,6 +1167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricesCityDistrictRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/office-reminders': {
+      id: '/api/public/cron/office-reminders'
+      path: '/api/public/cron/office-reminders'
+      fullPath: '/api/public/cron/office-reminders'
+      preLoaderRoute: typeof ApiPublicCronOfficeRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/moyasar/webhook': {
       id: '/api/public/moyasar/webhook'
       path: '/api/public/moyasar/webhook'
@@ -1124,6 +1205,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
+  AuthenticatedOfficeProjectsRoute: typeof AuthenticatedOfficeProjectsRoute
   AuthenticatedOfficeStatsRoute: typeof AuthenticatedOfficeStatsRoute
   AuthenticatedOfficeTeamRoute: typeof AuthenticatedOfficeTeamRoute
   AuthenticatedOwnerDashboardRoute: typeof AuthenticatedOwnerDashboardRoute
@@ -1162,6 +1244,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMapRoute: AuthenticatedMapRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
+  AuthenticatedOfficeProjectsRoute: AuthenticatedOfficeProjectsRoute,
   AuthenticatedOfficeStatsRoute: AuthenticatedOfficeStatsRoute,
   AuthenticatedOfficeTeamRoute: AuthenticatedOfficeTeamRoute,
   AuthenticatedOwnerDashboardRoute: AuthenticatedOwnerDashboardRoute,
@@ -1195,6 +1278,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ChooseRoleRoute: ChooseRoleRoute,
   OfficesRoute: OfficesRoute,
+  ProjectsRoute: ProjectsRoute,
   RequestsMarketRoute: RequestsMarketRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
@@ -1202,12 +1286,14 @@ const rootRouteChildren: RootRouteChildren = {
   OfficeOfficeIdRoute: OfficeOfficeIdRoute,
   OwnerOwnerIdRoute: OwnerOwnerIdRoute,
   OwnerLoginRoute: OwnerLoginRoute,
+  ProjectProjectIdRoute: ProjectProjectIdRoute,
   TenantActivateRoute: TenantActivateRoute,
   TenantLoginRoute: TenantLoginRoute,
   UnitUnitIdRoute: UnitUnitIdRoute,
   PricesIndexRoute: PricesIndexRoute,
   ApiAuthSendEmailRoute: ApiAuthSendEmailRoute,
   PricesCityDistrictRoute: PricesCityDistrictRoute,
+  ApiPublicCronOfficeRemindersRoute: ApiPublicCronOfficeRemindersRoute,
   ApiPublicMoyasarWebhookRoute: ApiPublicMoyasarWebhookRoute,
   ApiPublicWhatsappChannelIdRoute: ApiPublicWhatsappChannelIdRoute,
 }

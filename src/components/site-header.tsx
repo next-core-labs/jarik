@@ -54,6 +54,7 @@ export function SiteHeader() {
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const links = [
     { to: "/", label: t("nav_market"), exact: true },
+    { to: "/projects", label: t("nav_projects"), exact: false },
     { to: "/requests-market", label: t("nav_requests"), exact: false },
     { to: "/offices", label: t("nav_offices"), exact: false },
   ] as const;

@@ -6,6 +6,7 @@ import { emailProblem, userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { avatarUrl, uploadAvatar } from "@/lib/avatar";
+import { fillOfficeLogoIfEmpty } from "@/lib/photo-sync";
 import { parseSaudiMobile } from "@/lib/public-form";
 import { compressImage, validateImageFile } from "@/lib/unit-photos";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -158,10 +159,13 @@ export function AccountProfileCard() {
         .update({ avatar_path: path })
         .eq("id", userId);
       if (error) throw error;
+      // An office manager whose office has no logo yet: the same picture becomes the office logo.
+      return fillOfficeLogoIfEmpty(blob);
     },
-    onSuccess: () => {
-      toast.success("تم تحديث الصورة");
+    onSuccess: (alsoLogo) => {
+      toast.success(alsoLogo ? "تم تحديث الصورة — وصارت شعار مكتبك أيضًا" : "تم تحديث الصورة");
       queryClient.invalidateQueries({ queryKey: ["my-account-profile"] });
+      if (alsoLogo) queryClient.invalidateQueries({ queryKey: ["org-branding"] });
     },
     onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر رفع الصورة")),
   });

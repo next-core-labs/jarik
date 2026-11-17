@@ -166,6 +166,13 @@ export type Database = {
             foreignKeyName: "audit_log_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "audit_log_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -306,6 +313,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "deals_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "deals_org_id_fkey";
@@ -523,6 +537,13 @@ export type Database = {
             foreignKeyName: "expenses_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "expenses_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -660,6 +681,13 @@ export type Database = {
             foreignKeyName: "invitations_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -772,6 +800,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "invoices_org_id_fkey";
@@ -958,6 +993,13 @@ export type Database = {
             foreignKeyName: "link_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "link_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -1006,6 +1048,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_events_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "listing_events_org_id_fkey";
@@ -1145,6 +1194,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "listing_payments_org_id_fkey";
@@ -1303,6 +1359,13 @@ export type Database = {
             foreignKeyName: "maintenance_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "maintenance_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -1416,6 +1479,13 @@ export type Database = {
             foreignKeyName: "management_agreements_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "management_agreements_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -1461,6 +1531,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "market_request_contacts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "market_request_contacts_org_id_fkey";
@@ -1656,6 +1733,13 @@ export type Database = {
             foreignKeyName: "notifications_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "notifications_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -1718,6 +1802,13 @@ export type Database = {
             foreignKeyName: "office_reviews_office_id_fkey";
             columns: ["office_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "office_reviews_office_id_fkey";
+            columns: ["office_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -1763,6 +1854,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_clients_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "org_clients_org_id_fkey";
@@ -1839,10 +1937,59 @@ export type Database = {
             foreignKeyName: "org_invitations_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
         ];
+      };
+      office_reminder_emails: {
+        Row: {
+          attempts: number;
+          body: string;
+          created_at: string;
+          error: string | null;
+          id: string;
+          org_id: string | null;
+          sent_at: string | null;
+          stage: number;
+          status: string;
+          subject: string;
+          to_email: string;
+        };
+        Insert: {
+          attempts?: number;
+          body: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          org_id?: string | null;
+          sent_at?: string | null;
+          stage: number;
+          status?: string;
+          subject: string;
+          to_email: string;
+        };
+        Update: {
+          attempts?: number;
+          body?: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          org_id?: string | null;
+          sent_at?: string | null;
+          stage?: number;
+          status?: string;
+          subject?: string;
+          to_email?: string;
+        };
+        Relationships: [];
       };
       org_members: {
         Row: {
@@ -1890,6 +2037,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_members_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "org_members_org_id_fkey";
@@ -2062,6 +2216,13 @@ export type Database = {
             foreignKeyName: "owner_pages_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "owner_pages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -2196,6 +2357,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "owner_rent_requests_org_id_fkey";
@@ -2369,6 +2537,13 @@ export type Database = {
             foreignKeyName: "platform_commissions_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "platform_commissions_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -2482,6 +2657,331 @@ export type Database = {
         };
         Relationships: [];
       };
+      project_interests: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          full_name: string;
+          id: string;
+          model_id: string | null;
+          notes: string | null;
+          org_id: string | null;
+          phone: string;
+          project_id: string;
+          status: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          full_name: string;
+          id?: string;
+          model_id?: string | null;
+          notes?: string | null;
+          org_id?: string | null;
+          phone: string;
+          project_id: string;
+          status?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          full_name?: string;
+          id?: string;
+          model_id?: string | null;
+          notes?: string | null;
+          org_id?: string | null;
+          phone?: string;
+          project_id?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_interests_model_id_fkey";
+            columns: ["model_id"];
+            isOneToOne: false;
+            referencedRelation: "project_models";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_model_id_fkey";
+            columns: ["model_id"];
+            isOneToOne: false;
+            referencedRelation: "project_models_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "project_interests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "project_interests_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_models: {
+        Row: {
+          area: number | null;
+          available_count: number | null;
+          bathrooms: number | null;
+          created_at: string;
+          floor_plan_path: string | null;
+          halls: number | null;
+          id: string;
+          name: string;
+          position: number;
+          price: number;
+          project_id: string;
+          rooms: number | null;
+          unit_type: string;
+          units_count: number | null;
+        };
+        Insert: {
+          area?: number | null;
+          available_count?: number | null;
+          bathrooms?: number | null;
+          created_at?: string;
+          floor_plan_path?: string | null;
+          halls?: number | null;
+          id?: string;
+          name: string;
+          position?: number;
+          price: number;
+          project_id: string;
+          rooms?: number | null;
+          unit_type?: string;
+          units_count?: number | null;
+        };
+        Update: {
+          area?: number | null;
+          available_count?: number | null;
+          bathrooms?: number | null;
+          created_at?: string;
+          floor_plan_path?: string | null;
+          halls?: number | null;
+          id?: string;
+          name?: string;
+          position?: number;
+          price?: number;
+          project_id?: string;
+          rooms?: number | null;
+          unit_type?: string;
+          units_count?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_models_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_models_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_photos: {
+        Row: {
+          caption: string | null;
+          created_at: string;
+          id: string;
+          path: string;
+          position: number;
+          project_id: string;
+          uploaded_by: string | null;
+        };
+        Insert: {
+          caption?: string | null;
+          created_at?: string;
+          id?: string;
+          path: string;
+          position?: number;
+          project_id: string;
+          uploaded_by?: string | null;
+        };
+        Update: {
+          caption?: string | null;
+          created_at?: string;
+          id?: string;
+          path?: string;
+          position?: number;
+          project_id?: string;
+          uploaded_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_photos_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_photos_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      projects: {
+        Row: {
+          amenities: string[];
+          city: string | null;
+          completion_pct: number;
+          created_at: string;
+          created_by: string | null;
+          delivery_quarter: number | null;
+          delivery_year: number | null;
+          description: string | null;
+          developer_name: string | null;
+          district: string | null;
+          featured: boolean;
+          id: string;
+          lat: number | null;
+          lng: number | null;
+          name: string;
+          org_id: string;
+          published: boolean;
+          published_at: string | null;
+          status: string;
+          total_units: number | null;
+          updated_at: string;
+          wafi_license_no: string | null;
+        };
+        Insert: {
+          amenities?: string[];
+          city?: string | null;
+          completion_pct?: number;
+          created_at?: string;
+          created_by?: string | null;
+          delivery_quarter?: number | null;
+          delivery_year?: number | null;
+          description?: string | null;
+          developer_name?: string | null;
+          district?: string | null;
+          featured?: boolean;
+          id?: string;
+          lat?: number | null;
+          lng?: number | null;
+          name: string;
+          org_id: string;
+          published?: boolean;
+          published_at?: string | null;
+          status?: string;
+          total_units?: number | null;
+          updated_at?: string;
+          wafi_license_no?: string | null;
+        };
+        Update: {
+          amenities?: string[];
+          city?: string | null;
+          completion_pct?: number;
+          created_at?: string;
+          created_by?: string | null;
+          delivery_quarter?: number | null;
+          delivery_year?: number | null;
+          description?: string | null;
+          developer_name?: string | null;
+          district?: string | null;
+          featured?: boolean;
+          id?: string;
+          lat?: number | null;
+          lng?: number | null;
+          name?: string;
+          org_id?: string;
+          published?: boolean;
+          published_at?: string | null;
+          status?: string;
+          total_units?: number | null;
+          updated_at?: string;
+          wafi_license_no?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "projects_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+        ];
+      };
       properties: {
         Row: {
           address: string | null;
@@ -2573,6 +3073,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "properties_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "properties_org_id_fkey";
@@ -2721,6 +3228,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referrals_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "referrals_org_id_fkey";
@@ -2954,6 +3468,13 @@ export type Database = {
             foreignKeyName: "tenant_invites_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "tenant_invites_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -3017,6 +3538,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tenants_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "tenants_org_id_fkey";
@@ -3186,6 +3714,13 @@ export type Database = {
             foreignKeyName: "unit_photo_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -3326,6 +3861,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "unit_requests_org_id_fkey";
@@ -3515,6 +4057,13 @@ export type Database = {
             foreignKeyName: "units_market_org_id_fkey";
             columns: ["market_org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "units_market_org_id_fkey";
+            columns: ["market_org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -3615,6 +4164,13 @@ export type Database = {
             foreignKeyName: "whatsapp_channels_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "whatsapp_channels_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
           },
@@ -3701,6 +4257,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "org_settings";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "whatsapp_messages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "whatsapp_messages_org_id_fkey";
@@ -3861,6 +4424,142 @@ export type Database = {
           phone: string | null;
           property_types: string | null;
           whatsapp: string | null;
+        };
+        Relationships: [];
+      };
+      project_models_public: {
+        Row: {
+          area: number | null;
+          available_count: number | null;
+          bathrooms: number | null;
+          floor_plan_path: string | null;
+          halls: number | null;
+          id: string | null;
+          name: string | null;
+          position: number | null;
+          price: number | null;
+          project_id: string | null;
+          rooms: number | null;
+          unit_type: string | null;
+          units_count: number | null;
+        };
+        Insert: {
+          area?: number | null;
+          available_count?: number | null;
+          bathrooms?: number | null;
+          floor_plan_path?: string | null;
+          halls?: number | null;
+          id?: string | null;
+          name?: string | null;
+          position?: number | null;
+          price?: number | null;
+          project_id?: string | null;
+          rooms?: number | null;
+          unit_type?: string | null;
+          units_count?: number | null;
+        };
+        Update: {
+          area?: number | null;
+          available_count?: number | null;
+          bathrooms?: number | null;
+          floor_plan_path?: string | null;
+          halls?: number | null;
+          id?: string | null;
+          name?: string | null;
+          position?: number | null;
+          price?: number | null;
+          project_id?: string | null;
+          rooms?: number | null;
+          unit_type?: string | null;
+          units_count?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_models_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_models_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_photos_public: {
+        Row: {
+          caption: string | null;
+          id: string | null;
+          path: string | null;
+          position: number | null;
+          project_id: string | null;
+        };
+        Insert: {
+          caption?: string | null;
+          id?: string | null;
+          path?: string | null;
+          position?: number | null;
+          project_id?: string | null;
+        };
+        Update: {
+          caption?: string | null;
+          id?: string | null;
+          path?: string | null;
+          position?: number | null;
+          project_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_photos_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_photos_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      projects_public: {
+        Row: {
+          amenities: string[] | null;
+          available_units: number | null;
+          city: string | null;
+          company_name: string | null;
+          completion_pct: number | null;
+          cover_path: string | null;
+          created_at: string | null;
+          delivery_quarter: number | null;
+          delivery_year: number | null;
+          description: string | null;
+          developer_name: string | null;
+          district: string | null;
+          fal_license_no: string | null;
+          featured: boolean | null;
+          id: string | null;
+          lat: number | null;
+          lng: number | null;
+          logo_url: string | null;
+          models_count: number | null;
+          name: string | null;
+          office_id: string | null;
+          office_phone: string | null;
+          photos_count: number | null;
+          price_from: number | null;
+          published_at: string | null;
+          status: string | null;
+          total_units: number | null;
+          wafi_license_no: string | null;
+          whatsapp_number: string | null;
         };
         Relationships: [];
       };
@@ -4071,6 +4770,32 @@ export type Database = {
           whatsapp_locked: boolean;
         }[];
       };
+      hq_office_activation: {
+        Args: never;
+        Returns: {
+          blocker: string;
+          city: string;
+          company_name: string;
+          created_at: string;
+          district: string;
+          fal_license_no: string;
+          id: string;
+          last_reminder_at: string;
+          listed: number;
+          listed_publicly: boolean;
+          live: number;
+          live_with_photos: number;
+          manager_email: string;
+          office_phone: string;
+          priority: number;
+          reminders_sent: number;
+          units: number;
+          vacant: number;
+          vacant_priced: number;
+          verified: boolean;
+          whatsapp_number: string;
+        }[];
+      };
       hq_photo_requests: {
         Args: never;
         Returns: {
@@ -4227,6 +4952,23 @@ export type Database = {
       my_reference_code: { Args: never; Returns: string };
       my_referral_code: { Args: never; Returns: string };
       next_invoice_number: { Args: { _year: number }; Returns: string };
+      cron_secret_valid: { Args: { _secret: string }; Returns: boolean };
+      mark_reminder_email: {
+        Args: { _error?: string; _id: string; _ok: boolean };
+        Returns: undefined;
+      };
+      pending_reminder_emails: {
+        Args: { _limit?: number };
+        Returns: {
+          body: string;
+          company_name: string;
+          id: string;
+          stage: number;
+          subject: string;
+          to_email: string;
+        }[];
+      };
+      notify_cold_offices: { Args: never; Returns: number };
       notify_expiring_leases: { Args: { _days?: number }; Returns: number };
       notify_lease_tenant: {
         Args: {

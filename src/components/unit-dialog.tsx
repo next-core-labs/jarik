@@ -76,6 +76,8 @@ export type UnitFormValues = {
   notes: string;
   /** Public description shown on the listing in the offers market. */
   listing_description: string;
+  /** رقم ترخيص الإعلان العقاري من الهيئة العامة للعقار — يظهر في صفحة العرض العامة. */
+  ad_license_no: string;
   amenities: string[];
   /** Advertise the unit in the public offers market while it is vacant. */
   market_listed: boolean;
@@ -107,6 +109,7 @@ export const emptyUnit: UnitFormValues = {
   owner_id: "none",
   notes: "",
   listing_description: "",
+  ad_license_no: "",
   amenities: [],
   // Publishing is paid (listing-fee.ts), so a new unit starts off the market.
   market_listed: false,
@@ -174,6 +177,7 @@ export function unitFormFromRow(u: UnitRowForForm, copy = false): UnitFormValues
     notes: u.notes ?? "",
     // Loaded by the dialog itself (see UnitDialog), so the screens do not depend on these columns.
     listing_description: "",
+    ad_license_no: "",
     amenities: [],
     market_listed: false,
   };
@@ -188,6 +192,8 @@ export function unitFormFromRow(u: UnitRowForForm, copy = false): UnitFormValues
     water_meter_no: "",
     deed_number: "",
     notes: "",
+    // ترخيص الإعلان يخص إعلان وحدة بعينها — لا يُنسخ لوحدة جديدة.
+    ad_license_no: "",
     market_listed: emptyUnit.market_listed,
   };
 }
@@ -213,6 +219,7 @@ export type UnitLocks = {
 const LOCK_GROUP: Record<string, keyof Omit<UnitLocks, "note">> = {
   annual_rent: "rent",
   listing_description: "advert",
+  ad_license_no: "advert",
   amenities: "advert",
   notes: "advert",
   deed_number: "deed",
@@ -285,7 +292,9 @@ export function UnitDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("units")
-        .select("listing_description, amenities, market_listed, market_paid_until, market_org_id")
+        .select(
+          "listing_description, ad_license_no, amenities, market_listed, market_paid_until, market_org_id",
+        )
         .eq("id", initial.id!)
         .single();
       if (error) throw error;
@@ -317,10 +326,11 @@ export function UnitDialog({
     if (listingLoaded.current || !listingFields.data || listingFields.isFetching) return;
     if (!isOwner && myOffice.isFetching) return;
     listingLoaded.current = true;
-    const { listing_description, amenities } = listingFields.data;
+    const { listing_description, ad_license_no, amenities } = listingFields.data;
     setForm((f) => ({
       ...f,
       listing_description: listing_description ?? "",
+      ad_license_no: ad_license_no ?? "",
       amenities: amenities ?? [],
       market_listed: shownListed,
     }));
@@ -515,6 +525,7 @@ export function UnitDialog({
       ...(isOwner ? {} : { owner_id: v.owner_id === "none" ? null : v.owner_id }),
       notes: v.notes.trim() || null,
       listing_description: v.listing_description.trim() || null,
+      ad_license_no: v.ad_license_no.trim() || null,
       amenities: v.amenities,
     };
   };
@@ -535,13 +546,20 @@ export function UnitDialog({
         const before = toRow({
           ...initial,
           listing_description: saved?.listing_description ?? "",
+          ad_license_no: saved?.ad_license_no ?? "",
           amenities: saved?.amenities ?? [],
         });
         const changes: TablesUpdate<"units"> = {};
         for (const [column, value] of Object.entries(row)) {
           if (locked(column)) continue;
           // A listing text that never loaded is not written over.
-          if (!saved && (column === "listing_description" || column === "amenities")) continue;
+          if (
+            !saved &&
+            (column === "listing_description" ||
+              column === "ad_license_no" ||
+              column === "amenities")
+          )
+            continue;
           if (!sameValue(value, before[column as keyof typeof before])) {
             (changes as Record<string, unknown>)[column] = value;
           }
@@ -951,6 +969,19 @@ export function UnitDialog({
                 disabled={lock.advert}
                 placeholder="مثال: شقة جديدة بتشطيب فاخر، قريبة من المدارس والخدمات، مدخل خاص ومطبخ راكب…"
               />
+            </Field>
+            <Field label="رقم ترخيص الإعلان (الهيئة العامة للعقار)">
+              <Input
+                maxLength={40}
+                dir="ltr"
+                value={form.ad_license_no}
+                onChange={(e) => set("ad_license_no", e.target.value)}
+                disabled={lock.advert}
+                placeholder="مثال: 7200000000"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                يظهر مع الإعلان في صفحة العرض العامة بشارة «إعلان مرخّص».
+              </p>
             </Field>
             <Field label="المزايا والخدمات">
               <div className="flex flex-wrap gap-2">
