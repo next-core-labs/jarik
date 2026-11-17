@@ -18,9 +18,11 @@ import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as RequestsMarketRouteImport } from './routes/requests-market'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StaysRouteImport } from './routes/stays'
 import { Route as AuthenticatedAgreementsRouteImport } from './routes/_authenticated/agreements'
 import { Route as AuthenticatedAssistantRouteImport } from './routes/_authenticated/assistant'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
+import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
 import { Route as AuthenticatedCollectionsRouteImport } from './routes/_authenticated/collections'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDealsRouteImport } from './routes/_authenticated/deals'
@@ -113,6 +115,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaysRoute = StaysRouteImport.update({
+  id: '/stays',
+  path: '/stays',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAgreementsRoute = AuthenticatedAgreementsRouteImport.update({
   id: '/agreements',
   path: '/agreements',
@@ -126,6 +133,11 @@ const AuthenticatedAssistantRoute = AuthenticatedAssistantRouteImport.update({
 const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBookingsRoute = AuthenticatedBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCollectionsRoute =
@@ -390,9 +402,11 @@ export interface FileRoutesByFullPath {
   '/requests-market': typeof RequestsMarketRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/stays': typeof StaysRoute
   '/agreements': typeof AuthenticatedAgreementsRoute
   '/assistant': typeof AuthenticatedAssistantRoute
   '/audit': typeof AuthenticatedAuditRoute
+  '/bookings': typeof AuthenticatedBookingsRoute
   '/collections': typeof AuthenticatedCollectionsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/deals': typeof AuthenticatedDealsRoute
@@ -450,9 +464,11 @@ export interface FileRoutesByTo {
   '/requests-market': typeof RequestsMarketRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/stays': typeof StaysRoute
   '/agreements': typeof AuthenticatedAgreementsRoute
   '/assistant': typeof AuthenticatedAssistantRoute
   '/audit': typeof AuthenticatedAuditRoute
+  '/bookings': typeof AuthenticatedBookingsRoute
   '/collections': typeof AuthenticatedCollectionsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/deals': typeof AuthenticatedDealsRoute
@@ -512,9 +528,11 @@ export interface FileRoutesById {
   '/requests-market': typeof RequestsMarketRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/stays': typeof StaysRoute
   '/_authenticated/agreements': typeof AuthenticatedAgreementsRoute
   '/_authenticated/assistant': typeof AuthenticatedAssistantRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
+  '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
   '/_authenticated/collections': typeof AuthenticatedCollectionsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/deals': typeof AuthenticatedDealsRoute
@@ -574,9 +592,11 @@ export interface FileRouteTypes {
     | '/requests-market'
     | '/reset-password'
     | '/sitemap.xml'
+    | '/stays'
     | '/agreements'
     | '/assistant'
     | '/audit'
+    | '/bookings'
     | '/collections'
     | '/dashboard'
     | '/deals'
@@ -634,9 +654,11 @@ export interface FileRouteTypes {
     | '/requests-market'
     | '/reset-password'
     | '/sitemap.xml'
+    | '/stays'
     | '/agreements'
     | '/assistant'
     | '/audit'
+    | '/bookings'
     | '/collections'
     | '/dashboard'
     | '/deals'
@@ -695,9 +717,11 @@ export interface FileRouteTypes {
     | '/requests-market'
     | '/reset-password'
     | '/sitemap.xml'
+    | '/stays'
     | '/_authenticated/agreements'
     | '/_authenticated/assistant'
     | '/_authenticated/audit'
+    | '/_authenticated/bookings'
     | '/_authenticated/collections'
     | '/_authenticated/dashboard'
     | '/_authenticated/deals'
@@ -757,6 +781,7 @@ export interface RootRouteChildren {
   RequestsMarketRoute: typeof RequestsMarketRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StaysRoute: typeof StaysRoute
   LegalSlugRoute: typeof LegalSlugRoute
   OfficeOfficeIdRoute: typeof OfficeOfficeIdRoute
   OwnerOwnerIdRoute: typeof OwnerOwnerIdRoute
@@ -838,6 +863,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stays': {
+      id: '/stays'
+      path: '/stays'
+      fullPath: '/stays'
+      preLoaderRoute: typeof StaysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/agreements': {
       id: '/_authenticated/agreements'
       path: '/agreements'
@@ -857,6 +889,13 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/audit'
       preLoaderRoute: typeof AuthenticatedAuditRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bookings': {
+      id: '/_authenticated/bookings'
+      path: '/bookings'
+      fullPath: '/bookings'
+      preLoaderRoute: typeof AuthenticatedBookingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/collections': {
@@ -1195,6 +1234,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAgreementsRoute: typeof AuthenticatedAgreementsRoute
   AuthenticatedAssistantRoute: typeof AuthenticatedAssistantRoute
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
+  AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRoute
   AuthenticatedCollectionsRoute: typeof AuthenticatedCollectionsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDealsRoute: typeof AuthenticatedDealsRoute
@@ -1234,6 +1274,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAgreementsRoute: AuthenticatedAgreementsRoute,
   AuthenticatedAssistantRoute: AuthenticatedAssistantRoute,
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
+  AuthenticatedBookingsRoute: AuthenticatedBookingsRoute,
   AuthenticatedCollectionsRoute: AuthenticatedCollectionsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDealsRoute: AuthenticatedDealsRoute,
@@ -1282,6 +1323,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequestsMarketRoute: RequestsMarketRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StaysRoute: StaysRoute,
   LegalSlugRoute: LegalSlugRoute,
   OfficeOfficeIdRoute: OfficeOfficeIdRoute,
   OwnerOwnerIdRoute: OwnerOwnerIdRoute,

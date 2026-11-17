@@ -97,6 +97,13 @@ export type Database = {
             foreignKeyName: "agreement_units_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "agreement_units_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -145,6 +152,13 @@ export type Database = {
             foreignKeyName: "audit_log_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "audit_log_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -175,6 +189,124 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
+          },
+        ];
+      };
+      bookings: {
+        Row: {
+          created_at: string;
+          decided_at: string | null;
+          guest_name: string | null;
+          guest_phone: string | null;
+          guest_user_id: string | null;
+          guests: number | null;
+          id: string;
+          nights: number;
+          notes: string | null;
+          org_id: string | null;
+          staff_note: string | null;
+          status: string;
+          stay: unknown;
+          total_amount: number;
+          unit_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          decided_at?: string | null;
+          guest_name?: string | null;
+          guest_phone?: string | null;
+          guest_user_id?: string | null;
+          guests?: number | null;
+          id?: string;
+          nights: number;
+          notes?: string | null;
+          org_id?: string | null;
+          staff_note?: string | null;
+          status?: string;
+          stay: unknown;
+          total_amount: number;
+          unit_id: string;
+        };
+        Update: {
+          created_at?: string;
+          decided_at?: string | null;
+          guest_name?: string | null;
+          guest_phone?: string | null;
+          guest_user_id?: string | null;
+          guests?: number | null;
+          id?: string;
+          nights?: number;
+          notes?: string | null;
+          org_id?: string | null;
+          staff_note?: string | null;
+          status?: string;
+          stay?: unknown;
+          total_amount?: number;
+          unit_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bookings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "bookings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "bookings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "bookings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -293,6 +425,13 @@ export type Database = {
           value?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "deals_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "deals_org_id_fkey";
             columns: ["org_id"];
@@ -516,6 +655,13 @@ export type Database = {
             foreignKeyName: "expenses_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "expenses_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -552,6 +698,13 @@ export type Database = {
             columns: ["property_id"];
             isOneToOne: false;
             referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
             referencedColumns: ["id"];
           },
           {
@@ -656,6 +809,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "invitations_org_id_fkey";
             columns: ["org_id"];
@@ -784,6 +944,13 @@ export type Database = {
             foreignKeyName: "invoices_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "invoices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -906,6 +1073,13 @@ export type Database = {
             foreignKeyName: "leases_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "leases_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -972,6 +1146,13 @@ export type Database = {
             foreignKeyName: "link_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "link_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1032,6 +1213,13 @@ export type Database = {
             foreignKeyName: "listing_events_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "listing_events_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1067,6 +1255,13 @@ export type Database = {
             foreignKeyName: "listing_events_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_events_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -1096,6 +1291,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "listing_favorites_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "listing_favorites_unit_id_fkey";
             columns: ["unit_id"];
@@ -1178,6 +1380,13 @@ export type Database = {
             foreignKeyName: "listing_payments_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "listing_payments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1221,6 +1430,13 @@ export type Database = {
             columns: ["request_id"];
             isOneToOne: false;
             referencedRelation: "market_requests_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "listing_payments_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
             referencedColumns: ["id"];
           },
           {
@@ -1338,6 +1554,13 @@ export type Database = {
             foreignKeyName: "maintenance_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "maintenance_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1374,6 +1597,13 @@ export type Database = {
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "maintenance_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
             referencedColumns: ["id"];
           },
           {
@@ -1458,6 +1688,13 @@ export type Database = {
             foreignKeyName: "management_agreements_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "management_agreements_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1511,6 +1748,13 @@ export type Database = {
           user_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "market_request_contacts_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "market_request_contacts_org_id_fkey";
             columns: ["org_id"];
@@ -1652,6 +1896,13 @@ export type Database = {
             foreignKeyName: "meter_readings_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "meter_readings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -1708,6 +1959,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "notifications_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "notifications_org_id_fkey";
             columns: ["org_id"];
@@ -1790,6 +2048,13 @@ export type Database = {
             foreignKeyName: "office_reminder_emails_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "office_reminder_emails_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1859,6 +2124,13 @@ export type Database = {
             foreignKeyName: "office_reviews_office_id_fkey";
             columns: ["office_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "office_reviews_office_id_fkey";
+            columns: ["office_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -1912,6 +2184,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "org_clients_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "org_clients_org_id_fkey";
             columns: ["org_id"];
@@ -1994,6 +2273,13 @@ export type Database = {
             foreignKeyName: "org_invitations_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -2053,6 +2339,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "org_members_org_id_fkey";
             columns: ["org_id"];
@@ -2231,6 +2524,13 @@ export type Database = {
             foreignKeyName: "owner_pages_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "owner_pages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -2377,6 +2677,13 @@ export type Database = {
             foreignKeyName: "owner_rent_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -2407,6 +2714,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "owner_rent_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "owner_rent_requests_unit_id_fkey";
@@ -2548,6 +2862,13 @@ export type Database = {
           status?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "platform_commissions_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "platform_commissions_org_id_fkey";
             columns: ["org_id"];
@@ -2744,6 +3065,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "project_models_public";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_interests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
           },
           {
             foreignKeyName: "project_interests_org_id_fkey";
@@ -2985,6 +3313,13 @@ export type Database = {
             foreignKeyName: "projects_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -3089,6 +3424,13 @@ export type Database = {
           year_built?: number | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "properties_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
           {
             foreignKeyName: "properties_org_id_fkey";
             columns: ["org_id"];
@@ -3248,6 +3590,13 @@ export type Database = {
             foreignKeyName: "referrals_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "referrals_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -3371,6 +3720,13 @@ export type Database = {
             foreignKeyName: "repair_invoices_unit_id_fkey";
             columns: ["unit_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "repair_invoices_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
             referencedRelation: "units";
             referencedColumns: ["id"];
           },
@@ -3483,6 +3839,13 @@ export type Database = {
             foreignKeyName: "tenant_invites_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "tenant_invites_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -3558,6 +3921,13 @@ export type Database = {
             foreignKeyName: "tenants_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "tenants_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -3591,6 +3961,76 @@ export type Database = {
           },
         ];
       };
+      unit_booking_settings: {
+        Row: {
+          checkin_time: string;
+          checkout_time: string;
+          created_at: string;
+          enabled: boolean;
+          free_cancel_days: number;
+          house_rules: string | null;
+          max_guests: number | null;
+          min_nights: number;
+          nightly_rate: number | null;
+          tourism_license_no: string | null;
+          unit_id: string;
+          updated_at: string;
+          weekend_rate: number | null;
+        };
+        Insert: {
+          checkin_time?: string;
+          checkout_time?: string;
+          created_at?: string;
+          enabled?: boolean;
+          free_cancel_days?: number;
+          house_rules?: string | null;
+          max_guests?: number | null;
+          min_nights?: number;
+          nightly_rate?: number | null;
+          tourism_license_no?: string | null;
+          unit_id: string;
+          updated_at?: string;
+          weekend_rate?: number | null;
+        };
+        Update: {
+          checkin_time?: string;
+          checkout_time?: string;
+          created_at?: string;
+          enabled?: boolean;
+          free_cancel_days?: number;
+          house_rules?: string | null;
+          max_guests?: number | null;
+          min_nights?: number;
+          nightly_rate?: number | null;
+          tourism_license_no?: string | null;
+          unit_id?: string;
+          updated_at?: string;
+          weekend_rate?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "unit_booking_settings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: true;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_booking_settings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: true;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "unit_booking_settings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: true;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       unit_events: {
         Row: {
           body: string | null;
@@ -3617,6 +4057,13 @@ export type Database = {
           unit_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "unit_events_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "unit_events_unit_id_fkey";
             columns: ["unit_id"];
@@ -3668,6 +4115,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "unit_messages_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "unit_messages_unit_id_fkey";
             columns: ["unit_id"];
@@ -3729,6 +4183,13 @@ export type Database = {
             foreignKeyName: "unit_photo_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -3759,6 +4220,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "unit_photo_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "unit_photo_requests_unit_id_fkey";
@@ -3808,6 +4276,13 @@ export type Database = {
           uploaded_by?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "unit_photos_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "unit_photos_unit_id_fkey";
             columns: ["unit_id"];
@@ -3881,6 +4356,13 @@ export type Database = {
             foreignKeyName: "unit_requests_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "unit_requests_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -3911,6 +4393,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "vacant_units_public";
             referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "unit_requests_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "unit_requests_unit_id_fkey";
@@ -4072,6 +4561,13 @@ export type Database = {
             foreignKeyName: "units_market_org_id_fkey";
             columns: ["market_org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "units_market_org_id_fkey";
+            columns: ["market_org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -4179,6 +4675,13 @@ export type Database = {
             foreignKeyName: "whatsapp_channels_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "whatsapp_channels_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -4277,6 +4780,13 @@ export type Database = {
             foreignKeyName: "whatsapp_messages_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "whatsapp_messages_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
             referencedRelation: "office_directory";
             referencedColumns: ["id"];
           },
@@ -4312,6 +4822,47 @@ export type Database = {
       };
     };
     Views: {
+      bookable_units_public: {
+        Row: {
+          amenities: string[] | null;
+          area: number | null;
+          bathrooms: number | null;
+          checkin_time: string | null;
+          checkout_time: string | null;
+          city: string | null;
+          company_name: string | null;
+          cover_path: string | null;
+          created_at: string | null;
+          district: string | null;
+          fal_license_no: string | null;
+          featured: boolean | null;
+          free_cancel_days: number | null;
+          furnished: boolean | null;
+          furnishing: string | null;
+          halls: number | null;
+          house_rules: string | null;
+          id: string | null;
+          lat: number | null;
+          listing_description: string | null;
+          lng: number | null;
+          logo_url: string | null;
+          max_guests: number | null;
+          min_nights: number | null;
+          nightly_rate: number | null;
+          office_id: string | null;
+          office_phone: string | null;
+          photos_count: number | null;
+          rooms: number | null;
+          street: string | null;
+          tourism_license_no: string | null;
+          unit_name: string | null;
+          unit_number: string | null;
+          unit_type: string | null;
+          weekend_rate: number | null;
+          whatsapp_number: string | null;
+        };
+        Relationships: [];
+      };
       district_price_stats: {
         Row: {
           avg_area: number | null;
@@ -4599,6 +5150,46 @@ export type Database = {
         };
         Relationships: [];
       };
+      unit_booked_dates_public: {
+        Row: {
+          from_date: string | null;
+          to_date: string | null;
+          unit_id: string | null;
+        };
+        Insert: {
+          from_date?: never;
+          to_date?: never;
+          unit_id?: string | null;
+        };
+        Update: {
+          from_date?: never;
+          to_date?: never;
+          unit_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bookings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bookings_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       vacant_unit_photos_public: {
         Row: {
           path: string | null;
@@ -4606,6 +5197,13 @@ export type Database = {
           unit_id: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "unit_photos_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "unit_photos_unit_id_fkey";
             columns: ["unit_id"];
@@ -4723,6 +5321,18 @@ export type Database = {
           _term_months: number;
         };
         Returns: undefined;
+      };
+      create_booking_request: {
+        Args: {
+          _from: string;
+          _guest_name: string;
+          _guest_phone: string;
+          _guests?: number;
+          _notes?: string;
+          _to: string;
+          _unit_id: string;
+        };
+        Returns: string;
       };
       create_lease: {
         Args: {
@@ -5341,6 +5951,24 @@ export type Database = {
           stage: number;
           subject: string;
           to_email: string;
+        }[];
+      };
+      quote_booking: {
+        Args: { _from: string; _to: string; _unit_id: string };
+        Returns: {
+          available: boolean;
+          checkin_time: string;
+          checkout_time: string;
+          free_cancel_days: number;
+          max_guests: number;
+          min_nights: number;
+          nightly_rate: number;
+          nights: number;
+          reason: string;
+          total: number;
+          weekday_nights: number;
+          weekend_nights: number;
+          weekend_rate: number;
         }[];
       };
       record_market_request_contact: {

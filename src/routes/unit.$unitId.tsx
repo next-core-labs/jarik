@@ -12,6 +12,7 @@ import { MortgageCalculator } from "@/components/mortgage-calculator";
 import { NearbyPlacesSection } from "@/components/nearby-places-section";
 import { PhotoGallery } from "@/components/photo-gallery";
 import { SiteHeader } from "@/components/site-header";
+import { BookingWidget } from "@/components/booking-widget";
 import { UnitRequestForm } from "@/components/unit-request-form";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,12 +48,27 @@ type UnitPageData =
       advertiser: AdvertiserView;
       /** إحصاءة حي الإعلان (نفس النوع والغرض) — مادة «مقارنة بمتوسط الحي»، أو null بلا بيانات كافية. */
       districtStat: PriceStat | null;
+      /** إعدادات الحجز اليومي حين تكون الوحدة معروضة له — null لوحدة إيجار سنوي أو بيع. */
+      booking: BookingOffer | null;
     }
   | { status: "missing" }
   | { status: "error" };
 
 /** Everything the page needs, fetched on the server too so link previews (WhatsApp) have the photo. */
 /** Public ids are uuids — anything else can't be a record (and PostgREST would fail with 22P02). */
+/** ما تحتاجه واجهة الحجز من bookable_units_public — الوحدة قد تكون للإيجار السنوي والحجز معًا. */
+type BookingOffer = {
+  nightlyRate: number;
+  weekendRate: number | null;
+  minNights: number;
+  maxGuests: number | null;
+  checkinTime: string | null;
+  checkoutTime: string | null;
+  freeCancelDays: number;
+  houseRules: string | null;
+  tourismLicenseNo: string | null;
+};
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function loadUnitPage(unitId: string): Promise<UnitPageData> {
@@ -147,7 +163,30 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
           ratingsCount: office?.ratings_count ?? null,
         };
 
-    return { status: "ok", listing, photos, similar, advertiser, districtStat };
+    // الحجز اليومي: من العرض العام نفسه، فلا تُعرض واجهة حجز لوحدة لا تقبله (أو بلا رخصة إيواء).
+    const { data: bookingRow } = await supabase
+      .from("bookable_units_public")
+      .select(
+        "nightly_rate, weekend_rate, min_nights, max_guests, checkin_time, checkout_time, free_cancel_days, house_rules, tourism_license_no",
+      )
+      .eq("id", unitId)
+      .maybeSingle();
+    const booking: BookingOffer | null =
+      bookingRow && Number(bookingRow.nightly_rate ?? 0) > 0
+        ? {
+            nightlyRate: Number(bookingRow.nightly_rate),
+            weekendRate: bookingRow.weekend_rate == null ? null : Number(bookingRow.weekend_rate),
+            minNights: Number(bookingRow.min_nights ?? 1),
+            maxGuests: bookingRow.max_guests == null ? null : Number(bookingRow.max_guests),
+            checkinTime: bookingRow.checkin_time,
+            checkoutTime: bookingRow.checkout_time,
+            freeCancelDays: Number(bookingRow.free_cancel_days ?? 0),
+            houseRules: bookingRow.house_rules,
+            tourismLicenseNo: bookingRow.tourism_license_no,
+          }
+        : null;
+
+    return { status: "ok", listing, photos, similar, advertiser, districtStat, booking };
   } catch {
     return { status: "error" };
   }
@@ -351,7 +390,7 @@ function UnitPublic() {
 
   if (data.status !== "ok") return <UnitUnavailable error />;
 
-  const { listing: l, photos, similar, advertiser, districtStat } = data;
+  const { listing: l, photos, similar, advertiser, districtStat, booking } = data;
   const title = listingTitle(l);
   const location = listingLocation(l);
 
@@ -576,6 +615,22 @@ function UnitPublic() {
           </div>
 
           <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
+            {/* وحدة للحجز اليومي: الحجز هو الإجراء المقصود، فيتقدّم بطاقة المعلن. */}
+            {booking ? (
+              <BookingWidget
+                unitId={l.id}
+                locale={locale}
+                nightlyRate={booking.nightlyRate}
+                weekendRate={booking.weekendRate}
+                minNights={booking.minNights}
+                maxGuests={booking.maxGuests}
+                checkinTime={booking.checkinTime}
+                checkoutTime={booking.checkoutTime}
+                freeCancelDays={booking.freeCancelDays}
+                houseRules={booking.houseRules}
+                tourismLicenseNo={booking.tourismLicenseNo}
+              />
+            ) : null}
             <AdvertiserCard
               advertiser={advertiser}
               inquiry={inquiry}

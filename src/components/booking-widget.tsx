@@ -1,0 +1,289 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { CalendarCheck, CheckCircle2, Clock, Users } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { userErrorMessage } from "@/lib/auth-errors";
+import { publicNum, publicSar } from "@/lib/format";
+import { translate, type Locale } from "@/lib/i18n";
+import { quoteBooking, submitBooking } from "@/lib/bookings.functions";
+import {
+  addDays,
+  nightsBetween,
+  overlapsBooked,
+  toDateInput,
+  type BookedRange,
+} from "@/lib/bookings";
+
+/**
+ * حجز وحدة بالليلة. السعر والإتاحة يأتيان من القاعدة (quote_booking) مع كل تغيير للتواريخ — فما
+ * يراه الضيف هو ما سيُسجَّل عليه بالضبط. فحص التزاحم في الواجهة يعطّل الزر مبكرًا فقط؛ الرفض
+ * الحقيقي من قيد EXCLUDE في القاعدة، وهو من يحمي من حجزين في اللحظة نفسها.
+ */
+export function BookingWidget({
+  unitId,
+  locale = "ar",
+  nightlyRate,
+  weekendRate,
+  minNights,
+  maxGuests,
+  checkinTime,
+  checkoutTime,
+  freeCancelDays,
+  houseRules,
+  tourismLicenseNo,
+}: {
+  unitId: string;
+  locale?: Locale;
+  nightlyRate: number;
+  weekendRate: number | null;
+  minNights: number;
+  maxGuests: number | null;
+  checkinTime: string | null;
+  checkoutTime: string | null;
+  freeCancelDays: number;
+  houseRules: string | null;
+  tourismLicenseNo: string | null;
+}) {
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const today = toDateInput(new Date());
+  const [from, setFrom] = useState(addDays(today, 1));
+  const [to, setTo] = useState(addDays(today, 1 + Math.max(1, minNights)));
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [guests, setGuests] = useState("");
+  const [done, setDone] = useState(false);
+
+  // الليالي المشغولة: لتظليل مبكر ورسالة فورية بلا انتظار رد الخادم.
+  const booked = useQuery({
+    queryKey: ["unit-booked-dates", unitId],
+    staleTime: 30_000,
+    queryFn: async (): Promise<BookedRange[]> => {
+      const { data, error } = await supabase
+        .from("unit_booked_dates_public")
+        .select("from_date, to_date")
+        .eq("unit_id", unitId);
+      if (error) throw error;
+      return (data ?? []).filter(
+        (r): r is BookedRange => Boolean(r.from_date) && Boolean(r.to_date),
+      );
+    },
+  });
+
+  // الخروج يتبع الدخول دائمًا: تاريخ خروج قبل أقل مدة لا معنى له.
+  useEffect(() => {
+    if (nightsBetween(from, to) < Math.max(1, minNights)) {
+      setTo(addDays(from, Math.max(1, minNights)));
+    }
+  }, [from, to, minNights]);
+
+  const getQuote = useServerFn(quoteBooking);
+  const quote = useQuery({
+    queryKey: ["booking-quote", unitId, from, to],
+    enabled: nightsBetween(from, to) > 0,
+    queryFn: async () => await getQuote({ data: { unitId, from, to } }),
+  });
+
+  const send = useServerFn(submitBooking);
+  const book = useMutation({
+    mutationFn: async () =>
+      await send({
+        data: {
+          unitId,
+          from,
+          to,
+          fullName: name.trim(),
+          phone: phone.trim(),
+          ...(guests.trim() ? { guests: Number(guests) } : {}),
+        },
+      }),
+    onSuccess: () => setDone(true),
+    onError: (e: Error) => toast.error(userErrorMessage(e, t("bk_error"))),
+  });
+
+  const localOverlap = overlapsBooked(from, to, booked.data ?? []);
+  const q = quote.data;
+  const nights = nightsBetween(from, to);
+  const canBook =
+    Boolean(q?.available) &&
+    !localOverlap &&
+    name.trim().length >= 2 &&
+    /^[0-9+\s-]{9,15}$/.test(phone.trim());
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center">
+        <CheckCircle2 className="size-8 text-brass" aria-hidden />
+        <p className="text-sm font-medium">{t("bk_done")}</p>
+        <p className="text-xs text-muted-foreground">{t("bk_done_note")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (canBook) book.mutate();
+      }}
+    >
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-lg font-bold">{t("bk_title")}</h2>
+        <p className="flex flex-wrap items-baseline gap-1.5 text-sm text-muted-foreground">
+          <span className="text-[22px] font-bold text-foreground tabular-nums">
+            {publicSar(nightlyRate, locale)}
+          </span>
+          {t("bk_per_night")}
+          {weekendRate && weekendRate !== nightlyRate ? (
+            <span className="text-xs">
+              {` · ${t("bk_weekend")} ${publicSar(weekendRate, locale)}`}
+            </span>
+          ) : null}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1.5 text-sm">
+          {t("bk_checkin")}
+          <Input
+            type="date"
+            value={from}
+            min={today}
+            onChange={(e) => setFrom(e.target.value)}
+            required
+          />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          {t("bk_checkout")}
+          <Input
+            type="date"
+            value={to}
+            min={addDays(from, Math.max(1, minNights))}
+            onChange={(e) => setTo(e.target.value)}
+            required
+          />
+        </label>
+      </div>
+
+      {/* السبب يأتي من القاعدة بنصّه: «محجوزة»، «أقل مدة n ليلة»، «تاريخ ماضٍ»… */}
+      {localOverlap ? (
+        <p className="rounded-sm bg-muted/60 px-3 py-2 text-xs font-medium">{t("bk_taken")}</p>
+      ) : q && !q.available && q.reason ? (
+        <p className="rounded-sm bg-muted/60 px-3 py-2 text-xs font-medium">{q.reason}</p>
+      ) : null}
+
+      {q?.available && nights > 0 ? (
+        <div className="flex flex-col gap-1 border-y border-border py-3 text-sm">
+          {q.weekdayNights > 0 ? (
+            <Row
+              label={`${publicNum(q.weekdayNights)} ${t("bk_nights_weekday")}`}
+              value={publicSar(q.weekdayNights * (q.nightlyRate ?? 0), locale)}
+            />
+          ) : null}
+          {q.weekendNights > 0 ? (
+            <Row
+              label={`${publicNum(q.weekendNights)} ${t("bk_nights_weekend")}`}
+              value={publicSar(q.weekendNights * (q.weekendRate ?? q.nightlyRate ?? 0), locale)}
+            />
+          ) : null}
+          <div className="mt-1 flex items-baseline justify-between font-bold">
+            <span>{t("bk_total")}</span>
+            <span className="tabular-nums">{publicSar(q.total, locale)}</span>
+          </div>
+        </div>
+      ) : null}
+
+      <label className="flex flex-col gap-1.5 text-sm">
+        {t("bk_name")}
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={120}
+          required
+          autoComplete="name"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm">
+        {t("bk_phone")}
+        <Input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          dir="ltr"
+          inputMode="tel"
+          maxLength={15}
+          required
+          autoComplete="tel"
+          placeholder="05xxxxxxxx"
+        />
+      </label>
+      {maxGuests ? (
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="flex items-center gap-1.5">
+            <Users className="size-3.5 text-brass" aria-hidden />
+            {t("bk_guests")} ({t("bk_max")} {publicNum(maxGuests)})
+          </span>
+          <Input
+            value={guests}
+            onChange={(e) => setGuests(e.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            max={maxGuests}
+          />
+        </label>
+      ) : null}
+
+      <Button type="submit" disabled={!canBook || book.isPending}>
+        <CalendarCheck className="size-4" />
+        {book.isPending ? t("bk_sending") : t("bk_submit")}
+      </Button>
+
+      <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {checkinTime || checkoutTime ? (
+          <li className="flex items-center gap-1.5">
+            <Clock className="size-3.5" aria-hidden />
+            {t("bk_checkin")} {checkinTime?.slice(0, 5)} · {t("bk_checkout")}{" "}
+            {checkoutTime?.slice(0, 5)}
+          </li>
+        ) : null}
+        {minNights > 1 ? (
+          <li>
+            {t("bk_min_nights")} {publicNum(minNights)}
+          </li>
+        ) : null}
+        <li>
+          {freeCancelDays > 0
+            ? `${t("bk_free_cancel")} ${publicNum(freeCancelDays)} ${t("bk_days_before")}`
+            : t("bk_no_free_cancel")}
+        </li>
+        <li>{t("bk_pay_note")}</li>
+        {tourismLicenseNo ? (
+          <li dir="auto">
+            {t("bk_license")}: <span dir="ltr">{tourismLicenseNo}</span>
+          </li>
+        ) : null}
+      </ul>
+
+      {houseRules ? (
+        <div className="border-t border-border pt-3">
+          <p className="mb-1 text-xs font-semibold">{t("bk_rules")}</p>
+          <p className="text-xs leading-relaxed whitespace-pre-line text-muted-foreground">
+            {houseRules}
+          </p>
+        </div>
+      ) : null}
+    </form>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between text-muted-foreground">
+      <span>{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
