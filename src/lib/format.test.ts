@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arCount, arPct, daysLabel, monthsLabel } from "@/lib/format";
+import { arCount, arPct, daysLabel, isolate, monthsLabel } from "@/lib/format";
 
 describe("daysLabel", () => {
   it("uses the singular and (oblique) dual forms for one and two", () => {
@@ -47,5 +47,19 @@ describe("arPct", () => {
   it("uses Arabic-Indic digits and the Arabic percent sign", () => {
     expect(arPct(71)).toBe(new Intl.NumberFormat("ar-SA", { style: "percent" }).format(0.71));
     expect(arPct(71)).not.toMatch(/[0-9]/);
+  });
+});
+
+describe("isolate", () => {
+  it("wraps the value in FSI…PDI so it can't reorder the sentence around it", () => {
+    expect(isolate("مكة")).toBe("⁨مكة⁩");
+    // The whole point: the separator and number after the name stay outside the Arabic run.
+    expect(`${isolate("مكة")} · 2 days ago`).toBe("⁨مكة⁩ · 2 days ago");
+  });
+
+  it("returns an empty string for a missing name, adding no stray marks", () => {
+    expect(isolate(null)).toBe("");
+    expect(isolate(undefined)).toBe("");
+    expect(isolate("")).toBe("");
   });
 });

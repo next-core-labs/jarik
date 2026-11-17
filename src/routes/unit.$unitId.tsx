@@ -20,7 +20,7 @@ import { useFavorites } from "@/lib/favorites";
 import { isNativeApp, nativeShare } from "@/lib/native";
 import { langSearch, localeFromSearch, translate, useLocale, type Locale } from "@/lib/i18n";
 import { trackListingEvent } from "@/lib/office-tools.functions";
-import { publicDate, publicNum, publicSar } from "@/lib/format";
+import { isolate, publicDate, publicNum, publicSar } from "@/lib/format";
 import {
   listingLocation,
   listingPrice,
@@ -659,10 +659,11 @@ function DistrictPriceLine({
   return (
     <section className="flex flex-col gap-1.5 border border-border bg-card p-4">
       <p className="text-sm text-muted-foreground">
+        {/* Isolated: «… in المصيف: 30,000 SAR» otherwise prints the price inside the Arabic run. */}
         {tf(locale, "ld_vs_district_avg", {
-          type: l.unitType,
+          type: isolate(l.unitType),
           purpose: purposeWord,
-          district: l.district,
+          district: isolate(l.district),
           avg: publicSar(stat.avgPrice, locale),
         })}
       </p>
@@ -679,7 +680,7 @@ function DistrictPriceLine({
         search={langSearch(locale)}
         className="w-fit text-sm font-medium underline underline-offset-4 hover:text-red-text"
       >
-        {tf(locale, "ld_vs_district_link", { district: l.district })}
+        {tf(locale, "ld_vs_district_link", { district: isolate(l.district) })}
       </Link>
     </section>
   );

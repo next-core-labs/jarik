@@ -40,6 +40,17 @@ export function publicSar(amount: number | null | undefined, locale: Locale) {
   return `${value} ${locale === "en" ? "SAR" : "ر.س"}`;
 }
 
+/**
+ * Wraps a value in Unicode isolates (FSI…PDI) so its own direction can't reorder the sentence
+ * around it: an Arabic district inside an English line pulled the neighbouring separator and
+ * number into its run, printing «مكة · 2 days ago» as «2 · مكة days ago». Use this for a
+ * user-supplied name interpolated into a translated string; in JSX prefer `<bdi>`, which the
+ * advertiser card already uses for the same reason.
+ */
+export function isolate(text: string | null | undefined): string {
+  return text ? `⁨${text}⁩` : "";
+}
+
 /** A date on the public site: «16 أكتوبر 2026» / «16 Oct 2026», pinned to Riyadh like shortDate. */
 export function publicDate(value: string | null | undefined, locale: Locale) {
   if (!value) return "—";

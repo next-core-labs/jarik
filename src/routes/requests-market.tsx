@@ -370,7 +370,9 @@ function RequestRow({
           {r.unitType ?? t(r.purpose === "sale" ? "rq_any_sale" : "rq_any_rent")}
         </h2>
         <p className="text-[13px] text-muted-foreground">
-          {where} · {postedAgo(r.createdAt, locale)}
+          {/* An Arabic city inside the English line pulled the separator and the number into its
+              run («2 · مكة days ago»), so the place name is isolated. */}
+          <bdi>{where}</bdi> · {postedAgo(r.createdAt, locale)}
           {r.serious && r.contactsCount > 0
             ? ` · ${tf(locale, "rq_serious_contacts", {
                 n: publicCount(

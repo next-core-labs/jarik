@@ -14,7 +14,7 @@ import {
   type PricePoint,
   type PriceStat,
 } from "@/lib/district-prices";
-import { publicCount, publicNum, publicSar } from "@/lib/format";
+import { isolate, publicCount, publicNum, publicSar } from "@/lib/format";
 import {
   langSearch,
   localeFromSearch,
@@ -374,11 +374,13 @@ function DistrictPricesPage() {
         </nav>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-1.5">
+            {/* Isolated on screen only: «in المصيف, الرياض» otherwise swaps the two names around
+                the comma. The head() strings stay raw so no invisible mark lands in the metadata. */}
             <h1 className="text-[32px] leading-tight font-bold">
-              {t("prices_district_title", { city, district })}
+              {t("prices_district_title", { city: isolate(city), district: isolate(district) })}
             </h1>
             <p className="text-[15px] text-muted-foreground">
-              {t("prices_district_sub", { city, district })}
+              {t("prices_district_sub", { city: isolate(city), district: isolate(district) })}
             </p>
           </div>
           <Link
