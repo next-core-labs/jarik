@@ -19,6 +19,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  bookingBlockers,
+  bookingDirty,
+  bookingFromRow,
+  bookingToRow,
+  emptyBooking,
+  type BookingForm,
+  type BookingSettingsRow,
+} from "@/lib/booking-settings";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -336,6 +345,47 @@ export function UnitDialog({
     }));
   }, [listingFields.data, listingFields.isFetching, isOwner, myOffice.isFetching, shownListed]);
 
+  // ── الحجز اليومي ───────────────────────────────────────────────────────────────────────────
+  // حالة منفصلة عن UnitFormValues عن قصد: الإعدادات في جدولها (unit_booking_settings) لا في
+  // units، وآلة النموذج هنا (الأقفال، النسخ، الحفظ الجزئي للأعمدة) دقيقة فلا تُوسَّع لأجل جدول آخر.
+  // الصلاحية: موظف مكتب الوحدة فقط — وهو نفس ما تشترطه RLS، فلا يرى المالك هذا القسم أصلًا.
+  const canBooking = !isOwner && !lock.details;
+  const [booking, setBooking] = useState(emptyBooking);
+  const bookingLoaded = useRef(false);
+
+  const savedBooking = useQuery({
+    queryKey: ["unit-booking-settings", initial.id],
+    enabled: open && Boolean(initial.id) && canBooking,
+    retry: false,
+    queryFn: async (): Promise<BookingSettingsRow | null> => {
+      const { data, error } = await supabase
+        .from("unit_booking_settings")
+        .select(
+          "unit_id, enabled, nightly_rate, weekend_rate, min_nights, max_guests, checkin_time, checkout_time, tourism_license_no, free_cancel_days, house_rules",
+        )
+        .eq("unit_id", initial.id!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (!open) {
+      bookingLoaded.current = false;
+      setBooking(emptyBooking);
+      return;
+    }
+    if (bookingLoaded.current || savedBooking.isFetching || !canBooking) return;
+    // صف غائب = حجز غير مفعَّل (لا خطأ): الوحدة الجديدة وغير المفعّلة سواء.
+    if (savedBooking.isLoading) return;
+    bookingLoaded.current = true;
+    setBooking(bookingFromRow(savedBooking.data ?? null));
+  }, [open, canBooking, savedBooking.data, savedBooking.isFetching, savedBooking.isLoading]);
+
+  const setB = <K extends keyof BookingForm>(key: K, value: BookingForm[K]) =>
+    setBooking((b) => ({ ...b, [key]: value }));
+
   // Photos: the saved ones are loaded once, then edited locally and written on save.
   const savedPhotos = useQuery({
     queryKey: ["unit-photos", initial.id],
@@ -606,6 +656,14 @@ export function UnitDialog({
         // From here on a retry updates this unit instead of creating a second one.
         setForm((f) => ({ ...f, id: data.id }));
       }
+      // إعدادات الحجز اليومي: تُكتب فقط حين فُتح القسم فعلًا (bookingLoaded)، فحفظٌ لم يُحمّل
+      // فيه الصف لا يطفئ حجزًا مفعَّلًا. القاعدة ترفض سعرًا ≤ 0 وتخفي الوحدة بلا رخصة إيواء.
+      if (canBooking && bookingLoaded.current && bookingDirty(booking, savedBooking.data ?? null)) {
+        const { error: bookingError } = await supabase
+          .from("unit_booking_settings")
+          .upsert(bookingToRow(unitId, booking), { onConflict: "unit_id" });
+        if (bookingError) throw bookingError;
+      }
       // Don't touch the photos of a unit whose saved photos never loaded (that would delete them).
       if (!isOwner && !lock.details && (!form.id || savedPhotos.data)) {
         await syncUnitPhotos(supabase, unitId, savedPhotos.data ?? [], photoItems);
@@ -619,6 +677,9 @@ export function UnitDialog({
       queryClient.invalidateQueries({ queryKey: ["owner-agreements-properties"] });
       queryClient.invalidateQueries({ queryKey: ["market"] });
       queryClient.invalidateQueries({ queryKey: ["unit-listing-fields", form.id] });
+      queryClient.invalidateQueries({ queryKey: ["unit-booking-settings", form.id] });
+      queryClient.invalidateQueries({ queryKey: ["office-bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["office-bookable-units"] });
       queryClient.invalidateQueries({ queryKey: ["property-unit-numbers", propertyId] });
       onOpenChange(false);
     },
@@ -1012,6 +1073,126 @@ export function UnitDialog({
               </div>
             </Field>
           </div>
+
+          {/* الحجز اليومي: شاليه أو استراحة أو وحدة مفروشة تُحجز بالليلة لا تُؤجَّر بعقد سنوي.
+              سوق منفصل (/stays)، فلا تحتاج الوحدة سعرًا سنويًا لتظهر فيه. */}
+          {canBooking ? (
+            <div className="flex flex-col gap-4 sm:col-span-2">
+              <div className="flex items-start justify-between gap-3 border-t border-border pt-4">
+                <div className="flex flex-col gap-0.5">
+                  <Label htmlFor="booking_enabled" className="text-sm font-semibold">
+                    الحجز اليومي
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    تُحجز بالليلة في «الحجز اليومي» — شاليه أو استراحة أو وحدة مفروشة. لا تحتاج
+                    سعرًا سنويًا.
+                  </p>
+                </div>
+                <Switch
+                  id="booking_enabled"
+                  checked={booking.enabled}
+                  disabled={isEdit && savedBooking.isLoading}
+                  onCheckedChange={(v) => setB("enabled", v)}
+                />
+              </div>
+
+              {booking.enabled ? (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="سعر الليلة — أيام الأسبوع (ر.س)">
+                      <Input
+                        value={booking.nightly_rate}
+                        onChange={(e) => setB("nightly_rate", e.target.value)}
+                        inputMode="numeric"
+                        placeholder="1500"
+                      />
+                    </Field>
+                    <Field label="سعر ليلة نهاية الأسبوع (الخميس والجمعة)">
+                      <Input
+                        value={booking.weekend_rate}
+                        onChange={(e) => setB("weekend_rate", e.target.value)}
+                        inputMode="numeric"
+                        placeholder="2500 — يُترك فارغًا ليساوي سعر الأسبوع"
+                      />
+                    </Field>
+                    <Field label="رقم رخصة الإيواء السياحي">
+                      <Input
+                        value={booking.tourism_license_no}
+                        onChange={(e) => setB("tourism_license_no", e.target.value)}
+                        dir="ltr"
+                        maxLength={40}
+                        placeholder="TL-000000"
+                      />
+                    </Field>
+                    <Field label="أقل مدة حجز (ليالٍ)">
+                      <Input
+                        value={booking.min_nights}
+                        onChange={(e) => setB("min_nights", e.target.value.replace(/[^\d]/g, ""))}
+                        inputMode="numeric"
+                        maxLength={2}
+                      />
+                    </Field>
+                    <Field label="أقصى عدد ضيوف">
+                      <Input
+                        value={booking.max_guests}
+                        onChange={(e) => setB("max_guests", e.target.value.replace(/[^\d]/g, ""))}
+                        inputMode="numeric"
+                        maxLength={3}
+                      />
+                    </Field>
+                    <Field label="إلغاء مجاني حتى (أيام قبل الدخول)">
+                      <Input
+                        value={booking.free_cancel_days}
+                        onChange={(e) =>
+                          setB("free_cancel_days", e.target.value.replace(/[^\d]/g, ""))
+                        }
+                        inputMode="numeric"
+                        maxLength={2}
+                      />
+                    </Field>
+                    <Field label="وقت الدخول">
+                      <Input
+                        type="time"
+                        value={booking.checkin_time}
+                        onChange={(e) => setB("checkin_time", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="وقت الخروج">
+                      <Input
+                        type="time"
+                        value={booking.checkout_time}
+                        onChange={(e) => setB("checkout_time", e.target.value)}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="شروط الوحدة (تظهر للضيف)">
+                    <Textarea
+                      rows={3}
+                      maxLength={2000}
+                      value={booking.house_rules}
+                      onChange={(e) => setB("house_rules", e.target.value)}
+                      placeholder="مثال: ممنوع التدخين داخل الوحدة · المسبح يُنظَّف يوميًا · التأمين يُسترد بعد المعاينة"
+                    />
+                  </Field>
+
+                  {/* شروط الظهور تُقال قبل الحفظ، لا كاختفاء صامت من السوق بعده. */}
+                  {bookingBlockers(booking).length > 0 ? (
+                    <ul className="flex flex-col gap-1 rounded-sm border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+                      {bookingBlockers(booking).map((b) => (
+                        <li key={b}>{b}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rounded-sm border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+                      جاهزة للحجز — تظهر في «الحجز اليومي» متى كانت الوحدة منشورة وشاغرة.
+                    </p>
+                  )}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="sm:col-span-2">
             <Field label="ملاحظات">
               <Textarea

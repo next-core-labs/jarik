@@ -3,6 +3,7 @@
 //
 //   node scripts/import-listings.ts --template listings.xlsx           # blank sheet + instructions
 //   node scripts/import-listings.ts --offices                           # offices and whether they can publish
+//   node scripts/import-listings.ts --check-sheet listings.xlsx [--photos <dir>]  # validate a sheet, no key needed
 //   node scripts/import-listings.ts listings.xlsx --office <id> [--photos <dir>]            # check only
 //   node scripts/import-listings.ts listings.xlsx --office <id> [--photos <dir>] --commit   # write
 //
@@ -13,6 +14,9 @@
 //
 // The office must be verified in /hq and have a FAL licence and a phone: REGA requires the licence on
 // every property ad, and the listing's contact button calls the office.
+//
+// الحجز اليومي: تعبئة «سعر الليلة» تُفعّل الحجز للوحدة وتضعها في /stays، وتُلزم معها «رخصة الإيواء
+// السياحي» (وزارة السياحة) — فبدونها لا يراها زائر واحد. وحدة حجز يومي لا تحتاج «السعر» السنوي.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,7 +49,7 @@ const COLUMNS = [
   ["رقم الوحدة", "unit_number", true, "فريد داخل العقار، مثل: 101"],
   ["الغرض", "purpose", true, "للإيجار أو للبيع"],
   ["نوع الوحدة", "unit_type", true, PROPERTY_TYPES.join("، ")],
-  ["السعر", "price", true, "ريال: الإيجار السنوي أو سعر البيع"],
+  ["السعر", "price", false, "ريال: الإيجار السنوي أو سعر البيع — إلزامي ما لم تُعبّأ «سعر الليلة»"],
   ["المدينة", "city", true, "الرياض"],
   ["الحي", "district", true, "الملقا"],
   ["الموقع", "location", true, "إحداثيات 24.8073, 46.6129 أو رابط خرائط جوجل (المختصر مقبول)"],
@@ -58,7 +62,34 @@ const COLUMNS = [
   ["المساحة م²", "area", false, "رقم"],
   ["مؤثثة", "furnished", false, "نعم أو لا"],
   ["المزايا", "amenities", false, AMENITIES.join("، ")],
+  [
+    "رقم ترخيص الإعلان",
+    "ad_license_no",
+    false,
+    "رقم ترخيص الإعلان العقاري من الهيئة العامة للعقار — يظهر مع الإعلان بشارة «إعلان مرخّص»",
+  ],
   ["الوصف", "description", false, "حتى 2000 حرف، يظهر للعموم"],
+  // ── الحجز اليومي: تُعبَّأ لشاليه أو استراحة أو وحدة مفروشة تُحجز بالليلة. «سعر الليلة» هو
+  //    المفتاح: بتعبئته تُفعَّل إعدادات الحجز للوحدة وتظهر في «الحجز اليومي» (/stays). وبقية
+  //    الأعمدة لها افتراضيات في القاعدة فتُترك فارغة بلا ضرر.
+  ["سعر الليلة", "nightly_rate", false, "ريال لليلة في أيام الأسبوع — تعبئته تُفعّل الحجز اليومي"],
+  [
+    "سعر ليلة نهاية الأسبوع",
+    "weekend_rate",
+    false,
+    "ريال لليلة الخميس والجمعة — يُترك فارغًا ليساوي سعر أيام الأسبوع",
+  ],
+  [
+    "رخصة الإيواء السياحي",
+    "tourism_license_no",
+    false,
+    "رقم رخصة وزارة السياحة — إلزامي مع «سعر الليلة»، وبدونه لا تظهر الوحدة للحجز",
+  ],
+  ["أقل مدة حجز", "min_nights", false, "عدد الليالي، 1 إن تُرك فارغًا"],
+  ["أقصى ضيوف", "max_guests", false, "رقم"],
+  ["وقت الدخول", "checkin_time", false, "16:00 إن تُرك فارغًا"],
+  ["وقت الخروج", "checkout_time", false, "12:00 إن تُرك فارغًا"],
+  ["شروط الوحدة", "house_rules", false, "تظهر للضيف، حتى 2000 حرف"],
   [
     "الصور",
     "photos",
@@ -74,7 +105,8 @@ type Row = {
   unit_number: string;
   purpose: "rent" | "sale";
   unit_type: string;
-  price: number;
+  /** null لوحدة حجز يومي بلا سعر سنوي — سعرها سعر الليلة. */
+  price: number | null;
   city: string;
   district: string;
   location: LatLng;
@@ -87,7 +119,19 @@ type Row = {
   area: number | null;
   furnished: boolean;
   amenities: string[];
+  ad_license_no: string | null;
   description: string | null;
+  /** إعدادات الحجز اليومي — null حين لم يُعبَّأ «سعر الليلة» (وحدة إيجار سنوي أو بيع فقط). */
+  booking: {
+    nightly_rate: number;
+    weekend_rate: number | null;
+    tourism_license_no: string;
+    min_nights: number;
+    max_guests: number | null;
+    checkin_time: string;
+    checkout_time: string;
+    house_rules: string | null;
+  } | null;
   photos: string[]; // absolute file paths or https URLs
 };
 
@@ -116,6 +160,18 @@ if (templatePath) {
   process.exit(0);
 }
 
+// قبل كتلة الفحص: يقرأ argv فقط، ويستعمله مدقّق الصور داخل readSheet.
+const photosDir = option("--photos") ? resolve(option("--photos")!) : null;
+
+const checkSheet = option("--check-sheet");
+if (checkSheet) {
+  const only = await readSheet(resolve(checkSheet));
+  console.log(`\n${only.length} listings are valid.`);
+  printSummary(only);
+  console.log("\nSheet check only — no office and no database were touched.");
+  process.exit(0);
+}
+
 const env = loadEnv();
 const admin = createClient(env.url, env.serviceKey, { auth: { persistSession: false } });
 
@@ -126,7 +182,6 @@ if (flag("--offices")) {
 
 const file = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.match(/^--(office|photos)$/));
 const officeId = option("--office");
-const photosDir = option("--photos") ? resolve(option("--photos")!) : null;
 if (!file || !officeId)
   fail("Usage: node scripts/import-listings.ts <sheet.xlsx|.csv> --office <id>");
 
@@ -259,6 +314,58 @@ async function readSheet(path: string): Promise<Row[]> {
     if (get("price") && (price === null || price < lo || price > hi))
       err(`«السعر» ${get("price")} is outside ${lo.toLocaleString()}–${hi.toLocaleString()} SAR`);
 
+    // ── الحجز اليومي ─────────────────────────────────────────────────────────────────────────
+    const nightly = toNumber(get("nightly_rate"));
+    const hasNightly = Boolean(get("nightly_rate"));
+    if (hasNightly && (nightly === null || nightly < 50 || nightly > 500_000))
+      err(`«سعر الليلة» ${get("nightly_rate")} is outside 50–500,000 SAR`);
+
+    // وحدة إيجار سنوي/بيع تحتاج سعرًا؛ وحدة حجز يومي يكفيها سعر الليلة. وحدة بلا أي سعر لا تظهر
+    // في أي سوق، فيُرفض الصف بدل أن يُستورد إعلان لا يراه أحد.
+    if (!get("price") && !hasNightly) err("«السعر» is empty and no «سعر الليلة» either");
+
+    const tourism = get("tourism_license_no").trim();
+    // النظام السعودي يُلزم برخصة إيواء للتأجير اليومي، والعرض العام يخفي الوحدة بدونها — فلو
+    // استوردناها بلا رخصة لظهرت للمكتب «منشورة» ولم يرها زائر واحد.
+    if (hasNightly && !tourism)
+      err("«رخصة الإيواء السياحي» is required when «سعر الليلة» is filled");
+    if (tourism && !hasNightly)
+      err("«رخصة الإيواء السياحي» was given without «سعر الليلة» — fill the nightly rate or clear it");
+
+    const weekend = toNumber(get("weekend_rate"));
+    if (get("weekend_rate") && (weekend === null || weekend < 50 || weekend > 500_000))
+      err(`«سعر ليلة نهاية الأسبوع» ${get("weekend_rate")} is outside 50–500,000 SAR`);
+    if (get("weekend_rate") && !hasNightly)
+      err("«سعر ليلة نهاية الأسبوع» needs «سعر الليلة» as well");
+
+    const minNights = toNumber(get("min_nights"));
+    if (get("min_nights") && (minNights === null || minNights < 1 || minNights > 90))
+      err(`«أقل مدة حجز» ${get("min_nights")} must be between 1 and 90`);
+    const maxGuests = toNumber(get("max_guests"));
+    if (get("max_guests") && (maxGuests === null || maxGuests < 1 || maxGuests > 500))
+      err(`«أقصى ضيوف» ${get("max_guests")} must be between 1 and 500`);
+
+    const time = (f: Field, fallback: string): string => {
+      const raw = get(f).trim();
+      if (!raw) return fallback;
+      // Excel يحوّل الوقت إلى كسر من اليوم أحيانًا (0.666… = 16:00)، فنقبل الصيغتين.
+      const asNum = Number(raw);
+      if (Number.isFinite(asNum) && asNum > 0 && asNum < 1) {
+        const mins = Math.round(asNum * 24 * 60);
+        return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+      }
+      const m = /^(\d{1,2}):(\d{2})/.exec(raw);
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) {
+        err(`«${f === "checkin_time" ? "وقت الدخول" : "وقت الخروج"}» «${raw}» is not HH:MM`);
+        return fallback;
+      }
+      return `${m[1]!.padStart(2, "0")}:${m[2]}`;
+    };
+    const checkin = time("checkin_time", "16:00");
+    const checkout = time("checkout_time", "12:00");
+    const houseRules = get("house_rules").trim();
+    if (houseRules.length > 2000) err("«شروط الوحدة» is longer than 2000 characters");
+
     let location: LatLng | null = null;
     const locText = get("location");
     if (locText) {
@@ -296,7 +403,8 @@ async function readSheet(path: string): Promise<Row[]> {
     if (seen.has(key)) err(`unit ${get("unit_number")} of «${get("property")}» appears twice`);
     seen.add(key);
 
-    if (purpose && price !== null && location)
+    // السعر صار اختياريًا لوحدة حجز يومي، فالصف يُقبل بسعر أو بسعر ليلة.
+    if (purpose && (price !== null || nightly !== null) && location)
       rows.push({
         line,
         property: get("property"),
@@ -316,7 +424,21 @@ async function readSheet(path: string): Promise<Row[]> {
         area: ints.area ?? null,
         furnished: /^(نعم|yes|y|1|true|مؤثثة)$/i.test(get("furnished")),
         amenities,
+        ad_license_no: get("ad_license_no").trim() || null,
         description: description || null,
+        booking:
+          hasNightly && nightly !== null && tourism
+            ? {
+                nightly_rate: nightly,
+                weekend_rate: weekend,
+                tourism_license_no: tourism,
+                min_nights: minNights ?? 1,
+                max_guests: maxGuests,
+                checkin_time: checkin,
+                checkout_time: checkout,
+                house_rules: houseRules || null,
+              }
+            : null,
         photos,
       });
   }
@@ -384,9 +506,10 @@ async function importRows(orgId: string, rows: Row[]): Promise<{ id: string; row
       area: row.area,
       furnished: row.furnished,
       listing_purpose: row.purpose,
-      annual_rent: row.purpose === "rent" ? row.price : 0,
-      sale_price: row.purpose === "sale" ? row.price : 0,
+      annual_rent: row.purpose === "rent" ? (row.price ?? 0) : 0,
+      sale_price: row.purpose === "sale" ? (row.price ?? 0) : 0,
       listing_description: row.description,
+      ad_license_no: row.ad_license_no,
       amenities: row.amenities,
       market_listed: true,
     };
@@ -430,6 +553,34 @@ async function importRows(orgId: string, rows: Row[]): Promise<{ id: string; row
         .single();
       if (error) fail(`line ${row.line}: ${error.message}`);
       unitId = data.id;
+    }
+
+    // إعدادات الحجز اليومي. الصف المعبّأ يُفعّلها، والفارغ يُطفئها لوحدة كانت مفعّلة — فإعادة
+    // الاستيراد تُطابق الورقة بدل أن تترك حجزًا قديمًا شغّالًا بسعر لم يعد في الملف.
+    if (row.booking) {
+      const { error } = await admin.from("unit_booking_settings").upsert(
+        {
+          unit_id: unitId,
+          enabled: true,
+          nightly_rate: row.booking.nightly_rate,
+          weekend_rate: row.booking.weekend_rate,
+          tourism_license_no: row.booking.tourism_license_no,
+          min_nights: row.booking.min_nights,
+          max_guests: row.booking.max_guests,
+          checkin_time: row.booking.checkin_time,
+          checkout_time: row.booking.checkout_time,
+          house_rules: row.booking.house_rules,
+        },
+        { onConflict: "unit_id" },
+      );
+      if (error) fail(`line ${row.line}: ${error.message}`);
+    } else {
+      const { error } = await admin
+        .from("unit_booking_settings")
+        .update({ enabled: false })
+        .eq("unit_id", unitId);
+      // غياب الصف ليس خطأ: الوحدة لم تكن للحجز اليومي أصلًا.
+      if (error && error.code !== "PGRST116") fail(`line ${row.line}: ${error.message}`);
     }
 
     await addPhotos(unitId, row);
@@ -569,6 +720,13 @@ function printSummary(rows: Row[]) {
   console.log(`  purpose:   ${by((r) => (r.purpose === "sale" ? "للبيع" : "للإيجار"))}`);
   console.log(`  districts: ${by((r) => `${r.city}/${r.district}`)}`);
   console.log(`  with photos: ${rows.filter((r) => r.photos.length).length} of ${rows.length}`);
+  const stays = rows.filter((r) => r.booking);
+  if (stays.length > 0) {
+    const nightly = stays.map((r) => r.booking!.nightly_rate);
+    console.log(
+      `  daily stays: ${stays.length} of ${rows.length} · nightly ${Math.min(...nightly).toLocaleString()}–${Math.max(...nightly).toLocaleString()} SAR`,
+    );
+  }
 }
 
 function clean(v: unknown): string {
