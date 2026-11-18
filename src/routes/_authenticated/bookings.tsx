@@ -20,8 +20,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { userErrorMessage } from "@/lib/auth-errors";
-import { sar, shortDate } from "@/lib/format";
-import { bookingStatusLabel, isBookingStatus, occupiesDates, toDateInput } from "@/lib/bookings";
+import { arCount, sar, shortDate } from "@/lib/format";
+import {
+  bookingStatusLabel,
+  isBookingStatus,
+  occupiesDates,
+  stayLabel,
+  toDateInput,
+} from "@/lib/bookings";
 import { phoneHref } from "@/lib/market";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +49,9 @@ type Row = {
   guest_phone: string | null;
   guests: number | null;
   stay: string;
+  /** `stay` يأتي من PostgREST نصًّا (`[2026-12-01,2026-12-04)`)، فيُفكّ مرة واحدة عند القراءة. */
+  from_date: string;
+  to_date: string;
   nights: number;
   total_amount: number;
   status: string;
@@ -73,7 +82,10 @@ function Bookings() {
         .order("created_at", { ascending: false })
         .limit(300);
       if (error) throw error;
-      return (data ?? []) as Row[];
+      return (data ?? []).map((b) => {
+        const { from, to } = parseStay(String(b.stay ?? ""));
+        return { ...b, from_date: from, to_date: to } as Row;
+      });
     },
   });
 
@@ -135,8 +147,16 @@ function Bookings() {
 
       {pendingCount > 0 ? (
         <p className="rounded-lg border border-brass bg-brass/5 px-4 py-3 text-sm">
-          <span className="font-semibold">{pendingCount} طلب بانتظار تأكيدك.</span> التواريخ محجوزة
-          مؤقتًا لهذه الطلبات، فرفض الطلب يحرّرها لغيره.
+          <span className="font-semibold">
+            {arCount(pendingCount, {
+              one: "طلب واحد",
+              two: "طلبان",
+              few: "طلبات",
+              many: "طلبًا",
+            })}{" "}
+            بانتظار تأكيدك.
+          </span>{" "}
+          التواريخ محجوزة مؤقتًا لهذه الطلبات، فرفض الطلب يحرّرها لغيره.
         </p>
       ) : null}
 
@@ -158,7 +178,6 @@ function Bookings() {
         </Card>
       ) : (
         rows.map((b) => {
-          const { from, to } = parseStay(b.stay);
           const tel = phoneHref(b.guest_phone);
           const unit = b.units?.unit_name || `وحدة ${b.units?.unit_number ?? "—"}`;
           return (
@@ -172,8 +191,19 @@ function Bookings() {
                         : `${b.guest_name} — ${unit}`}
                     </CardTitle>
                     <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                      {from} → {to} · {b.nights} ليالٍ
-                      {b.guests ? ` · ${b.guests} ضيوف` : ""} · طُلب {shortDate(b.created_at)}
+                      {/* stayLabel يكتب «١ ديسمبر → ٤ ديسمبر» بأرقام عربية كبقية السطر؛ الصيغة
+                          الخام ISO كانت تنعكس فتُقرأ «الخروج → الدخول». */}
+                      {stayLabel(b.from_date, b.to_date)} ·{" "}
+                      {arCount(b.nights, {
+                        one: "ليلة واحدة",
+                        two: "ليلتان",
+                        few: "ليالٍ",
+                        many: "ليلة",
+                      })}
+                      {b.guests
+                        ? ` · ${arCount(b.guests, { one: "ضيف واحد", two: "ضيفان", few: "ضيوف", many: "ضيفًا" })}`
+                        : ""}{" "}
+                      · طُلب {shortDate(b.created_at)}
                     </p>
                   </div>
                   <Badge

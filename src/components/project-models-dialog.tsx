@@ -218,10 +218,17 @@ export function ProjectModelsDialog({
                     <td className="px-3 py-2 tabular-nums">{m.area ?? "—"}</td>
                     <td className="px-3 py-2 tabular-nums">{m.rooms ?? "—"}</td>
                     <td className="px-3 py-2 tabular-nums">{m.bathrooms ?? "—"}</td>
+                    {/* dir=ltr: «8 / 20» داخل خلية rtl ينعكس بصريًا إلى «20 / 8»، فيقرأ المكتب
+                        «20 متاحة من 8». tabular-nums وحدها لا تمنع ذلك. */}
                     <td className="px-3 py-2 tabular-nums">
-                      {m.available_count != null
-                        ? `${m.available_count}${m.units_count ? ` / ${m.units_count}` : ""}`
-                        : "—"}
+                      {m.available_count != null ? (
+                        <span dir="ltr">
+                          {m.available_count}
+                          {m.units_count ? ` / ${m.units_count}` : ""}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-3 py-2 font-semibold tabular-nums">{sar(Number(m.price))}</td>
                     <td className="px-3 py-2">

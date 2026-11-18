@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { publicSar } from "@/lib/format";
+import { publicCount, publicSar } from "@/lib/format";
 import { localeFromSearch, useLocale, type TranslationKey } from "@/lib/i18n";
 import {
   defaultProjectFilters,
@@ -195,7 +195,13 @@ function Projects() {
         </div>
 
         <p className="text-sm text-muted-foreground tabular-nums">
-          {t("pj_count").replace("{n}", rows.length.toLocaleString("en-US"))}
+          {/* publicCount يصرّف الاسم: «مشروع واحد» و«3 مشاريع» و«1 project» — لا «1 projects». */}
+          {publicCount(
+            rows.length,
+            locale,
+            { one: "مشروع واحد", two: "مشروعان", few: "مشاريع", many: "مشروعًا" },
+            { one: "project", many: "projects" },
+          )}
         </p>
 
         {rows.length === 0 ? (

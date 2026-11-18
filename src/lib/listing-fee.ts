@@ -79,13 +79,17 @@ export function requestPaymentIdFromSearch(search: string): string | null {
  * offices that are listed («إظهار المكتب في دليل المكاتب», settings) AND verified by the platform.
  * Named the way the settings screen names it, so the office can find the switch.
  */
-export function officeListingBlock(office: {
-  listed_publicly: boolean | null;
-  verified: boolean | null;
-}): string | null {
+export function officeListingBlock(
+  office: {
+    listed_publicly: boolean | null;
+    verified: boolean | null;
+  },
+  /** ما الذي لا يظهر: «وحداتك» افتراضيًا، و«مشاريعك» في شاشة المشاريع — فلا تُسمّى وحدات. */
+  what: string = "وحداتك",
+): string | null {
   if (!office.listed_publicly)
-    return "وحداتك المنشورة لا تظهر حتى تفعّل «إظهار المكتب في دليل المكاتب» من الإعدادات ← بيانات المكتب وتحفظ.";
+    return `${what} المنشورة لا تظهر حتى تفعّل «إظهار المكتب في دليل المكاتب» من الإعدادات ← بيانات المكتب وتحفظ.`;
   if (!office.verified)
-    return "مكتبك بانتظار اعتماد إدارة جارك — تظهر وحداتك المنشورة في الموقع بعد الاعتماد.";
+    return `مكتبك بانتظار اعتماد إدارة جارك — تظهر ${what} المنشورة في الموقع بعد الاعتماد.`;
   return null;
 }

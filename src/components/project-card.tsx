@@ -3,7 +3,7 @@ import { Building2, CalendarClock, ImageOff, MapPin } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { langSearch, translate, type Locale } from "@/lib/i18n";
-import { publicNum, publicSar } from "@/lib/format";
+import { publicCount, publicNum, publicSar } from "@/lib/format";
 import { deliveryLabel, statusLabel, type Project } from "@/lib/projects";
 import { mediaUrl } from "@/lib/unit-photos";
 import { cn } from "@/lib/utils";
@@ -128,7 +128,12 @@ export function ProjectCard({ project: p, locale = "ar" }: { project: Project; l
             ) : null}
             {p.modelsCount > 0 ? (
               <span className="tabular-nums">
-                {publicNum(p.modelsCount)} {t("pj_models")}
+                {publicCount(
+                  p.modelsCount,
+                  locale,
+                  { one: "نموذج واحد", two: "نموذجان", few: "نماذج", many: "نموذجًا" },
+                  { one: "model", many: "models" },
+                )}
               </span>
             ) : null}
           </div>

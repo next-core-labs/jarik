@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { userErrorMessage } from "@/lib/auth-errors";
 import { publicNum, publicSar } from "@/lib/format";
 import { translate, type Locale } from "@/lib/i18n";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { quoteBooking, submitBooking } from "@/lib/bookings.functions";
 import {
   addDays,
@@ -97,7 +98,8 @@ export function BookingWidget({
           from,
           to,
           fullName: name.trim(),
-          phone: phone.trim(),
+          // مطبّعًا 05XXXXXXXX كبقية نماذج الموقع العامة.
+          phone: mobile ?? phone.trim(),
           ...(guests.trim() ? { guests: Number(guests) } : {}),
         },
       }),
@@ -105,6 +107,8 @@ export function BookingWidget({
     onError: (e: Error) => toast.error(userErrorMessage(e, t("bk_error"))),
   });
 
+  const mobile = parseSaudiMobile(phone);
+  const phoneError = phone.trim() !== "" && !mobile ? t("ld_req_phone_invalid") : null;
   const localOverlap = overlapsBooked(from, to, booked.data ?? []);
   const q = quote.data;
   const nights = nightsBetween(from, to);
@@ -112,7 +116,8 @@ export function BookingWidget({
     Boolean(q?.available) &&
     !localOverlap &&
     name.trim().length >= 2 &&
-    /^[0-9+\s-]{9,15}$/.test(phone.trim());
+    // رقم سعودي فعلًا: المكتب يتصل بالضيف، فرقم غير قابل للاتصال حجز ميّت.
+    mobile !== null;
 
   if (done) {
     return (
@@ -219,7 +224,9 @@ export function BookingWidget({
           required
           autoComplete="tel"
           placeholder="05xxxxxxxx"
+          aria-invalid={phoneError ? true : undefined}
         />
+        {phoneError ? <span className="text-xs text-destructive">{phoneError}</span> : null}
       </label>
       {maxGuests ? (
         <label className="flex flex-col gap-1.5 text-sm">

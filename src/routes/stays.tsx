@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { publicNum, publicSar } from "@/lib/format";
+import { publicCount, publicNum, publicSar } from "@/lib/format";
 import { langSearch, localeFromSearch, useLocale, type TranslationKey } from "@/lib/i18n";
 import { mediaUrl } from "@/lib/unit-photos";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
@@ -172,13 +172,26 @@ function Stays() {
         </div>
 
         <p className="text-sm text-muted-foreground tabular-nums">
-          {t("bk_count").replace("{n}", rows.length.toLocaleString("en-US"))}
+          {publicCount(
+            rows.length,
+            locale,
+            { one: "وحدة واحدة", two: "وحدتان", few: "وحدات", many: "وحدة" },
+            { one: "unit", many: "units" },
+          )}
         </p>
 
         {rows.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-5 py-12 text-center text-sm text-muted-foreground">
-            {t("bk_empty")}
-          </p>
+          // حالة فارغة بلا مخرج كانت طريقًا مسدودًا — تقود الآن إلى سوق العروض.
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-5 py-12 text-center">
+            <p className="text-sm text-muted-foreground">{t("bk_empty")}</p>
+            <Link
+              to="/"
+              search={search}
+              className="flex h-10 items-center bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              {t("adv_browse_all")}
+            </Link>
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {rows.map((s) => {

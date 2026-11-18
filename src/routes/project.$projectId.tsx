@@ -163,7 +163,9 @@ function ProjectPage() {
   const { project: p, models, photos } = data;
   useTrackSiteVisit(`/project/${p.id}`);
   const [locale] = useLocale();
-  const t = (key: TranslationKey) => tf(locale, key);
+  const en = locale === "en";
+  // tf يقبل متغيّرات القالب ({n} في fal_short مثلًا)، فالغلاف يمرّرها.
+  const t = (key: TranslationKey, vars?: Record<string, string | number>) => tf(locale, key, vars);
   const search = langSearch(locale);
   const delivery = deliveryLabel(p, locale);
   const tel = phoneHref(p.office.phone);
@@ -208,7 +210,10 @@ function ProjectPage() {
                 {p.city || p.district ? (
                   <span className="flex items-center gap-1.5">
                     <MapPin className="size-4 text-brass" aria-hidden />
-                    {[p.district ? `حي ${p.district}` : null, p.city].filter(Boolean).join(" · ")}
+                    {/* «حي» تُحذف في الإنجليزية — نفس ما تفعله بطاقة المشروع. */}
+                    {[p.district ? (en ? p.district : `حي ${p.district}`) : null, p.city]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 ) : null}
                 {delivery ? (
@@ -277,9 +282,7 @@ function ProjectPage() {
                         <th className="px-4 py-3 text-start font-medium">{t("info_area")}</th>
                         <th className="px-4 py-3 text-start font-medium">{t("filter_rooms")}</th>
                         <th className="px-4 py-3 text-start font-medium">{t("pj_available")}</th>
-                        <th className="px-4 py-3 text-start font-medium">
-                          {t("filter_price_sale")}
-                        </th>
+                        <th className="px-4 py-3 text-start font-medium">{t("pj_model_price")}</th>
                         <th className="px-4 py-3 text-start font-medium">{t("pj_plan")}</th>
                       </tr>
                     </thead>
@@ -380,8 +383,9 @@ function ProjectPage() {
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{p.office.name}</p>
                   {p.office.licenseNo ? (
-                    <p className="text-xs text-muted-foreground" dir="ltr">
-                      {p.office.licenseNo}
+                    // بلا تسمية يُقرأ الرقم كرقم جوال — نفس صيغة صفحة الوحدة «فال …».
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {t("fal_short", { n: p.office.licenseNo })}
                     </p>
                   ) : null}
                 </div>
@@ -413,7 +417,7 @@ function ProjectPage() {
                   search={search}
                   className="text-center text-sm font-medium underline-offset-4 hover:underline"
                 >
-                  {t("nav_offices")}
+                  {t("pj_office_page")}
                 </Link>
               ) : null}
             </div>

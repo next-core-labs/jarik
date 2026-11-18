@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { PageHeader } from "@/components/app-shell";
 import { ProjectDialog } from "@/components/project-dialog";
+import { ProjectInterestsDialog } from "@/components/project-interests-dialog";
 import { ProjectModelsDialog } from "@/components/project-models-dialog";
 import { ProjectPhotosDialog } from "@/components/project-photos-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +66,7 @@ function OfficeProjects() {
   const [creating, setCreating] = useState(false);
   const [models, setModels] = useState<OwnProject | null>(null);
   const [photos, setPhotos] = useState<OwnProject | null>(null);
+  const [interestsOf, setInterests] = useState<OwnProject | null>(null);
 
   const office = useQuery({
     queryKey: ["my-org-id-for-projects"],
@@ -83,7 +85,7 @@ function OfficeProjects() {
         .eq("id", office.data!)
         .maybeSingle();
       if (error) throw error;
-      return data ? officeListingBlock(data) : null;
+      return data ? officeListingBlock(data, "مشاريعك") : null;
     },
   });
 
@@ -231,8 +233,12 @@ function OfficeProjects() {
                   {p.status !== "ready" ? (
                     <span className="tabular-nums">الإنجاز {p.completion_pct}%</span>
                   ) : null}
+                  {/* «جاهز للتسليم الآن» يحمل الكلمة أصلًا، فسابقة «التسليم» تُكرّرها. */}
                   {asProject && deliveryLabel(asProject) ? (
-                    <span>التسليم {deliveryLabel(asProject)}</span>
+                    <span>
+                      {p.status === "ready" ? "" : "التسليم "}
+                      {deliveryLabel(asProject)}
+                    </span>
                   ) : null}
                   {p.wafi_license_no ? (
                     <span dir="ltr" className="tabular-nums">
@@ -262,6 +268,13 @@ function OfficeProjects() {
                     <Images className="size-4" />
                     صور المشروع ({p.project_photos.length})
                   </Button>
+                  {/* بلا هذا الزر كان العدد وحده يظهر ولا طريق لاسترجاع اسم المهتمّ وجواله. */}
+                  {interests > 0 ? (
+                    <Button size="sm" variant="outline" onClick={() => setInterests(p)}>
+                      <Users className="size-4" />
+                      المهتمّون ({interests})
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant={p.published ? "outline" : "default"}
@@ -324,6 +337,12 @@ function OfficeProjects() {
         projectId={photos?.id ?? null}
         projectName={photos?.name ?? ""}
         onClose={() => setPhotos(null)}
+      />
+      <ProjectInterestsDialog
+        open={interestsOf !== null}
+        projectId={interestsOf?.id ?? null}
+        projectName={interestsOf?.name ?? ""}
+        onClose={() => setInterests(null)}
       />
     </div>
   );

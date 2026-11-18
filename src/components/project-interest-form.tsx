@@ -16,6 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { userErrorMessage } from "@/lib/auth-errors";
 import { translate, type Locale } from "@/lib/i18n";
+import { parseSaudiMobile } from "@/lib/public-form";
 import { submitProjectInterest } from "@/lib/projects.functions";
 import type { ProjectModel } from "@/lib/projects";
 
@@ -35,6 +36,7 @@ export function ProjectInterestForm({
   const [modelId, setModelId] = useState("any");
   const [notes, setNotes] = useState("");
   const [done, setDone] = useState(false);
+  const [touched, setTouched] = useState({ name: false, phone: false });
 
   const submit = useServerFn(submitProjectInterest);
   const send = useMutation({
@@ -44,7 +46,8 @@ export function ProjectInterestForm({
           projectId,
           ...(modelId !== "any" ? { modelId } : {}),
           fullName: fullName.trim(),
-          phone: phone.trim(),
+          // يُرسل مطبّعًا 05XXXXXXXX كبقية نماذج الموقع العامة.
+          phone: mobile ?? phone.trim(),
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         },
       }),
@@ -52,7 +55,14 @@ export function ProjectInterestForm({
     onError: (e: Error) => toast.error(userErrorMessage(e, t("pj_interest"))),
   });
 
-  const valid = fullName.trim().length >= 2 && /^[0-9+\s-]{9,15}$/.test(phone.trim());
+  // رقم سعودي فعلًا، لا أي 9–15 رقمًا: نفس parseSaudiMobile الذي تستخدمه كل النماذج العامة —
+  // وإلا وصل المكتب رقم لا يستطيع الاتصال به. والخطأ يُعرض بدل تعطيل الزر بصمت.
+  const mobile = parseSaudiMobile(phone);
+  const nameError = fullName.trim().length < 2 ? t("req_name_short") : null;
+  const phoneError = mobile ? null : t("ld_req_phone_invalid");
+  const showNameError = touched.name && fullName.trim() !== "" && nameError;
+  const showPhoneError = touched.phone && phone.trim() !== "" && phoneError;
+  const valid = !nameError && !phoneError;
 
   if (done) {
     return (
@@ -94,10 +104,13 @@ export function ProjectInterestForm({
         <Input
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, name: true }))}
           maxLength={120}
           required
           autoComplete="name"
+          aria-invalid={showNameError ? true : undefined}
         />
+        {showNameError ? <span className="text-xs text-destructive">{nameError}</span> : null}
       </label>
 
       <label className="flex flex-col gap-1.5 text-sm">
@@ -105,13 +118,16 @@ export function ProjectInterestForm({
         <Input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          onBlur={() => setTouched((v) => ({ ...v, phone: true }))}
           dir="ltr"
           inputMode="tel"
           maxLength={15}
           required
           autoComplete="tel"
           placeholder="05xxxxxxxx"
+          aria-invalid={showPhoneError ? true : undefined}
         />
+        {showPhoneError ? <span className="text-xs text-destructive">{phoneError}</span> : null}
       </label>
 
       {models.length > 0 ? (
