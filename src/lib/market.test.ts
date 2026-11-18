@@ -199,6 +199,23 @@ describe("titles and similar offers", () => {
     ]);
     expect(similarListings(all, cur, 1).map((l) => l.id)).toEqual(["sameBoth"]);
   });
+
+  it("keeps «قريبة» honest: another city never appears, however well it matches", () => {
+    const cur = L({ id: "cur", city: "الرياض", district: "النرجس", unit_type: "سكني" });
+    const all = [
+      cur,
+      // مطابقة تامة في الغرض والحي والنوع — لكنها في مدينة أخرى تبعد أكثر من ألف كيلومتر.
+      L({ id: "otherCity", city: "عمان", district: "النرجس", unit_type: "سكني" }),
+      L({ id: "sameCity", city: "الرياض", district: "الياسمين", unit_type: "سكني" }),
+    ];
+    expect(similarListings(all, cur, 3).map((l) => l.id)).toEqual(["sameCity"]);
+  });
+
+  it("does not exclude on an unknown city — nothing is ruled out by a blank", () => {
+    const cur = L({ id: "cur", city: null, district: "النرجس", unit_type: "سكني" });
+    const all = [cur, L({ id: "somewhere", city: "جدة", district: "النرجس", unit_type: "سكني" })];
+    expect(similarListings(all, cur, 3).map((l) => l.id)).toEqual(["somewhere"]);
+  });
 });
 
 describe("phone links", () => {

@@ -2,7 +2,10 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 
 import { arNum, arPct, sar } from "@/lib/format";
 import { Panel } from "@/components/owner-dashboard/parts";
-import type { DistrictBenchmark } from "@/components/owner-dashboard/model";
+import {
+  MIN_DISTRICT_UNITS_FOR_BENCHMARK,
+  type DistrictBenchmark,
+} from "@/components/owner-dashboard/model";
 
 /**
  * Your asking rent against the district's, per district you own in. Neutral ink, not good/bad
@@ -19,7 +22,8 @@ export function MarketBenchmark({ benchmarks }: { benchmarks: DistrictBenchmark[
       </div>
       {benchmarks.length === 0 ? (
         <p className="px-5 py-10 text-center text-sm text-muted-foreground">
-          لا تتوفر بيانات كافية عن أحيائك بعد — نعرض الحي عند توفر 3 وحدات فأكثر فيه.
+          لا تتوفر بيانات كافية عن أحيائك بعد — نعرض الحي عند توفر{" "}
+          {MIN_DISTRICT_UNITS_FOR_BENCHMARK} وحدات فأكثر فيه.
         </p>
       ) : (
         <ul className="mt-3 divide-y divide-border">

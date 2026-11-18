@@ -33,7 +33,12 @@ export function SimilarCard({
     >
       <div className="h-[120px] overflow-hidden rounded-arch bg-muted">
         {cover ? (
-          <img src={cover} alt="" loading="lazy" className="size-full object-cover" />
+          <img
+            src={cover}
+            alt={listingTitle(l)}
+            loading="lazy"
+            className="size-full object-cover"
+          />
         ) : null}
       </div>
       <div className="flex flex-col gap-[3px] px-1 pb-1">

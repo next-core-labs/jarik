@@ -198,12 +198,11 @@ function EjarSection() {
         contracts[leaseId] ?? current ?? "",
       );
       if (invalid) throw new Error(invalid);
+      // لا كتابة بلا رقم: الزر معطّل على الفراغ، وهذا حارس ثانٍ لو وصل النداء بطريق آخر.
+      if (!value) throw new Error("أدخل رقم عقد إيجار أولًا");
       const { error } = await supabase
         .from("leases")
-        .update({
-          ejar_contract_no: value || null,
-          ejar_status: value ? "synced" : "pending",
-        })
+        .update({ ejar_contract_no: value, ejar_status: "synced" })
         .eq("id", leaseId);
       if (error) throw error;
     },
@@ -299,6 +298,11 @@ function EjarSection() {
               const typed = contracts[l.id];
               const contractError =
                 typed === undefined ? null : normalizeEjarContractNo(typed).error;
+              // ما سيُكتب فعلًا: المكتوب إن لُمس الحقل، وإلا المحفوظ. مسح الحقل صراحةً كان يمحو
+              // الرقم المحفوظ ويعرض «تم ربط رقم العقد» — فقدان بيانات مع تأكيد كاذب.
+              const contractValue = normalizeEjarContractNo(
+                typed ?? l.ejar_contract_no ?? "",
+              ).value;
               return (
                 <div
                   key={l.id}
@@ -342,7 +346,10 @@ function EjarSection() {
                     <Button
                       variant="outline"
                       className="mt-[1.375rem]"
-                      disabled={saveContract.isPending || Boolean(contractError)}
+                      disabled={
+                        saveContract.isPending || Boolean(contractError) || !contractValue
+                      }
+                      title={!contractValue && !contractError ? "أدخل رقم عقد إيجار أولًا" : undefined}
                       onClick={() =>
                         saveContract.mutate({ leaseId: l.id, current: l.ejar_contract_no ?? null })
                       }

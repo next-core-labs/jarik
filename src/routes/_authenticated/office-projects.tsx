@@ -15,10 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { userErrorMessage } from "@/lib/auth-errors";
-import { sar, shortDate } from "@/lib/format";
+import { arCount, arNum, sar, shortDate } from "@/lib/format";
 import { officeListingBlock } from "@/lib/listing-fee";
 import { deliveryLabel, statusLabel, toProject, type ProjectStatus } from "@/lib/projects";
 import { myOrgId } from "@/lib/use-org-branding";
+
+/** أرقام عربية وجمع صحيح — البطاقة كانت تقول «1 نموذج» و«3 اهتمام». */
+const MODEL_FORMS = { one: "نموذج واحد", two: "نموذجان", few: "نماذج", many: "نموذجًا" };
+const INTEREST_FORMS = { one: "مهتمّ واحد", two: "مهتمّان", few: "مهتمّين", many: "مهتمًّا" };
 
 export const Route = createFileRoute("/_authenticated/office-projects")({
   staticData: { sitemap: false },
@@ -227,7 +231,7 @@ function OfficeProjects() {
               <CardContent className="flex flex-col gap-3">
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
                   <span className="tabular-nums">
-                    {p.project_models.length} نموذج
+                    {arCount(p.project_models.length, MODEL_FORMS)}
                     {from > 0 ? ` · يبدأ من ${sar(from)}` : " · بلا سعر"}
                   </span>
                   {p.status !== "ready" ? (
@@ -249,7 +253,7 @@ function OfficeProjects() {
                   )}
                   <span className="flex items-center gap-1 tabular-nums">
                     <Users className="size-3.5" aria-hidden />
-                    {interests} اهتمام
+                    {arCount(interests, INTEREST_FORMS)}
                   </span>
                   {p.project_photos.length === 0 ? (
                     <span className="font-medium text-foreground">بلا صور</span>
@@ -262,7 +266,7 @@ function OfficeProjects() {
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setModels(p)}>
                     <Layers className="size-4" />
-                    نماذج الوحدات ({p.project_models.length})
+                    نماذج الوحدات ({arNum(p.project_models.length)})
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setPhotos(p)}>
                     <Images className="size-4" />
@@ -272,7 +276,7 @@ function OfficeProjects() {
                   {interests > 0 ? (
                     <Button size="sm" variant="outline" onClick={() => setInterests(p)}>
                       <Users className="size-4" />
-                      المهتمّون ({interests})
+                      المهتمّون ({arNum(interests)})
                     </Button>
                   ) : null}
                   <Button

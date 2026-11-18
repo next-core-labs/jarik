@@ -37,6 +37,9 @@ import { depositSettleable, settleDeposit } from "@/lib/office-tools.functions";
 import { parseAmount } from "@/lib/public-form";
 import { suggestRent } from "@/lib/pricing.functions";
 
+/** «عقد واحد» / «عقدان» / «٣ عقود» — بدل «1 عقود». */
+const LEASE_FORMS = { one: "عقد واحد", two: "عقدين", few: "عقود", many: "عقدًا" };
+
 export const Route = createFileRoute("/_authenticated/renewals")({
   staticData: { sitemap: false },
   head: () => ({
@@ -578,7 +581,9 @@ function BulkRenewDialog({
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-display">تجديد {leases.length} عقود دفعة واحدة</DialogTitle>
+          <DialogTitle className="font-display">
+            تجديد {arCount(leases.length, LEASE_FORMS)} دفعة واحدة
+          </DialogTitle>
           <DialogDescription>
             راجع الإيجار وعدد الدفعات لكل عقد قبل التأكيد — كل عقد يُجدَّد بشكل مستقل.
           </DialogDescription>
@@ -637,7 +642,9 @@ function BulkRenewDialog({
           </Button>
           {!allDone ? (
             <Button onClick={() => bulkRenew.mutate()} disabled={bulkRenew.isPending}>
-              {bulkRenew.isPending ? "جارٍ التجديد..." : `تأكيد تجديد ${leases.length} عقود`}
+              {bulkRenew.isPending
+                ? "جارٍ التجديد..."
+                : `تأكيد تجديد ${arCount(leases.length, LEASE_FORMS)}`}
             </Button>
           ) : null}
         </DialogFooter>

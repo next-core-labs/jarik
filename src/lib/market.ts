@@ -220,7 +220,11 @@ export function listingLocation(l: Listing): string {
   return [l.district ? `حي ${l.district}` : null, l.street, l.city].filter(Boolean).join(" · ");
 }
 
-/** Up to `limit` other offers, preferring the same district, then the same type. */
+/**
+ * Up to `limit` other offers in the SAME CITY, preferring the same district, then the same type.
+ * القسم معنون «عروض مشابهة قريبة»، وكان يرشّح وحدة في مدينة أخرى تبعد أكثر من ألف كيلومتر لأن
+ * الترتيب يزن الغرض والحي والنوع بلا مدينة. المدينة الآن شرط لا وزن: «قريبة» تعني قريبة.
+ */
 export function similarListings(all: Listing[], current: Listing, limit = 3): Listing[] {
   const others = all.filter((l) => l.id !== current.id);
   const score = (l: Listing) =>
@@ -229,6 +233,8 @@ export function similarListings(all: Listing[], current: Listing, limit = 3): Li
     (l.unitType === current.unitType ? 1 : 0);
   return others
     .filter((l) => l.purpose === current.purpose)
+    // مدينة العرض الحالي غير معروفة؟ لا نُقصي أحدًا بناءً على مجهول.
+    .filter((l) => !current.city || l.city === current.city)
     .map((l) => ({ l, s: score(l) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s)

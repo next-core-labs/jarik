@@ -34,6 +34,7 @@ import {
 import { PROPERTY_TYPES } from "@/lib/property-types";
 import { useTrackSiteVisit } from "@/lib/use-track-site-visit";
 import { cn } from "@/lib/utils";
+import { listingsCount } from "@/lib/format";
 
 const MarketMap = lazy(() => import("@/components/market-map"));
 
@@ -287,7 +288,7 @@ function Market() {
       <SiteHeader />
       <h1 className="sr-only">{t("hero_title")}</h1>
 
-      <div className="flex h-[calc(100dvh-4rem)] min-h-[520px] flex-col">
+      <main className="flex h-[calc(100dvh-4rem)] min-h-[520px] flex-col">
         {/* Phones: search gets its own full-width row — inside the swipeable filter row below it
             would start off-screen. */}
         <div className="relative z-10 shrink-0 bg-card px-4 pt-2.5 sm:hidden">
@@ -556,9 +557,7 @@ function Market() {
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 pt-3.5 pb-3">
               <div className="flex min-w-0 flex-col gap-0.5">
                 <h2 className="text-[17px] leading-snug font-bold">
-                  {market.data
-                    ? t("results_count").replace("{n}", rows.length.toLocaleString("en-US"))
-                    : t("results_heading")}
+                  {market.data ? listingsCount(rows.length, locale) : t("results_heading")}
                 </h2>
                 <span className="truncate text-[13px] text-muted-foreground">{note}</span>
               </div>
@@ -779,7 +778,7 @@ function Market() {
             {sheetOpen ? t("view_map") : t("view_list")}
           </button>
         </div>
-      </div>
+      </main>
 
       <ForOffices />
 

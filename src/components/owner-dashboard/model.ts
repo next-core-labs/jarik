@@ -3,6 +3,11 @@ import { todayRiyadh } from "@/lib/dates";
 import { arCount, daysLabel, daysUntil, sar } from "@/lib/format";
 import { portfolioHealthScore, type PortfolioHealth } from "@/lib/portfolio-health";
 
+/**
+ * أقل عدد وحدات في الحي لعرض مقارنته. دون ذلك تصير «المقارنة» كشفًا: المالك يطرح إيجاره من
+ * المتوسط فيعرف إيجار جاره. نفس قاعدة MIN_LISTINGS_FOR_STATS في صفحات الأسعار العامة.
+ */
+export const MIN_DISTRICT_UNITS_FOR_BENCHMARK = 3;
 // Every list below comes from owner-scoped RPCs (supabase/migrations/20261003120000_*): they cover
 // exactly the units the caller owns — COALESCE(units.owner_id, properties.owner_id) — so a dual
 // owner+tenant account never mixes its own tenancy in, a unit owned inside someone else's property
@@ -512,7 +517,12 @@ export function deriveDashboard(
   }
   const benchmarks: DistrictBenchmark[] = data.market
     .filter(
-      (m): m is MarketRow & { district: string } => !!m.district && byDistrict.has(m.district),
+      (m): m is MarketRow & { district: string } =>
+        !!m.district &&
+        byDistrict.has(m.district) &&
+        // الحدّ الذي يَعِد به نصّ البطاقة («نعرض الحي عند توفر 3 وحدات فأكثر») ولم يكن مُنفَّذًا:
+        // في حي فيه وحدتان، إحداهما للمالك، يُشتق إيجار الجار بالضبط = المتوسط × 2 − إيجاري.
+        Number(m.units_count) >= MIN_DISTRICT_UNITS_FOR_BENCHMARK,
     )
     .map((m) => {
       const mine = byDistrict.get(m.district)!;
