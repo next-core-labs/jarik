@@ -54,22 +54,45 @@ export function nearestLeaseTerm(start: string, end: string): number {
 }
 
 /**
- * The payment schedule of a lease, built exactly like private.lease_schedule in the database
- * (used by create_lease, renew_lease and correct_lease): the contract total is the annual rent's
- * share for the term, split into whole halalas (remainder on the last installment). Installment i
- * (0-based) falls due floor(i × term / count) calendar months after the start — monthly on the
- * same day, quarterly every three months — with the month-end clamp of addMonths.
+ * A lease shorter than a year is priced by what the whole term costs («شهر واحد بـ 1,500»), not by
+ * a yearly figure: the office types the term's rent and the lease stores its yearly equivalent, so
+ * annual_rent means the same thing on every lease.
+ */
+export function isShortLease(termMonths: number): boolean {
+  return termMonths > 0 && termMonths < 12;
+}
+
+/** The yearly rent to store for what was typed in the rent field of a `termMonths` lease. */
+export function annualRentFromInput(value: number, termMonths: number): number {
+  return isShortLease(termMonths) ? Math.round(((value * 12) / termMonths) * 100) / 100 : value;
+}
+
+/** What the rent field shows for a stored yearly rent: the term's rent on a short lease. */
+export function rentInputFromAnnual(annualRent: number, termMonths: number): number {
+  return isShortLease(termMonths)
+    ? Math.round(((annualRent * termMonths) / 12) * 100) / 100
+    : annualRent;
+}
+
+/**
+ * The payment schedule of a lease, built exactly like create_lease and correct_lease do in the
+ * database: the contract total is the annual rent's share for the term (private.lease_schedule),
+ * split into whole halalas (remainder on the last installment). Installment i (0-based) falls due
+ * floor(i × term / count) calendar months after the start — monthly on the same day, quarterly
+ * every three months — with the month-end clamp of addMonths. The security deposit is collected
+ * with the first installment, however many there are.
  */
 export function leaseSchedule(input: {
   startDate: string;
   termMonths: number;
   annualRent: number;
   installments: number;
+  deposit?: number;
 }): { amount: number; due_date: string }[] {
-  const { startDate, termMonths, annualRent, installments } = input;
+  const { startDate, termMonths, annualRent, installments, deposit = 0 } = input;
   const total = Math.round(((annualRent * termMonths) / 12) * 100) / 100;
   return splitInstallments(total, installments).map((amount, i) => ({
-    amount,
+    amount: i === 0 ? Math.round((amount + deposit) * 100) / 100 : amount,
     due_date: addMonths(startDate, Math.floor((i * termMonths) / installments)),
   }));
 }

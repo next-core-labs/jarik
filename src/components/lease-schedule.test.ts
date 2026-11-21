@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   addMonths,
   leaseEndDate,
+  annualRentFromInput,
   leaseSchedule,
+  rentInputFromAnnual,
   leaseTermFromEnd,
 } from "@/components/lease-schedule";
 
@@ -119,5 +121,48 @@ describe("leaseTermFromEnd", () => {
     expect(leaseTermFromEnd("2026-12-08", "2026-12-01")).toBeNull();
     expect(leaseTermFromEnd("2026-12-08", "2036-12-07")).toBeNull();
     expect(leaseTermFromEnd("", "2027-12-07")).toBeNull();
+  });
+});
+
+describe("short leases and the deposit", () => {
+  it("collects what was typed for a one-month lease in a single payment", () => {
+    const annualRent = annualRentFromInput(1500, 1);
+    expect(annualRent).toBe(18000);
+    expect(rentInputFromAnnual(annualRent, 1)).toBe(1500);
+    expect(
+      leaseSchedule({ startDate: "2026-11-19", termMonths: 1, annualRent, installments: 1 }),
+    ).toEqual([{ amount: 1500, due_date: "2026-11-19" }]);
+  });
+
+  it("gives back the typed term rent for every short term", () => {
+    for (let term = 1; term < 12; term++) {
+      for (const typed of [1500, 10000, 3333.33, 0.01]) {
+        const annualRent = annualRentFromInput(typed, term);
+        expect(rentInputFromAnnual(annualRent, term)).toBe(typed);
+        const rows = leaseSchedule({
+          startDate: "2026-01-01",
+          termMonths: term,
+          annualRent,
+          installments: 1,
+        });
+        expect(rows[0]?.amount).toBe(typed);
+      }
+    }
+  });
+
+  it("keeps a yearly figure for a year or longer", () => {
+    expect(annualRentFromInput(36000, 12)).toBe(36000);
+    expect(annualRentFromInput(36000, 24)).toBe(36000);
+  });
+
+  it("adds the deposit to the first installment only", () => {
+    const rows = leaseSchedule({
+      startDate: "2026-11-01",
+      termMonths: 12,
+      annualRent: 36000,
+      installments: 4,
+      deposit: 2000,
+    });
+    expect(rows.map((r) => r.amount)).toEqual([11000, 9000, 9000, 9000]);
   });
 });

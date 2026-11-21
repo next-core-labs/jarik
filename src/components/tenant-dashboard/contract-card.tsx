@@ -1,3 +1,4 @@
+import { isShortLease, rentInputFromAnnual } from "@/components/lease-schedule";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -113,7 +114,10 @@ export function ContractCard({ leaseId }: { leaseId: string }) {
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="flex items-center gap-2 text-sm">
             <Wallet className="size-4 text-muted-foreground" />
-            <span>الإيجار السنوي {sar(data.annual_rent)}</span>
+            <span>
+              {isShortLease(data.term_months) ? "إيجار مدة العقد" : "الإيجار السنوي"}{" "}
+              {sar(rentInputFromAnnual(Number(data.annual_rent), data.term_months))}
+            </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Wallet className="size-4 text-muted-foreground" />
@@ -152,8 +156,12 @@ export function ContractCard({ leaseId }: { leaseId: string }) {
                 </td>
               </tr>
               <tr className="border-b">
-                <td className="py-2 text-gray-600">الإيجار السنوي</td>
-                <td className="py-2 text-left font-bold">{sar(data.annual_rent)}</td>
+                <td className="py-2 text-gray-600">
+                  {isShortLease(data.term_months) ? "إيجار مدة العقد" : "الإيجار السنوي"}
+                </td>
+                <td className="py-2 text-left font-bold">
+                  {sar(rentInputFromAnnual(Number(data.annual_rent), data.term_months))}
+                </td>
               </tr>
               <tr className="border-b">
                 <td className="py-2 text-gray-600">الوديعة</td>

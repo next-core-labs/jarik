@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { rentalUnits } from "@/lib/daily-listings";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -28,11 +29,14 @@ import {
 import {
   LEASE_TERMS,
   MAX_LEASE_MONTHS,
+  annualRentFromInput,
+  isShortLease,
   leaseEndDate,
   leaseSchedule,
   leaseStatusText,
   leaseTermFromEnd,
   nearestLeaseTerm,
+  rentInputFromAnnual,
 } from "@/components/lease-schedule";
 import { effectiveStatus, todayRiyadh } from "@/lib/dates";
 import { arNum, monthsLabel, paymentStatusLabel, sar, shortDate } from "@/lib/format";
@@ -153,7 +157,7 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
       const { data, error } = await supabase
         .from("leases")
         .select(
-          "id, start_date, end_date, annual_rent, term_months, installments, deposit, deposit_status, ejar_contract_no, ejar_status, status, moved_out_on, end_note, tenants(full_name, phone, national_id, email), units(unit_number, unit_name, unit_type, properties(name)), payments(id, amount, amount_paid, due_date, paid_date, status)",
+          "id, start_date, end_date, annual_rent, term_months, installments, deposit, deposit_status, ejar_contract_no, ejar_status, status, moved_out_on, end_note, tenants(full_name, phone, national_id, email), units(unit_number, unit_name, unit_type, properties(name)), payments(id, amount, amount_paid, deposit_amount, due_date, paid_date, status)",
         )
         .eq("id", leaseId)
         .single();
@@ -228,7 +232,9 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
                   </span>
                 ) : null}
               </Item>
-              <Item label="الإيجار السنوي">{sar(data.annual_rent)}</Item>
+              <Item label={isShortLease(data.term_months) ? "إيجار مدة العقد" : "الإيجار السنوي"}>
+                {sar(rentInputFromAnnual(Number(data.annual_rent), data.term_months))}
+              </Item>
               <Item label="عدد الدفعات">{arNum(data.installments)}</Item>
               <Item label="التأمين">
                 {sar(data.deposit)}
@@ -264,6 +270,9 @@ export function LeaseDetailsDialog({ leaseId, onClose }: { leaseId: string; onCl
                     >
                       <span className="text-muted-foreground">
                         الدفعة {arNum(i + 1)} · {shortDate(p.due_date)}
+                        {Number(p.deposit_amount) > 0
+                          ? ` · تشمل التأمين ${sar(p.deposit_amount)}`
+                          : ""}
                       </span>
                       <span className="flex items-center gap-2">
                         <span className="font-medium tabular-nums">{sar(p.amount)}</span>
@@ -510,21 +519,33 @@ export function CorrectLeaseDialog({
     setStartDate(next);
     if (kept && next) setEndDate(leaseEndDate(next, kept));
   };
-  const [annualRent, setAnnualRent] = useState(String(initial?.annualRent ?? lease.annual_rent));
+  // A lease under a year shows (and takes) the rent of its whole term — see isShortLease.
+  const [annualRent, setAnnualRent] = useState(() =>
+    String(
+      rentInputFromAnnual(
+        Number(initial?.annualRent ?? lease.annual_rent),
+        initial?.termMonths ?? lease.term_months,
+      ),
+    ),
+  );
   const [installments, setInstallments] = useState(String(lease.installments));
   const [depositText, setDepositText] = useState(String(lease.deposit));
 
   const term = (startDate && leaseTermFromEnd(startDate, endDate)) || 0;
-  const rent = parseNumber(annualRent);
+  const rentInput = parseNumber(annualRent);
+  const rent = rentInput === null ? null : annualRentFromInput(rentInput, term);
+  const short = isShortLease(term);
   const count = parseNumber(installments);
   const deposit = depositText.trim() ? parseNumber(depositText) : 0;
   const errors = {
     startDate: !startDate ? "حدّد تاريخ بداية العقد" : null,
     endDate: endDateError(startDate, endDate),
     rent:
-      rent === null || rent <= 0
-        ? "أدخل الإيجار السنوي بالريال"
-        : Math.round(rent * 100) !== rent * 100
+      rentInput === null || rentInput <= 0
+        ? short
+          ? "أدخل إيجار مدة العقد بالريال"
+          : "أدخل الإيجار السنوي بالريال"
+        : Math.round(rentInput * 100) !== rentInput * 100
           ? "الإيجار بحد أقصى منزلتين عشريتين"
           : null,
     installments:
@@ -543,7 +564,13 @@ export function CorrectLeaseDialog({
   const valid = Object.values(errors).every((e) => e === null);
   const schedule =
     valid && rent !== null && count !== null
-      ? leaseSchedule({ startDate, termMonths: term, annualRent: rent, installments: count })
+      ? leaseSchedule({
+          startDate,
+          termMonths: term,
+          annualRent: rent,
+          installments: count,
+          deposit: deposit ?? 0,
+        })
       : [];
 
   const correct = useMutation({
@@ -594,7 +621,11 @@ export function CorrectLeaseDialog({
             onEndDate={setEndDate}
             error={errors.endDate}
           />
-          <Field id={`${uid}-rent`} label="الإيجار السنوي (ريال)" error={errors.rent}>
+          <Field
+            id={`${uid}-rent`}
+            label={short ? "إيجار مدة العقد (ريال)" : "الإيجار السنوي (ريال)"}
+            error={errors.rent}
+          >
             <Input
               id={`${uid}-rent`}
               dir="ltr"
@@ -629,6 +660,7 @@ export function CorrectLeaseDialog({
                   <li key={p.due_date} className="flex justify-between gap-2 px-3 py-2">
                     <span className="text-muted-foreground">
                       الدفعة {arNum(i + 1)} · {shortDate(p.due_date)}
+                      {i === 0 && deposit ? ` · تشمل التأمين ${sar(deposit)}` : ""}
                     </span>
                     <span className="font-medium tabular-nums">{sar(p.amount)}</span>
                   </li>
@@ -719,7 +751,7 @@ export function NewLeaseDialog({
         supabase
           .from("units")
           .select(
-            "id, unit_number, unit_name, annual_rent, status, listing_purpose, properties(name)",
+            "id, unit_number, unit_name, annual_rent, sale_price, status, listing_purpose, unit_booking_settings(unit_id), properties(name)",
           )
           .order("unit_number"),
         supabase.from("tenants").select("id, full_name, phone").order("full_name"),
@@ -729,7 +761,8 @@ export function NewLeaseDialog({
       return {
         // A sale unit can never carry a lease (guard_no_lease_on_sale_unit); an occupied one
         // already has an active lease, which is renewed from «التجديدات» instead.
-        units: units.data.filter(
+        // وإعلان حجز يومي فقط يُحجز بالليلة من لوحته، لا يُؤجَّر بعقد.
+        units: rentalUnits(units.data).filter(
           (u) => u.listing_purpose !== "sale" && u.status !== "occupied" && u.status !== "sold",
         ),
         tenants: tenants.data,
@@ -738,7 +771,10 @@ export function NewLeaseDialog({
   });
 
   const term = (form.startDate && leaseTermFromEnd(form.startDate, form.endDate)) || 0;
-  const rent = parseNumber(form.annualRent);
+  // Under a year the field holds the rent of the whole term; the lease stores its yearly equivalent.
+  const rentInput = parseNumber(form.annualRent);
+  const rent = rentInput === null ? null : annualRentFromInput(rentInput, term);
+  const short = isShortLease(term);
   const count = parseNumber(form.installments);
   const deposit = form.deposit.trim() ? parseNumber(form.deposit) : 0;
   const endDate = term > 0 ? leaseEndDate(form.startDate, term) : null;
@@ -804,9 +840,11 @@ export function NewLeaseDialog({
     startDate: !form.startDate ? "حدّد تاريخ بداية العقد" : null,
     endDate: endDateError(form.startDate, form.endDate),
     rent:
-      rent === null || rent <= 0
-        ? "أدخل الإيجار السنوي بالريال"
-        : Math.round(rent * 100) !== rent * 100
+      rentInput === null || rentInput <= 0
+        ? short
+          ? "أدخل إيجار مدة العقد بالريال"
+          : "أدخل الإيجار السنوي بالريال"
+        : Math.round(rentInput * 100) !== rentInput * 100
           ? "الإيجار بحد أقصى منزلتين عشريتين"
           : null,
     installments:
@@ -829,6 +867,7 @@ export function NewLeaseDialog({
           termMonths: term,
           annualRent: rent,
           installments: count,
+          deposit: deposit ?? 0,
         })
       : [];
 
@@ -1079,7 +1118,7 @@ export function NewLeaseDialog({
             />
             <Field
               id={`${uid}-rent`}
-              label="الإيجار السنوي (ريال)"
+              label={short ? "إيجار مدة العقد (ريال)" : "الإيجار السنوي (ريال)"}
               error={show("rent", form.annualRent.trim() !== "")}
             >
               <Input
@@ -1089,9 +1128,13 @@ export function NewLeaseDialog({
                 value={form.annualRent}
                 onChange={(e) => set("annualRent", e.target.value)}
               />
-              {term !== 12 ? (
+              {short ? (
                 <p className="text-xs text-muted-foreground">
-                  يُحصَّل من الإيجار السنوي ما يعادل مدة العقد فقط.
+                  المبلغ كاملًا عن {termText(term)} — يُقسَّم على الدفعات كما هو.
+                </p>
+              ) : term > 12 ? (
+                <p className="text-xs text-muted-foreground">
+                  يُحصَّل من الإيجار السنوي ما يعادل مدة العقد.
                 </p>
               ) : null}
             </Field>
@@ -1126,6 +1169,7 @@ export function NewLeaseDialog({
                     <li key={p.due_date} className="flex justify-between gap-2 px-3 py-2">
                       <span className="text-muted-foreground">
                         الدفعة {arNum(i + 1)} · {shortDate(p.due_date)}
+                        {i === 0 && deposit ? ` · تشمل التأمين ${sar(deposit)}` : ""}
                       </span>
                       <span className="font-medium tabular-nums">{sar(p.amount)}</span>
                     </li>

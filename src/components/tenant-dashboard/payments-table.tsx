@@ -29,6 +29,7 @@ interface Payment {
   lease_id: string;
   amount: number;
   amount_paid: number;
+  deposit_amount: number;
   due_date: string;
   paid_date: string | null;
   status: string;
@@ -64,7 +65,7 @@ export function PaymentsTable({
       const { data, error } = await supabase
         .from("payments")
         .select(
-          "id, lease_id, amount, amount_paid, due_date, paid_date, status, transfer_reference, transfer_rejected_note",
+          "id, lease_id, amount, amount_paid, deposit_amount, due_date, paid_date, status, transfer_reference, transfer_rejected_note",
         )
         .in("lease_id", [leaseId, ...earlierLeaseIds])
         .order("due_date");
@@ -175,10 +176,12 @@ export function PaymentsTable({
     );
   };
 
+  // The security deposit is collected with the first installment; say so where it is included.
   const amountText = (p: Row) =>
-    p.status !== "paid" && Number(p.amount_paid) > 0
+    (p.status !== "paid" && Number(p.amount_paid) > 0
       ? `${sar(p.amount)} · سدّدت ${sar(p.amount_paid)}`
-      : sar(p.amount);
+      : sar(p.amount)) +
+    (Number(p.deposit_amount) > 0 ? ` · تشمل التأمين ${sar(p.deposit_amount)}` : "");
 
   return (
     <Card className="shadow-deed">

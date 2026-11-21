@@ -2744,6 +2744,7 @@ export type Database = {
           amount_paid: number;
           collected_by: string | null;
           created_at: string;
+          deposit_amount: number;
           due_date: string;
           id: string;
           last_reminded_at: string | null;
@@ -2762,6 +2763,7 @@ export type Database = {
           amount_paid?: number;
           collected_by?: string | null;
           created_at?: string;
+          deposit_amount?: number;
           due_date: string;
           id?: string;
           last_reminded_at?: string | null;
@@ -2780,6 +2782,7 @@ export type Database = {
           amount_paid?: number;
           collected_by?: string | null;
           created_at?: string;
+          deposit_amount?: number;
           due_date?: string;
           id?: string;
           last_reminded_at?: string | null;
