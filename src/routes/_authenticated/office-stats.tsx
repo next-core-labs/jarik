@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Eye, Gift, Handshake, MessageCircle, PieChart, Phone } from "lucide-react";
 import { toast } from "sonner";
+import { rentalUnits } from "@/lib/daily-listings";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -49,14 +50,15 @@ function OfficeStats() {
         supabase
           .from("units")
           .select(
-            "id, unit_number, unit_name, unit_type, status, annual_rent, district, property_id, properties(name)",
+            "id, unit_number, unit_name, unit_type, status, annual_rent, sale_price, district, property_id, unit_booking_settings(unit_id), properties(name)",
           ),
         supabase.from("deals").select("id, client_name, stage, value, notes"),
       ]);
       if (units.error) throw units.error;
       return {
         officesCount: offices.count ?? 0,
-        units: units.data ?? [],
+        // إعلانات الحجز اليومي فقط ليست شواغر إيجار: لها لوحتها.
+        units: rentalUnits(units.data),
         deals: deals.data ?? [],
       };
     },

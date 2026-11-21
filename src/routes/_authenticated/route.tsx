@@ -19,7 +19,14 @@ const OWNER_PATHS = new Set([
 ]);
 const TENANT_PATHS = new Set(["/tenant-dashboard", "/tenant/settings"]);
 // Open to every signed-in role that uses them (staff, owner, tenant, technician).
-const SHARED_PATHS = new Set(["/portal", "/messages", "/documents", "/notifications"]);
+// «حجوزاتي» منها: الحجز اليومي متاح لأي حساب (عميل، مستأجر، مالك، موظف)، فصاحبه يرى حجزه أيًّا كان دوره.
+const SHARED_PATHS = new Set([
+  "/portal",
+  "/messages",
+  "/documents",
+  "/notifications",
+  "/my-bookings",
+]);
 // A brand-new "office" signup holds no role at all until register_office() grants one (see
 // assign_default_role() / 20260924180000), so this form is for role-less accounts only; anyone
 // already in an office (staff, technician) or linked to one (owner, tenant) is sent home.

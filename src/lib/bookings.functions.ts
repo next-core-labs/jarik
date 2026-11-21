@@ -15,6 +15,25 @@ const MAX_BOOKINGS_PER_PHONE_PER_HOUR = 5;
 /** أبعد تاريخ يُقبل الحجز إليه: سنة من اليوم (تواريخ أبعد غالبًا خطأ إدخال). */
 const MAX_DAYS_AHEAD = 365;
 
+/**
+ * حساب الزائر إن كان داخلًا. الحجز متاح بلا حساب، فلا نشترط جلسة (لا requireSupabaseAuth) — لكن
+ * حين توجد نتحقق من رمزها ونربط الحجز بصاحبه ليظهر في «حجوزاتي». رمز غير صالح = زائر بلا حساب.
+ */
+async function optionalUserId(): Promise<string | null> {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const header = getRequest()?.headers.get("authorization") ?? "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    if (token.split(".").length !== 3) return null;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.auth.getClaims(token);
+    if (error || !data?.claims?.sub) return null;
+    return data.claims.sub;
+  } catch {
+    return null;
+  }
+}
+
 /** سعر وإتاحة مدى من التواريخ — تُستدعى كلما غيّر الزائر التواريخ. القاعدة تحتسب، لا المتصفح. */
 export const quoteBooking = createServerFn({ method: "POST" })
   .validator((input: unknown) =>
@@ -111,6 +130,16 @@ export const submitBooking = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message || "تعذّر إتمام الحجز");
 
+    // الحجز قائم؛ ربطه بالحساب إضافة فوقه، ففشلها يُسجَّل ولا يُفشل الحجز.
+    const guestUserId = await optionalUserId();
+    if (guestUserId && bookingId) {
+      const { error: linkError } = await supabaseAdmin
+        .from("bookings")
+        .update({ guest_user_id: guestUserId })
+        .eq("id", bookingId);
+      if (linkError) console.error("[submitBooking] could not link the guest:", linkError.message);
+    }
+
     const place = [unit.unit_type, unit.district ? `حي ${unit.district}` : null, unit.city]
       .filter(Boolean)
       .join(" · ");
@@ -122,5 +151,5 @@ export const submitBooking = createServerFn({ method: "POST" })
       related_id: bookingId ?? unit.id,
     });
 
-    return { ok: true as const, bookingId };
+    return { ok: true as const, bookingId, linked: Boolean(guestUserId) };
   });

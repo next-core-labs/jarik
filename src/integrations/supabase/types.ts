@@ -192,6 +192,113 @@ export type Database = {
           },
         ];
       };
+      booking_reviews: {
+        Row: {
+          author_user_id: string | null;
+          booking_id: string;
+          comment: string | null;
+          created_at: string;
+          direction: string;
+          id: string;
+          org_id: string | null;
+          rating: number;
+          unit_id: string;
+        };
+        Insert: {
+          author_user_id?: string | null;
+          booking_id: string;
+          comment?: string | null;
+          created_at?: string;
+          direction: string;
+          id?: string;
+          org_id?: string | null;
+          rating: number;
+          unit_id: string;
+        };
+        Update: {
+          author_user_id?: string | null;
+          booking_id?: string;
+          comment?: string | null;
+          created_at?: string;
+          direction?: string;
+          id?: string;
+          org_id?: string | null;
+          rating?: number;
+          unit_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "booking_reviews_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_directory";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "office_pages_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "org_settings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "projects_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["office_id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       bookings: {
         Row: {
           created_at: string;
@@ -5193,6 +5300,69 @@ export type Database = {
           },
         ];
       };
+      unit_ratings_public: {
+        Row: {
+          rating_avg: number | null;
+          reviews_count: number | null;
+          unit_id: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      unit_reviews_public: {
+        Row: {
+          comment: string | null;
+          created_at: string | null;
+          guest_first_name: string | null;
+          id: string | null;
+          rating: number | null;
+          unit_id: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "bookable_units_public";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "booking_reviews_unit_id_fkey";
+            columns: ["unit_id"];
+            isOneToOne: false;
+            referencedRelation: "vacant_units_public";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       vacant_unit_photos_public: {
         Row: {
           path: string | null;
@@ -5546,6 +5716,34 @@ export type Database = {
         Returns: {
           company_name: string;
           org_id: string;
+        }[];
+      };
+      my_bookings: {
+        Args: never;
+        Returns: {
+          city: string;
+          cover_path: string;
+          created_at: string;
+          district: string;
+          from_date: string;
+          guests: number;
+          host_comment: string;
+          host_rating: number;
+          id: string;
+          listed: boolean;
+          my_comment: string;
+          my_rating: number;
+          nights: number;
+          office_name: string;
+          office_phone: string;
+          office_whatsapp: string;
+          status: string;
+          to_date: string;
+          total_amount: number;
+          unit_id: string;
+          unit_name: string;
+          unit_number: string;
+          unit_type: string;
         }[];
       };
       my_direct_conversations: {
@@ -6077,6 +6275,15 @@ export type Database = {
         Returns: undefined;
       };
       start_direct_conversation: { Args: { _code: string }; Returns: string };
+      submit_booking_review: {
+        Args: {
+          _booking_id: string;
+          _comment?: string;
+          _direction: string;
+          _rating: number;
+        };
+        Returns: string;
+      };
       submit_feedback: {
         Args: { _category: string; _message: string; _rating: number };
         Returns: undefined;

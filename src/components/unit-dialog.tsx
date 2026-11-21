@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { toLatinDigits } from "@/lib/saudi-id";
 import {
   bookingBlockers,
   bookingDirty,
@@ -240,6 +241,12 @@ const LOCK_GROUP: Record<string, keyof Omit<UnitLocks, "note">> = {
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
+ * أرقام فقط، بعد تحويل الأرقام الهندية. الحذف المباشر لما ليس [0-9] كان يمحو «١٥٠٠» حرفًا بحرف:
+ * الحقل لا يكتب شيئًا بلوحة مفاتيح عربية، بلا رسالة.
+ */
+const digitsOnly = (v: string) => toLatinDigits(v).replace(/[^\d]/g, "");
+
+/**
  * A typed quantity: undefined when left empty, null when it is not a number ≥ 0 (or not a whole
  * number when `whole`). Arabic-Indic digits and thousands separators are accepted (parseAmount).
  */
@@ -385,6 +392,9 @@ export function UnitDialog({
 
   const setB = <K extends keyof BookingForm>(key: K, value: BookingForm[K]) =>
     setBooking((b) => ({ ...b, [key]: value }));
+  // ما ينقص قبل أن تظهر الوحدة في «الحجز اليومي» — يُعرض في القسم ويمنع الحفظ (errors.booking).
+  const bookingNeeds = canBooking && booking.enabled ? bookingBlockers(booking) : [];
+  const bookingReady = bookingNeeds.length === 0;
 
   // Photos: the saved ones are loaded once, then edited locally and written on save.
   const savedPhotos = useQuery({
@@ -513,6 +523,9 @@ export function UnitDialog({
       form.auto_price_decay && !(priceFloor && priceFloor > 0)
         ? "حدّد حدًا أدنى صحيحًا للسعر قبل تفعيل التخفيض التلقائي"
         : null,
+    // الحجز اليومي المفعَّل بسعر أو رخصة ناقصة يُحفظ ثم لا يظهر في /stays ولا يقول لماذا.
+    // فالمنع هنا، لا الصمت بعده: تُكمل الحقول أو تُطفئ الحجز.
+    booking: bookingNeeds[0] ?? null,
   };
   const formError = Object.values(errors).find((e) => e !== null) ?? null;
 
@@ -1104,6 +1117,7 @@ export function UnitDialog({
                         value={booking.nightly_rate}
                         onChange={(e) => setB("nightly_rate", e.target.value)}
                         inputMode="numeric"
+                        aria-invalid={booking.enabled && !bookingReady}
                         placeholder="1500"
                       />
                     </Field>
@@ -1120,6 +1134,7 @@ export function UnitDialog({
                         value={booking.tourism_license_no}
                         onChange={(e) => setB("tourism_license_no", e.target.value)}
                         dir="ltr"
+                        aria-invalid={booking.enabled && !booking.tourism_license_no.trim()}
                         maxLength={40}
                         placeholder="TL-000000"
                       />
@@ -1127,7 +1142,7 @@ export function UnitDialog({
                     <Field label="أقل مدة حجز (ليالٍ)">
                       <Input
                         value={booking.min_nights}
-                        onChange={(e) => setB("min_nights", e.target.value.replace(/[^\d]/g, ""))}
+                        onChange={(e) => setB("min_nights", digitsOnly(e.target.value))}
                         inputMode="numeric"
                         maxLength={2}
                       />
@@ -1135,7 +1150,7 @@ export function UnitDialog({
                     <Field label="أقصى عدد ضيوف">
                       <Input
                         value={booking.max_guests}
-                        onChange={(e) => setB("max_guests", e.target.value.replace(/[^\d]/g, ""))}
+                        onChange={(e) => setB("max_guests", digitsOnly(e.target.value))}
                         inputMode="numeric"
                         maxLength={3}
                       />
@@ -1143,9 +1158,7 @@ export function UnitDialog({
                     <Field label="إلغاء مجاني حتى (أيام قبل الدخول)">
                       <Input
                         value={booking.free_cancel_days}
-                        onChange={(e) =>
-                          setB("free_cancel_days", e.target.value.replace(/[^\d]/g, ""))
-                        }
+                        onChange={(e) => setB("free_cancel_days", digitsOnly(e.target.value))}
                         inputMode="numeric"
                         maxLength={2}
                       />
@@ -1176,13 +1189,18 @@ export function UnitDialog({
                     />
                   </Field>
 
-                  {/* شروط الظهور تُقال قبل الحفظ، لا كاختفاء صامت من السوق بعده. */}
-                  {bookingBlockers(booking).length > 0 ? (
-                    <ul className="flex flex-col gap-1 rounded-sm border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
-                      {bookingBlockers(booking).map((b) => (
-                        <li key={b}>{b}</li>
-                      ))}
-                    </ul>
+                  {/* شروط الظهور تُقال قبل الحفظ، لا كاختفاء صامت من السوق بعده — وهي تمنعه. */}
+                  {bookingNeeds.length > 0 ? (
+                    <div className="flex flex-col gap-1 rounded-sm border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs text-destructive">
+                      <p className="font-semibold">
+                        لا يُحفظ الحجز اليومي قبل إكمال هذه — أو أطفئ الحجز اليومي:
+                      </p>
+                      <ul className="flex flex-col gap-1">
+                        {bookingNeeds.map((b) => (
+                          <li key={b}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
                   ) : (
                     <p className="rounded-sm border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
                       جاهزة للحجز — تظهر في «الحجز اليومي» متى كانت الوحدة منشورة وشاغرة.

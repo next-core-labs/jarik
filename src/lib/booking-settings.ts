@@ -1,4 +1,5 @@
 import type { TablesInsert } from "@/integrations/supabase/types";
+import { parseAmount } from "@/lib/public-form";
 
 /**
  * نموذج إعدادات الحجز اليومي في نافذة الوحدة. الحقول نصوص (كما يكتبها المستخدم) وتُحوَّل عند
@@ -67,22 +68,38 @@ export function bookingFromRow(row: BookingSettingsRow | null): BookingForm {
 }
 
 /**
- * قراءة صارمة لا «تنظيف». حذف المحارف غير الرقمية يحوّل «-5» إلى 5 بصمت: المكتب يرى سالبًا في
- * الحقل ويُحفظ موجب — وهذا أسوأ من رفض المُدخَل. فما لم يكن رقمًا صحيحًا يُعَد غير محدَّد (null)،
- * وشروط الظهور (bookingBlockers) تقول للمكتب إن السعر ناقص.
+ * قراءة الأرقام هنا هي نفسها قراءة بقية نافذة الوحدة (parseAmount): تقبل الأرقام الهندية (١٥٠٠)
+ * وفواصل الآلاف (1,500 · ١٬٥٠٠) وترفض ما ليس رقمًا — ولا «تنظّف» المُدخَل، فحذف المحارف غير
+ * الرقمية يحوّل «-5» إلى 5 بصمت: المكتب يرى سالبًا في الحقل ويُحفظ موجب.
+ *
+ * وكان هنا قارئ خاص بتعبير \d فقط — أي لاتيني بحت. فسعر ليلة يُكتب بلوحة مفاتيح عربية كان
+ * يُقرأ null ويُحفظ فراغًا، فتختفي الوحدة من /stays بلا رسالة واحدة. ولهذا نفرّق أدناه بين
+ * «فارغ» و«ليس رقمًا»: الأول نقص، والثاني خطأ يجب أن يُقال للمكتب لا أن يُمحى.
  */
-const money = (v: string): number | null => {
-  const t = v.trim();
-  if (!/^\d+(\.\d+)?$/.test(t)) return null;
-  const n = Number(t);
-  return n > 0 ? n : null;
+type NumRead = { value: number | null; invalid: boolean };
+
+const readMoney = (v: string): NumRead => {
+  const n = parseAmount(v);
+  if (n === undefined) return { value: null, invalid: false };
+  if (n === null || n <= 0) return { value: null, invalid: true };
+  return { value: n, invalid: false };
 };
-const count = (v: string): number | null => {
-  const t = v.trim();
-  if (!/^\d+$/.test(t)) return null;
-  const n = Number(t);
-  return n > 0 ? n : null;
+
+const readCount = (v: string): NumRead => {
+  const n = parseAmount(v);
+  if (n === undefined) return { value: null, invalid: false };
+  if (n === null || n <= 0 || !Number.isInteger(n)) return { value: null, invalid: true };
+  return { value: n, invalid: false };
 };
+
+/** عدد صحيح ≥ 0 (الإلغاء المجاني): الفارغ والخطأ كلاهما صفر، فلا يمنع الحفظ. */
+const readDays = (v: string): number => {
+  const n = parseAmount(v);
+  return n === undefined || n === null || n < 0 ? 0 : Math.floor(n);
+};
+
+const money = (v: string): number | null => readMoney(v).value;
+const count = (v: string): number | null => readCount(v).value;
 
 export function bookingToRow(
   unitId: string,
@@ -98,7 +115,7 @@ export function bookingToRow(
     checkin_time: f.checkin_time || "16:00",
     checkout_time: f.checkout_time || "12:00",
     tourism_license_no: f.tourism_license_no.trim() || null,
-    free_cancel_days: Math.min(60, Math.max(0, Number(f.free_cancel_days) || 0)),
+    free_cancel_days: Math.min(60, readDays(f.free_cancel_days)),
     house_rules: f.house_rules.trim() || null,
   };
 }
@@ -111,15 +128,33 @@ export function bookingDirty(f: BookingForm, row: BookingSettingsRow | null): bo
 }
 
 /**
- * ما ينقص قبل أن تظهر الوحدة في سوق الحجز اليومي — تُقال للمكتب قبل الحفظ، لا كخطأ بعده.
- * فارغة = جاهزة. تُستدعى فقط عند التفعيل.
+ * ما ينقص — أو ما كُتب خطأً — قبل أن تظهر الوحدة في سوق الحجز اليومي. تُقال للمكتب قبل الحفظ،
+ * وتمنعه (formError في نافذة الوحدة): حفظ «الحجز اليومي» بسعر أو رخصة ناقصة ينتج وحدة مفعَّلة
+ * لا تظهر في /stays ولا تقول لأحد لماذا — وهو ما حدث فعلًا. فارغة = جاهزة.
+ * تُستدعى فقط عند التفعيل.
  */
 export function bookingBlockers(f: BookingForm): string[] {
   const out: string[] = [];
-  if (money(f.nightly_rate) === null) out.push("أضف سعر الليلة في أيام الأسبوع.");
+
+  const rate = readMoney(f.nightly_rate);
+  if (rate.invalid) out.push("سعر الليلة ليس رقمًا موجبًا — اكتبه بالأرقام، مثال: 1500.");
+  else if (rate.value === null) out.push("أضف سعر الليلة في أيام الأسبوع.");
+
+  const weekend = readMoney(f.weekend_rate);
+  if (weekend.invalid) {
+    out.push("سعر ليلة نهاية الأسبوع ليس رقمًا موجبًا — أو اتركه فارغًا ليساوي سعر الأسبوع.");
+  }
+
   if (!f.tourism_license_no.trim()) {
     out.push("أضف رقم رخصة الإيواء السياحي — النظام يُلزم بها للتأجير اليومي.");
   }
+
+  const guests = readCount(f.max_guests);
+  if (guests.invalid) out.push("أقصى عدد ضيوف رقم صحيح — أو اتركه فارغًا.");
+
+  const nights = readCount(f.min_nights);
+  if (nights.invalid) out.push("أقل مدة حجز رقم صحيح من 1 إلى 90.");
+
   if (f.checkin_time && f.checkout_time && f.checkin_time === f.checkout_time) {
     out.push("وقت الدخول ووقت الخروج متطابقان.");
   }

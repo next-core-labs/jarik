@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
+  ChevronDown,
   Copy,
   FileText,
   Globe,
@@ -48,6 +49,7 @@ import { useOwnerUnitGroups } from "@/lib/owner-units";
 import { agreementPhase, heldAgreementUnitIds } from "@/lib/agreement-live";
 import { useUnitManagement, type UnitManagement } from "@/lib/unit-management";
 import { useMyRoles } from "@/lib/use-role";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/owner/properties")({
   staticData: { sitemap: false },
@@ -109,6 +111,14 @@ function OwnerProperties() {
     existingNumbers: string[];
   } | null>(null);
   const [requestFor, setRequestFor] = useState<string[] | null>(null);
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
+  const toggleOpen = (id: string) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const own = useQuery({
     queryKey: ["owner-own-properties", userId],
@@ -253,6 +263,8 @@ function OwnerProperties() {
   });
 
   const continueAfterCreate = (c: CreatedProperty) => {
+    // The new property opens so the units added next are in view.
+    setOpenIds((prev) => new Set(prev).add(c.id));
     if (c.structure === "single") {
       setUnitDialog({
         propertyId: c.id,
@@ -337,15 +349,24 @@ function OwnerProperties() {
               (u) => !managedUnits.has(u.id) && managementOf(u.id).kind === "none",
             );
             const specs = buildingSpecsLine(p);
+            // Folded until clicked, like the office's «الأملاك والوحدات»; a lone property stays open.
+            const isOpen = properties.length === 1 || openIds.has(p.id);
             return (
               <Card key={p.id} className="shadow-deed">
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-start gap-3 text-start"
+                      data-building-toggle
+                      onClick={() => toggleOpen(p.id)}
+                      aria-expanded={isOpen}
+                      disabled={properties.length === 1}
+                    >
                       <span className="grid size-10 shrink-0 place-items-center bg-muted text-brass">
                         {single ? <Home className="size-5" /> : <Building2 className="size-5" />}
                       </span>
-                      <div>
+                      <div className="min-w-0">
                         <CardTitle className="font-display text-xl">{p.name}</CardTitle>
                         <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                           <MapPin className="size-3.5" />
@@ -370,14 +391,28 @@ function OwnerProperties() {
                             ) : null}
                           </p>
                         ) : null}
+                        {!isOpen ? (
+                          <p className="mt-2 text-sm font-medium underline underline-offset-4">
+                            {single ? "عرض التفاصيل" : `عرض الوحدات (${units.length})`}
+                          </p>
+                        ) : null}
                       </div>
-                    </div>
+                    </button>
                     <div className="flex flex-wrap items-center gap-2">
                       {single ? null : <Badge variant="outline">{units.length} وحدة</Badge>}
                       {editable ? null : <Badge variant="secondary">سجّله مكتبك</Badge>}
+                      {properties.length > 1 ? (
+                        <ChevronDown
+                          className={cn(
+                            "size-5 text-muted-foreground transition-transform",
+                            isOpen && "rotate-180",
+                          )}
+                          aria-hidden
+                        />
+                      ) : null}
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className={cn("mt-3 flex flex-wrap gap-2", !isOpen && "hidden")}>
                     {unmanaged.length > 0 ? (
                       <Button size="sm" onClick={() => setRequestFor(unmanaged.map((u) => u.id))}>
                         <Handshake className="size-4" />
@@ -477,7 +512,7 @@ function OwnerProperties() {
                     ) : null}
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className={cn(!isOpen && "hidden")}>
                   {units.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       {single

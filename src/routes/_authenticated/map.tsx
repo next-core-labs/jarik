@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { MapPin, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { rentalUnits } from "@/lib/daily-listings";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -40,7 +41,14 @@ type Row = {
   district: string | null;
   lat: number | null;
   lng: number | null;
-  units: { status: string; annual_rent: number }[] | null;
+  units:
+    | {
+        status: string;
+        annual_rent: number;
+        sale_price: number | null;
+        unit_booking_settings?: unknown;
+      }[]
+    | null;
 };
 
 function MapPage() {
@@ -52,10 +60,15 @@ function MapPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("properties")
-        .select("id, name, city, district, lat, lng, units(status, annual_rent)")
+        .select(
+          "id, name, city, district, lat, lng, units(status, annual_rent, sale_price, unit_booking_settings(unit_id))",
+        )
         .order("name");
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      // خريطة إشغال الإيجار: إعلان حجز يومي فقط ليس وحدة شاغرة، وعقاره لا يُعدّ خاليًا.
+      return ((data ?? []) as unknown as Row[])
+        .map((p) => ({ ...p, units: rentalUnits(p.units), hadUnits: (p.units ?? []).length > 0 }))
+        .filter((p) => !(p.hadUnits && p.units.length === 0));
     },
   });
 

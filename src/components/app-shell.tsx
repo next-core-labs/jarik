@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   BadgeCheck,
+  BedDouble,
   Bell,
   Building2,
   CalendarCheck,
@@ -64,11 +65,21 @@ type NavLink = { to: string; label: string; icon: LucideIcon };
 const staffTopNav: NavLink[] = [
   { to: "/dashboard", label: "لوحة المؤشرات", icon: Gauge },
   { to: "/notifications", label: "الإشعارات", icon: Bell },
-  { to: "/messages", label: "المحادثات", icon: MessagesSquare },
   { to: "/assistant", label: "المساعد الذكي", icon: MessageCircle },
+  { to: "/messages", label: "المحادثات", icon: MessagesSquare },
 ];
 
 const staffNavGroups: { key: string; label: string; items: NavLink[] }[] = [
+  // «المكتب» first, right under «المحادثات» — asked for by the office owner.
+  {
+    key: "office",
+    label: "المكتب",
+    items: [
+      { to: "/settings", label: "هوية المكتب", icon: BadgeCheck },
+      { to: "/office-team", label: "فريق المكتب", icon: UserCog },
+      { to: "/portal", label: "صفحتي", icon: UserCircle },
+    ],
+  },
   {
     key: "properties",
     label: "العقارات",
@@ -91,13 +102,21 @@ const staffNavGroups: { key: string; label: string; items: NavLink[] }[] = [
       { to: "/maintenance", label: "الصيانة", icon: Wrench },
     ],
   },
+  // الحجز اليومي مسار مستقل عن الإيجار السنوي: إعلاناته ورخصه وعملاؤه في لوحته، لا بين العقود.
+  {
+    key: "stays",
+    label: "الحجز اليومي",
+    items: [
+      { to: "/bookings", label: "لوحة الحجز اليومي", icon: CalendarCheck },
+      { to: "/stays", label: "سوق الحجز اليومي", icon: BedDouble },
+    ],
+  },
   {
     key: "market",
     label: "السوق والمبيعات",
     items: [
       { to: "/", label: "سوق العروض", icon: Store },
       { to: "/office-projects", label: "المشاريع العقارية", icon: Building2 },
-      { to: "/bookings", label: "الحجوزات اليومية", icon: CalendarCheck },
       { to: "/requests", label: "طلبات الوحدات", icon: ClipboardList },
       { to: "/deals", label: "المبيعات والصفقات", icon: Handshake },
       { to: "/whatsapp", label: "مساعد واتساب", icon: MessageSquare },
@@ -110,15 +129,6 @@ const staffNavGroups: { key: string; label: string; items: NavLink[] }[] = [
       { to: "/office-stats", label: "إحصاءات المكتب", icon: PieChart },
       { to: "/reports", label: "التقارير الشهرية", icon: FileBarChart },
       { to: "/audit", label: "سجل التدقيق", icon: ScrollText },
-    ],
-  },
-  {
-    key: "office",
-    label: "المكتب",
-    items: [
-      { to: "/settings", label: "هوية المكتب", icon: BadgeCheck },
-      { to: "/office-team", label: "فريق المكتب", icon: UserCog },
-      { to: "/portal", label: "صفحتي", icon: UserCircle },
     ],
   },
 ];
@@ -186,6 +196,7 @@ const tenantNav: PortalNavItem[] = [
     badge: "unread",
   },
   { key: "documents", label: "المستندات", icon: FileText, href: "/documents" },
+  { key: "my-bookings", label: "حجوزاتي", icon: CalendarCheck, href: "/my-bookings" },
   { key: "settings", label: "الإعدادات", icon: UserCog, href: "/tenant/settings" },
 ];
 // الشريط السفلي بالجوال: 5 أيقونات بالضبط حسب المواصفة — "الإعدادات" تبقى متاحة من القائمة
@@ -193,7 +204,7 @@ const tenantNav: PortalNavItem[] = [
 const tenantBottomNav = tenantNav.slice(0, 5);
 
 // «عميل» before any lease: someone looking to buy or rent has no payments or maintenance yet, so
-// their menu points at the market and the requests market instead. Five items: the bottom bar too.
+// their menu points at the market and the requests market instead.
 const clientNav: PortalNavItem[] = [
   { key: "home", label: "الرئيسية", icon: Gauge, href: "/tenant-dashboard" },
   { key: "market", label: "سوق العروض", icon: Store, href: "/" },
@@ -205,8 +216,11 @@ const clientNav: PortalNavItem[] = [
     href: "/messages",
     badge: "unread",
   },
+  { key: "my-bookings", label: "حجوزاتي", icon: CalendarCheck, href: "/my-bookings" },
   { key: "settings", label: "الإعدادات", icon: UserCog, href: "/tenant/settings" },
 ];
+// الشريط السفلي يبقى خمسة عناصر: «حجوزاتي» في القائمة الجانبية (كما «الإعدادات» عند المستأجر).
+const clientBottomNav = clientNav.filter((item) => item.key !== "my-bookings");
 
 // قائمة المالك (spec: owner-dashboard-prompt.md، قسم 3) — بنفس منطق قائمة المستأجر: عناصر
 // "#" ترجع لنفس صفحة /owner-dashboard وتمرّر لقسمها، لأن كل الأقسام المذكورة موجودة فعليًا
@@ -406,6 +420,34 @@ export function AppShell({ children }: { children: ReactNode }) {
       return count ?? 0;
     },
   });
+  // طلبات حجز يومي تنتظر تأكيد المكتب (RLS: حجوزات مكتبه) — تحجز تواريخها حتى يُبتّ فيها.
+  const pendingBookings = useQuery({
+    queryKey: ["office-nav-pending-bookings", me?.userId],
+    enabled: staff,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+  // عدّاد على رابط المكتب: ما ينتظر ردّه.
+  const staffBadge = (to: string): { count: number; label: string } | null => {
+    const count =
+      to === "/agreements"
+        ? (pendingAgreements.data ?? 0)
+        : to === "/bookings"
+          ? (pendingBookings.data ?? 0)
+          : 0;
+    if (count <= 0) return null;
+    return {
+      count,
+      label: to === "/bookings" ? `${count} طلب حجز بانتظار تأكيدك` : `${count} طلب بانتظار ردّك`,
+    };
+  };
   const navBadge = (key: "overdue" | "unread" | "approvals") =>
     (key === "overdue"
       ? overdueCount.data
@@ -530,6 +572,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const navLink = (item: NavLink) => {
     const active = isCurrent(item.to);
+    const badge = staffBadge(item.to);
     return (
       <Link
         key={item.to}
@@ -545,12 +588,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <item.icon className="size-4" />
         <span className="flex-1">{item.label}</span>
-        {item.to === "/agreements" && (pendingAgreements.data ?? 0) > 0 ? (
+        {badge ? (
           <span
             className="rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground"
-            aria-label={`${pendingAgreements.data} طلب بانتظار ردّك`}
+            aria-label={badge.label}
           >
-            {pendingAgreements.data}
+            {badge.count}
           </span>
         ) : null}
       </Link>
@@ -642,9 +685,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {nav.map(navLink)}
                 {staffGroups.map((group) => {
                   const isOpen = groupOpen(group.key, group.items);
-                  const hasBadge =
-                    group.items.some((i) => i.to === "/agreements") &&
-                    (pendingAgreements.data ?? 0) > 0;
+                  const hasBadge = group.items.some((i) => staffBadge(i.to) !== null);
                   return (
                     <div key={group.key} className="pt-3">
                       <button
@@ -746,7 +787,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {!platformTeamPage && tenant ? (
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-card lg:hidden">
-          {(client ? clientNav : tenantBottomNav).map((item) => {
+          {(client ? clientBottomNav : tenantBottomNav).map((item) => {
             const active = portalItemActive(item.href);
             const badgeCount = item.badge ? navBadge(item.badge) : 0;
             return (

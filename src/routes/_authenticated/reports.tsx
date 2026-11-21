@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Download, BellRing } from "lucide-react";
 import { toast } from "sonner";
+import { rentalUnits } from "@/lib/daily-listings";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -83,7 +84,9 @@ function Reports() {
           .order("due_date"),
         supabase.from("expenses").select("id, amount, category, expense_date"),
         supabase.from("deals").select("id, stage, value, commission, assigned_to, created_at"),
-        supabase.from("units").select("id, status, annual_rent"),
+        supabase
+          .from("units")
+          .select("id, status, annual_rent, sale_price, unit_booking_settings(unit_id)"),
         listClientAccounts().catch(() => []),
         supabase.from("invoices").select("id, issue_date, vat_amount"),
       ]);
@@ -92,7 +95,8 @@ function Reports() {
         payments: payments.data ?? [],
         expenses: expenses.data ?? [],
         deals: deals.data ?? [],
-        units: units.data ?? [],
+        // نسبة الإشغال للإيجار: إعلان حجز يومي فقط ليس وحدة شاغرة.
+        units: rentalUnits(units.data),
         accounts: (accounts ?? []) as { id: string; email: string; fullName: string }[],
         invoices: invoices.data ?? [],
       };

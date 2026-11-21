@@ -14,6 +14,7 @@ import { PhotoGallery } from "@/components/photo-gallery";
 import { SiteHeader } from "@/components/site-header";
 import { BookingWidget } from "@/components/booking-widget";
 import { UnitRequestForm } from "@/components/unit-request-form";
+import { UnitReviews, type UnitReview } from "@/components/unit-reviews";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { loadListingDistrictStat, vsDistrictPct, type PriceStat } from "@/lib/district-prices";
@@ -50,6 +51,8 @@ type UnitPageData =
       districtStat: PriceStat | null;
       /** إعدادات الحجز اليومي حين تكون الوحدة معروضة له — null لوحدة إيجار سنوي أو بيع. */
       booking: BookingOffer | null;
+      /** تقييمات الضيوف لوحدة حجز يومي — فارغة لغيرها. */
+      reviews: UnitReview[];
     }
   | { status: "missing" }
   | { status: "error" };
@@ -186,7 +189,30 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
           }
         : null;
 
-    return { status: "ok", listing, photos, similar, advertiser, districtStat, booking };
+    // تقييمات الضيوف: لوحدات الحجز اليومي فقط. خطأ القراءة يُعرض كـ«لا تقييمات» ولا يُسقط الصفحة.
+    const { data: reviewRows } = booking
+      ? await supabase
+          .from("unit_reviews_public")
+          .select("id, rating, comment, created_at, guest_first_name")
+          .eq("unit_id", unitId)
+          .order("created_at", { ascending: false })
+          .limit(30)
+      : { data: null };
+    const reviews: UnitReview[] = (reviewRows ?? []).flatMap((r) =>
+      r.id && r.rating
+        ? [
+            {
+              id: r.id,
+              rating: r.rating,
+              comment: r.comment,
+              createdAt: r.created_at,
+              guestFirstName: r.guest_first_name,
+            },
+          ]
+        : [],
+    );
+
+    return { status: "ok", listing, photos, similar, advertiser, districtStat, booking, reviews };
   } catch {
     return { status: "error" };
   }
@@ -390,7 +416,7 @@ function UnitPublic() {
 
   if (data.status !== "ok") return <UnitUnavailable error />;
 
-  const { listing: l, photos, similar, advertiser, districtStat, booking } = data;
+  const { listing: l, photos, similar, advertiser, districtStat, booking, reviews } = data;
   const title = listingTitle(l);
   const location = listingLocation(l);
 
@@ -601,6 +627,8 @@ function UnitPublic() {
             {l.purpose === "sale" && l.salePrice > 0 ? (
               <MortgageCalculator price={l.salePrice} locale={locale} />
             ) : null}
+
+            <UnitReviews reviews={reviews} locale={locale} />
 
             {similar.length > 0 ? (
               <section className="flex flex-col gap-3">

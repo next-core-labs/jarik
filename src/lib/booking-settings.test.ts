@@ -86,6 +86,24 @@ describe("bookingToRow", () => {
     expect(bookingToRow("u1", { ...emptyBooking, nightly_rate: "0" }).nightly_rate).toBeNull();
     expect(bookingToRow("u1", { ...emptyBooking, nightly_rate: "-5" }).nightly_rate).toBeNull();
   });
+
+  // الخلل الذي اختفت به وحدة حقيقية من /stays: السعر كُتب، والقارئ لاتيني بحت فحُفظ فراغًا.
+  it("reads a price typed on an Arabic keyboard, and thousands separators", () => {
+    expect(bookingToRow("u1", { ...emptyBooking, nightly_rate: "١٥٠٠" }).nightly_rate).toBe(1500);
+    expect(bookingToRow("u1", { ...emptyBooking, nightly_rate: "1,500" }).nightly_rate).toBe(1500);
+    expect(bookingToRow("u1", { ...emptyBooking, nightly_rate: "١٬٥٠٠" }).nightly_rate).toBe(1500);
+    expect(bookingToRow("u1", { ...emptyBooking, weekend_rate: "٢٥٠٠" }).weekend_rate).toBe(2500);
+    expect(bookingToRow("u1", { ...emptyBooking, max_guests: "١٢" }).max_guests).toBe(12);
+    expect(bookingToRow("u1", { ...emptyBooking, min_nights: "٣" }).min_nights).toBe(3);
+    expect(bookingToRow("u1", { ...emptyBooking, free_cancel_days: "٧" }).free_cancel_days).toBe(7);
+  });
+
+  it("still refuses text, so a typo is never saved as a price", () => {
+    expect(
+      bookingToRow("u1", { ...emptyBooking, nightly_rate: "1500ر.س" }).nightly_rate,
+    ).toBeNull();
+    expect(bookingToRow("u1", { ...emptyBooking, nightly_rate: "غالي" }).nightly_rate).toBeNull();
+  });
 });
 
 describe("bookingDirty", () => {
@@ -120,6 +138,27 @@ describe("bookingBlockers", () => {
     expect(blockers).toHaveLength(2);
     expect(blockers.join(" ")).toContain("سعر الليلة");
     expect(blockers.join(" ")).toContain("رخصة الإيواء السياحي");
+  });
+
+  it("accepts an Arabic-typed price instead of asking for one that is already there", () => {
+    const f = { ...emptyBooking, enabled: true, nightly_rate: "١٥٠٠", tourism_license_no: "TL-9" };
+    expect(bookingBlockers(f)).toEqual([]);
+  });
+
+  it("says a price is wrong rather than missing — the office can see it is not empty", () => {
+    const f = { ...emptyBooking, enabled: true, nightly_rate: "غالي", tourism_license_no: "TL-9" };
+    expect(bookingBlockers(f).join(" ")).toContain("ليس رقمًا موجبًا");
+    expect(bookingBlockers(f).join(" ")).not.toContain("أضف سعر الليلة");
+  });
+
+  it("catches a bad weekend rate and guest count, which the database would silently null", () => {
+    const base = { ...emptyBooking, enabled: true, nightly_rate: "1500", tourism_license_no: "T" };
+    expect(bookingBlockers({ ...base, weekend_rate: "مجانًا" }).join(" ")).toContain(
+      "نهاية الأسبوع",
+    );
+    expect(bookingBlockers({ ...base, max_guests: "كثير" }).join(" ")).toContain("أقصى عدد ضيوف");
+    // الفارغ ليس خطأً: سعر نهاية الأسبوع يساوي سعر الأسبوع، وعدد الضيوف غير محدَّد.
+    expect(bookingBlockers({ ...base, weekend_rate: "", max_guests: "" })).toEqual([]);
   });
 
   it("catches identical check-in and check-out times", () => {

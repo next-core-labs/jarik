@@ -9,6 +9,7 @@ import {
   occupiesDates,
   OCCUPYING_STATUSES,
   overlapsBooked,
+  splitMyBookings,
   toDateInput,
 } from "./bookings";
 
@@ -115,5 +116,27 @@ describe("booking statuses", () => {
     expect(isBookingStatus("pending")).toBe(true);
     expect(isBookingStatus("some_new_status")).toBe(false);
     expect(isBookingStatus(null)).toBe(false);
+  });
+});
+
+describe("splitMyBookings", () => {
+  const row = (status: string, my_rating: number | null = null) => ({ status, my_rating });
+
+  it("puts a finished stay with no review first, and only until it is rated", () => {
+    const { toRate, past } = splitMyBookings([row("completed"), row("completed", 4)]);
+    expect(toRate).toEqual([row("completed")]);
+    expect(past).toEqual([row("completed", 4)]);
+  });
+
+  it("keeps pending and confirmed together as upcoming", () => {
+    const { upcoming } = splitMyBookings([row("pending"), row("confirmed"), row("rejected")]);
+    expect(upcoming.map((b) => b.status)).toEqual(["pending", "confirmed"]);
+  });
+
+  it("places every booking in exactly one section", () => {
+    const rows = ["pending", "confirmed", "rejected", "cancelled", "completed"].map((s) => row(s));
+    const { toRate, upcoming, past } = splitMyBookings(rows);
+    expect(toRate.length + upcoming.length + past.length).toBe(rows.length);
+    expect(past.map((b) => b.status)).toEqual(["rejected", "cancelled"]);
   });
 });

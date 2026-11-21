@@ -32,6 +32,7 @@ import { Route as AuthenticatedHqRouteImport } from './routes/_authenticated/hq'
 import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
 import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
+import { Route as AuthenticatedMyBookingsRouteImport } from './routes/_authenticated/my-bookings'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedOfficeProjectsRouteImport } from './routes/_authenticated/office-projects'
 import { Route as AuthenticatedOfficeStatsRouteImport } from './routes/_authenticated/office-stats'
@@ -185,6 +186,11 @@ const AuthenticatedMapRoute = AuthenticatedMapRouteImport.update({
 const AuthenticatedMessagesRoute = AuthenticatedMessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMyBookingsRoute = AuthenticatedMyBookingsRouteImport.update({
+  id: '/my-bookings',
+  path: '/my-bookings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedNotificationsRoute =
@@ -416,6 +422,7 @@ export interface FileRoutesByFullPath {
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/map': typeof AuthenticatedMapRoute
   '/messages': typeof AuthenticatedMessagesRoute
+  '/my-bookings': typeof AuthenticatedMyBookingsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/office-projects': typeof AuthenticatedOfficeProjectsRoute
   '/office-stats': typeof AuthenticatedOfficeStatsRoute
@@ -478,6 +485,7 @@ export interface FileRoutesByTo {
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/map': typeof AuthenticatedMapRoute
   '/messages': typeof AuthenticatedMessagesRoute
+  '/my-bookings': typeof AuthenticatedMyBookingsRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/office-projects': typeof AuthenticatedOfficeProjectsRoute
   '/office-stats': typeof AuthenticatedOfficeStatsRoute
@@ -542,6 +550,7 @@ export interface FileRoutesById {
   '/_authenticated/maintenance': typeof AuthenticatedMaintenanceRoute
   '/_authenticated/map': typeof AuthenticatedMapRoute
   '/_authenticated/messages': typeof AuthenticatedMessagesRoute
+  '/_authenticated/my-bookings': typeof AuthenticatedMyBookingsRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/office-projects': typeof AuthenticatedOfficeProjectsRoute
   '/_authenticated/office-stats': typeof AuthenticatedOfficeStatsRoute
@@ -606,6 +615,7 @@ export interface FileRouteTypes {
     | '/maintenance'
     | '/map'
     | '/messages'
+    | '/my-bookings'
     | '/notifications'
     | '/office-projects'
     | '/office-stats'
@@ -668,6 +678,7 @@ export interface FileRouteTypes {
     | '/maintenance'
     | '/map'
     | '/messages'
+    | '/my-bookings'
     | '/notifications'
     | '/office-projects'
     | '/office-stats'
@@ -731,6 +742,7 @@ export interface FileRouteTypes {
     | '/_authenticated/maintenance'
     | '/_authenticated/map'
     | '/_authenticated/messages'
+    | '/_authenticated/my-bookings'
     | '/_authenticated/notifications'
     | '/_authenticated/office-projects'
     | '/_authenticated/office-stats'
@@ -959,6 +971,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/messages'
       preLoaderRoute: typeof AuthenticatedMessagesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-bookings': {
+      id: '/_authenticated/my-bookings'
+      path: '/my-bookings'
+      fullPath: '/my-bookings'
+      preLoaderRoute: typeof AuthenticatedMyBookingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/notifications': {
@@ -1244,6 +1263,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMaintenanceRoute: typeof AuthenticatedMaintenanceRoute
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
+  AuthenticatedMyBookingsRoute: typeof AuthenticatedMyBookingsRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedOfficeProjectsRoute: typeof AuthenticatedOfficeProjectsRoute
   AuthenticatedOfficeStatsRoute: typeof AuthenticatedOfficeStatsRoute
@@ -1284,6 +1304,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMaintenanceRoute: AuthenticatedMaintenanceRoute,
   AuthenticatedMapRoute: AuthenticatedMapRoute,
   AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
+  AuthenticatedMyBookingsRoute: AuthenticatedMyBookingsRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedOfficeProjectsRoute: AuthenticatedOfficeProjectsRoute,
   AuthenticatedOfficeStatsRoute: AuthenticatedOfficeStatsRoute,

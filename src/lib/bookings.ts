@@ -88,3 +88,29 @@ export function stayLabel(from: string, to: string, locale: Locale = "ar"): stri
     });
   return `${fmt(from)} → ${fmt(to)}`;
 }
+
+/**
+ * ترتيب «حجوزاتي»: المنتهي بلا تقييم أولًا (هو ما ينتظر فعلًا من الضيف)، ثم القائم، ثم ما مضى.
+ * كل حجز في قسم واحد بالضبط.
+ */
+export function splitMyBookings<T extends { status: string; my_rating: number | null }>(
+  rows: readonly T[],
+): { toRate: T[]; upcoming: T[]; past: T[] } {
+  const toRate: T[] = [];
+  const upcoming: T[] = [];
+  const past: T[] = [];
+  for (const b of rows) {
+    if (b.status === "completed" && b.my_rating == null) toRate.push(b);
+    else if (b.status === "pending" || b.status === "confirmed") upcoming.push(b);
+    else past.push(b);
+  }
+  return { toRate, upcoming, past };
+}
+
+/** «٤٫٧» — متوسط التقييم بخانة عشرية واحدة. */
+export function ratingLabel(avg: number, locale: Locale = "ar"): string {
+  return avg.toLocaleString(locale === "en" ? "en-US" : "ar-SA", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}

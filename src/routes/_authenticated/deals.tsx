@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { rentalUnits } from "@/lib/daily-listings";
 import { sar, shortDate, dealStageLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/deals")({
@@ -70,11 +71,13 @@ function Deals() {
           .order("created_at", { ascending: false }),
         supabase
           .from("units")
-          .select("id, unit_number, unit_type, annual_rent, district, properties(name)")
+          .select(
+            "id, unit_number, unit_type, annual_rent, sale_price, district, unit_booking_settings(unit_id), properties(name)",
+          )
           .eq("status", "vacant"),
       ]);
       if (deals.error) throw deals.error;
-      return { deals: deals.data ?? [], vacant: vacant.data ?? [] };
+      return { deals: deals.data ?? [], vacant: rentalUnits(vacant.data) };
     },
   });
 

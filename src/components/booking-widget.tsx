@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { CalendarCheck, CheckCircle2, Clock, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,7 +58,8 @@ export function BookingWidget({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [guests, setGuests] = useState("");
-  const [done, setDone] = useState(false);
+  // false = أُرسل بلا حساب؛ true = رُبط بحساب الضيف فيظهر في «حجوزاتي».
+  const [done, setDone] = useState<null | { linked: boolean }>(null);
 
   // الليالي المشغولة: لتظليل مبكر ورسالة فورية بلا انتظار رد الخادم.
   const booked = useQuery({
@@ -103,7 +105,7 @@ export function BookingWidget({
           ...(guests.trim() ? { guests: Number(guests) } : {}),
         },
       }),
-    onSuccess: () => setDone(true),
+    onSuccess: (res) => setDone({ linked: res.linked }),
     onError: (e: Error) => toast.error(userErrorMessage(e, t("bk_error"))),
   });
 
@@ -125,6 +127,13 @@ export function BookingWidget({
         <CheckCircle2 className="size-8 text-brass" aria-hidden />
         <p className="text-sm font-medium">{t("bk_done")}</p>
         <p className="text-xs text-muted-foreground">{t("bk_done_note")}</p>
+        {done.linked ? (
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/my-bookings">{t("bk_done_mine")}</Link>
+          </Button>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t("bk_done_signin")}</p>
+        )}
       </div>
     );
   }

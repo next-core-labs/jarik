@@ -60,6 +60,7 @@ import {
   type UnitFormValues,
   type UnitLocks,
 } from "@/components/unit-dialog";
+import { rentalUnits } from "@/lib/daily-listings";
 import { BulkUnitsDialog } from "@/components/bulk-units-dialog";
 import { buildingSpecsLine, UnitFurnishingLine } from "@/components/unit-specs-summary";
 import { sar, shortDate, unitStatusLabel } from "@/lib/format";
@@ -276,7 +277,7 @@ function Properties() {
       const { data, error } = await supabase
         .from("properties")
         .select(
-          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, owner_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, market_org_id, featured_until, leases(status, tenants(full_name)))",
+          "id, name, property_type, structure, building_type, floors_count, year_built, elevators, parking_spaces, org_id, owner_id, city, district, address, deed_number, owner_name, lat, lng, units(id, unit_number, unit_name, unit_type, district, street, floor_no, rooms, halls, bathrooms, area, annual_rent, sale_price, listing_purpose, status, furnished, furnishing, furniture, furniture_notes, deed_number, electricity_meter_no, water_meter_no, owner_id, notes, auto_price_decay, price_floor, market_listed, market_paid_until, market_org_id, featured_until, unit_booking_settings(unit_id), leases(status, tenants(full_name)))",
         )
         .order("created_at");
       if (error) throw error;
@@ -286,9 +287,13 @@ function Properties() {
 
   // An account that is staff and also an owner gets its own office-less properties back from RLS;
   // those are managed from «عقاراتي» (/owner/properties), not here.
-  const data = (fetched ?? []).filter(
-    (p) => !(p.org_id == null && me?.userId && p.owner_id === me.userId),
-  );
+  //
+  // إعلانات الحجز اليومي فقط (بلا إيجار سنوي ولا سعر بيع) تُدار من «لوحة الحجز اليومي»، لا هنا:
+  // شاليه يُحجز بالليلة ليس وحدة شاغرة تنتظر عقدًا. والعقار الذي كل وحداته كذلك يُخفى معها.
+  const data = (fetched ?? [])
+    .filter((p) => !(p.org_id == null && me?.userId && p.owner_id === me.userId))
+    .map((p) => ({ ...p, units: rentalUnits(p.units), hadUnits: (p.units ?? []).length > 0 }))
+    .filter((p) => !(p.hadUnits && p.units.length === 0));
   type Unit = (typeof data)[number]["units"][number];
   // Owners' units seen through a management agreement: what the agreement lets this office edit.
   const management = useUnitManagement(
