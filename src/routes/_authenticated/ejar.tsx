@@ -346,10 +346,10 @@ function EjarSection() {
                     <Button
                       variant="outline"
                       className="mt-[1.375rem]"
-                      disabled={
-                        saveContract.isPending || Boolean(contractError) || !contractValue
+                      disabled={saveContract.isPending || Boolean(contractError) || !contractValue}
+                      title={
+                        !contractValue && !contractError ? "أدخل رقم عقد إيجار أولًا" : undefined
                       }
-                      title={!contractValue && !contractError ? "أدخل رقم عقد إيجار أولًا" : undefined}
                       onClick={() =>
                         saveContract.mutate({ leaseId: l.id, current: l.ejar_contract_no ?? null })
                       }

@@ -231,15 +231,17 @@ export function similarListings(all: Listing[], current: Listing, limit = 3): Li
     (l.purpose === current.purpose ? 4 : 0) +
     (current.district && l.district === current.district ? 2 : 0) +
     (l.unitType === current.unitType ? 1 : 0);
-  return others
-    .filter((l) => l.purpose === current.purpose)
-    // مدينة العرض الحالي غير معروفة؟ لا نُقصي أحدًا بناءً على مجهول.
-    .filter((l) => !current.city || l.city === current.city)
-    .map((l) => ({ l, s: score(l) }))
-    .filter((x) => x.s > 0)
-    .sort((a, b) => b.s - a.s)
-    .slice(0, limit)
-    .map((x) => x.l);
+  return (
+    others
+      .filter((l) => l.purpose === current.purpose)
+      // مدينة العرض الحالي غير معروفة؟ لا نُقصي أحدًا بناءً على مجهول.
+      .filter((l) => !current.city || l.city === current.city)
+      .map((l) => ({ l, s: score(l) }))
+      .filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, limit)
+      .map((x) => x.l)
+  );
 }
 
 /** Digits only, Saudi country code added. Returns null when there is nothing dialable. */
