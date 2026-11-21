@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { LocateFixed, MessageCircle, Phone, Search } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -248,7 +248,7 @@ function Offices() {
             ) : null}
           </ArchEmptyState>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-x-5 gap-y-9 pt-7">
             {list.map(({ o, km }) => (
               <OfficeCard key={o.id} office={o} km={km} locale={locale} />
             ))}
@@ -259,6 +259,48 @@ function Offices() {
   );
 }
 
+/** The QR on a pass. Drawn in the browser only, so the directory's HTML stays small. */
+function PassQr({ value, label }: { value: string; label: string }) {
+  const [image, setImage] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    void import("qrcode")
+      .then((QR) => QR.toDataURL(value, { margin: 0, width: 264, errorCorrectionLevel: "M" }))
+      .then((url) => {
+        if (current) setImage(url);
+      })
+      // Without the code the pass still carries the same link in its name and footer.
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [value]);
+  return (
+    <span className="grid size-[124px] place-items-center rounded-md bg-white p-2.5">
+      {image ? <img src={image} alt={label} className="size-full" /> : null}
+    </span>
+  );
+}
+
+function PassField({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-0.5", className)}>
+      <dt className="text-[11px] font-semibold text-background/60">{label}</dt>
+      <dd className="min-w-0 text-[15px] leading-snug text-background/90">{children}</dd>
+    </div>
+  );
+}
+
+/** An office as a wallet pass: one solid ink card with a notch on top, the logo and licence in the
+ *  header strip, label-over-value fields, and a QR that opens the office's page. */
 function OfficeCard({
   office: o,
   km,
@@ -270,97 +312,139 @@ function OfficeCard({
 }) {
   const t = (key: TranslationKey, vars?: Record<string, string | number>) => tf(locale, key, vars);
   const search = langSearch(locale);
-  const place = o.district ?? o.city;
-  const idLine = [o.fal_license_no ? t("fal_short", { n: o.fal_license_no }) : null, place]
-    .filter(Boolean)
-    .join(" · ");
+  const place = [o.district, o.city].filter(Boolean).join(locale === "en" ? ", " : "، ");
   const wa = whatsappHref(
     o.whatsapp_number ?? o.office_phone,
     `مرحبًا ${o.company_name}، وصلت إليكم من دليل المكاتب في جارك`,
   );
   const showRating = o.avg_rating != null && (o.ratings_count ?? 0) >= 3;
   const tel = phoneHref(o.office_phone);
+  // The code leads where the name leads: the office's own page, when it has one.
+  const qr = o.hasPage ? `https://jarak-ksa.com/office/${encodeURIComponent(o.id)}` : null;
 
   return (
-    <article className="flex flex-col border border-border bg-card">
-      <div className="relative h-24 bg-foreground">
-        <SquareLogo
-          src={o.logo || null}
-          name={o.company_name}
-          className="absolute start-5 -bottom-7 size-16"
-        />
-      </div>
-      <div className="flex flex-1 flex-col gap-2 px-5 pt-[38px] pb-5">
-        <h2 className="flex items-center gap-1.5 text-[17px] font-bold">
+    <article className="relative flex flex-col overflow-hidden bg-foreground text-background shadow-[0_14px_28px_-14px_rgba(32,30,29,0.55)]">
+      {/* The sheen and the notch are what make it read as a pass rather than a dark card. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.09)_0%,rgba(255,255,255,0)_45%)]"
+      />
+      <span
+        aria-hidden
+        className="absolute top-0 left-1/2 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background"
+      />
+      <div className="relative flex flex-1 flex-col gap-4 p-5">
+        <div className="flex items-start justify-between gap-16">
+          <SquareLogo src={o.logo || null} name={o.company_name} className="size-12 border-0" />
+          {o.fal_license_no ? (
+            <div className="flex min-w-0 flex-col items-end gap-0.5">
+              <span className="text-[11px] font-semibold text-background/60">
+                {t("offices_pass_fal")}
+              </span>
+              <span className="truncate text-lg leading-none font-semibold tabular-nums">
+                {o.fal_license_no}
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <div className="col-span-2 flex min-w-0 flex-col gap-0.5">
+            <dt className="text-[11px] font-semibold text-background/60">
+              {t("offices_pass_name")}
+            </dt>
+            <dd>
+              <h2 className="flex items-center gap-1.5 text-xl leading-snug font-bold">
+                {o.hasPage ? (
+                  <Link
+                    to="/office/$officeId"
+                    params={{ officeId: o.id }}
+                    search={search}
+                    className="min-w-0 truncate hover:underline hover:underline-offset-4"
+                  >
+                    {o.company_name}
+                  </Link>
+                ) : (
+                  <span className="min-w-0 truncate">{o.company_name}</span>
+                )}
+                {/* office_directory only lists offices the platform has verified. */}
+                <VerifiedMark className="text-[#FF6B50]" />
+              </h2>
+            </dd>
+          </div>
+          {place || km != null ? (
+            <PassField label={t("offices_pass_place")} className="col-span-2">
+              <span className="block truncate">{place}</span>
+              {km != null ? (
+                <span className="block text-[13px] font-semibold text-[#FF6B50] tabular-nums">
+                  {t("offices_distance", { d: distanceText(km, locale) })}
+                </span>
+              ) : null}
+            </PassField>
+          ) : null}
+          {o.listings_count != null ? (
+            <PassField label={t("offices_pass_listings")}>
+              {o.listings_count === 0
+                ? t("offices_no_listings")
+                : listingsCount(o.listings_count, locale)}
+            </PassField>
+          ) : null}
+          {showRating ? (
+            <PassField label={t("offices_pass_rating")}>
+              <span className="tabular-nums">
+                {t("maint_quality", {
+                  r: publicNum(o.avg_rating ?? 0, { maximumFractionDigits: 1 }),
+                })}
+              </span>
+            </PassField>
+          ) : null}
+        </dl>
+
+        <div className="mt-auto flex flex-col gap-4 pt-2">
+          {qr ? (
+            <div className="flex flex-col items-center gap-2">
+              <PassQr value={qr} label={t("offices_pass_qr", { name: o.company_name })} />
+              <span className="text-[11px] text-background/60">{t("offices_pass_scan")}</span>
+            </div>
+          ) : null}
+          {wa || tel ? (
+            <div className="grid grid-cols-2 gap-2">
+              {wa ? (
+                <Button variant="whatsapp" asChild className={tel ? undefined : "col-span-2"}>
+                  <a href={wa} target="_blank" rel="noreferrer">
+                    <MessageCircle aria-hidden />
+                    {t("card_whatsapp")}
+                  </a>
+                </Button>
+              ) : null}
+              {tel ? (
+                <Button
+                  variant="outline"
+                  asChild
+                  className={cn(
+                    "border-background/40 bg-transparent text-background hover:bg-background/10 hover:text-background",
+                    wa ? undefined : "col-span-2",
+                  )}
+                >
+                  <a href={tel}>
+                    <Phone aria-hidden />
+                    {t("card_call")}
+                  </a>
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {o.hasPage ? (
             <Link
               to="/office/$officeId"
               params={{ officeId: o.id }}
               search={search}
-              className="min-w-0 truncate hover:underline hover:underline-offset-4"
+              className="w-fit text-sm font-semibold underline underline-offset-4 hover:text-[#FF6B50]"
             >
-              {o.company_name}
+              {t("offices_all_listings")}
             </Link>
-          ) : (
-            <span className="min-w-0 truncate">{o.company_name}</span>
-          )}
-          {/* office_directory only lists offices the platform has verified. */}
-          <VerifiedMark />
-        </h2>
-        {idLine ? <p className="text-[13px] text-muted-foreground tabular-nums">{idLine}</p> : null}
-        {o.listings_count != null || showRating || km != null ? (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-semibold">
-            {km != null ? (
-              <span className="text-red-text tabular-nums">
-                {t("offices_distance", { d: distanceText(km, locale) })}
-              </span>
-            ) : null}
-            {o.listings_count != null ? (
-              <span>
-                {o.listings_count === 0
-                  ? t("offices_no_listings")
-                  : listingsCount(o.listings_count, locale)}
-              </span>
-            ) : null}
-            {showRating ? (
-              <span className="text-success-tint-foreground tabular-nums">
-                {t("maint_quality", {
-                  r: publicNum(o.avg_rating ?? 0, { maximumFractionDigits: 1 }),
-                })}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-        {wa || tel ? (
-          <div className="mt-auto grid grid-cols-2 gap-2 pt-1.5">
-            {wa ? (
-              <Button variant="whatsapp" asChild className={tel ? undefined : "col-span-2"}>
-                <a href={wa} target="_blank" rel="noreferrer">
-                  <MessageCircle aria-hidden />
-                  {t("card_whatsapp")}
-                </a>
-              </Button>
-            ) : null}
-            {tel ? (
-              <Button variant="outline" asChild className={wa ? undefined : "col-span-2"}>
-                <a href={tel}>
-                  <Phone aria-hidden />
-                  {t("card_call")}
-                </a>
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {o.hasPage ? (
-          <Link
-            to="/office/$officeId"
-            params={{ officeId: o.id }}
-            search={search}
-            className="w-fit text-sm font-semibold underline underline-offset-4 hover:text-red-text"
-          >
-            {t("offices_all_listings")}
-          </Link>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </article>
   );

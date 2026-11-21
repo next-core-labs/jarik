@@ -96,6 +96,62 @@ export type NearbyPlacesResult = { places: NearbyPlace[]; failed: boolean };
 
 const FAILED: NearbyPlacesResult = { places: [], failed: true };
 
+/** Public Overpass instances. Each one is regularly slow or down on its own, so the lookup asks
+ *  all of them at once and takes the first real answer. */
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.openstreetmap.fr/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+
+const LOOKUP_TIMEOUT_MS = 20_000;
+/** What is around a spot changes slowly — a good answer is reused for a week. */
+const CACHE_SECONDS = 7 * 24 * 60 * 60;
+
+/** Parse one Overpass answer; throws when it is not a real answer, so the race moves on. */
+export function parseOverpass(json: { elements?: OverpassElement[]; remark?: string }) {
+  // Overpass reports its own timeouts and memory limits as a 200 with a "remark" — that is a
+  // failure too, not an empty neighbourhood.
+  if (json.remark && /error/i.test(json.remark) && !json.elements?.length) {
+    throw new Error("overpass-remark");
+  }
+  if (!Array.isArray(json.elements)) throw new Error("overpass-shape");
+  const places: NearbyPlace[] = [];
+  for (const el of json.elements) {
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (lat == null || lon == null) continue;
+    const kind = classify(el.tags);
+    places.push({
+      name: el.tags?.["name:ar"] ?? el.tags?.["name"] ?? KIND_LABEL_AR[kind],
+      kind,
+      lat,
+      lng: lon,
+    });
+  }
+  return places;
+}
+
+async function askOverpass(endpoint: string, query: string, signal: AbortSignal) {
+  const res = await fetch(endpoint, {
+    method: "POST",
+    // Overpass answers 406 to requests without a descriptive User-Agent (the runtime's default
+    // one included) — which used to surface here as "no nearby places" everywhere.
+    headers: { "Content-Type": "text/plain", "User-Agent": "Jark/1.0 (nearby places lookup)" },
+    body: query,
+    signal,
+  });
+  if (!res.ok) throw new Error(`overpass-${res.status}`);
+  return parseOverpass((await res.json()) as { elements?: OverpassElement[]; remark?: string });
+}
+
+/** The Workers edge cache; absent in local dev and tests, where every lookup goes to Overpass. */
+function edgeCache(): Cache | null {
+  const c = (globalThis as { caches?: { default?: Cache } }).caches;
+  return c?.default ?? null;
+}
+
 /**
  * أقرب الخدمات لإحداثية عامة (Overpass API — بيانات OSM المفتوحة، بلا مفتاح مدفوع): مساجد، مدارس،
  * أسواق، مستشفيات وصيدليات، حدائق، محطات وقود، مطاعم ومقاهٍ، مولات، ومحطات نقل عام.
@@ -110,55 +166,62 @@ export const nearbyPlaces = createServerFn({ method: "GET" })
       .parse(input),
   )
   .handler(async ({ data }): Promise<NearbyPlacesResult> => {
-    const at = (r: number) => `(around:${r},${data.lat},${data.lng})`;
+    // The search is centred on the spot rounded to ~100 m, so neighbouring units share one cached
+    // answer; distances and the nearest-per-kind pick still use the exact spot.
+    const lat = data.lat.toFixed(3);
+    const lng = data.lng.toFixed(3);
+    const cache = edgeCache();
+    const cacheKey = `https://nearby-places.jarak.internal/v1/${lat},${lng}`;
+    try {
+      const hit = await cache?.match(cacheKey);
+      if (hit) {
+        return { places: pickNearest(data, (await hit.json()) as NearbyPlace[]), failed: false };
+      }
+    } catch {
+      // A cache read that fails is just a miss.
+    }
+
+    const at = (r: number) => `(around:${r},${lat},${lng})`;
     const wide = at(1500);
     // Restaurants and bus stops are dense — a tighter circle keeps the answer small and relevant.
     const near = at(800);
-    const query = `[out:json][timeout:12];(
+    const query = `[out:json][timeout:15];(
       nwr["amenity"="place_of_worship"]["religion"="muslim"]${wide};
-      nwr["amenity"="school"]${wide};
+      nwr["amenity"~"^(school|marketplace|hospital|clinic|pharmacy|fuel)$"]${wide};
       nwr["shop"~"^(supermarket|mall)$"]${wide};
-      nwr["amenity"="marketplace"]${wide};
-      nwr["amenity"~"^(hospital|clinic|pharmacy)$"]${wide};
       nwr["leisure"="park"]${wide};
-      nwr["amenity"="fuel"]${wide};
       nwr["amenity"~"^(restaurant|cafe|fast_food)$"]${near};
       nwr["public_transport"="station"]${wide};
       nwr["railway"="station"]${wide};
       node["highway"="bus_stop"]${near};
     );out center 300;`;
 
+    // One controller for the whole race: the deadline aborts every request, and so does a winner.
+    const race = new AbortController();
+    const deadline = setTimeout(() => race.abort(), LOOKUP_TIMEOUT_MS);
     try {
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        // Overpass answers 406 to requests without a descriptive User-Agent (the runtime's default
-        // one included) — which used to surface here as "no nearby places" everywhere.
-        headers: { "Content-Type": "text/plain", "User-Agent": "Jark/1.0 (nearby places lookup)" },
-        body: query,
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!res.ok) return FAILED;
-      const json = (await res.json()) as { elements?: OverpassElement[]; remark?: string };
-      // Overpass reports its own timeouts and memory limits as a 200 with a "remark" — that is a
-      // failure too, not an empty neighbourhood.
-      if (json.remark && /error/i.test(json.remark) && !json.elements?.length) return FAILED;
-
-      const places: NearbyPlace[] = [];
-      for (const el of json.elements ?? []) {
-        const lat = el.lat ?? el.center?.lat;
-        const lon = el.lon ?? el.center?.lon;
-        if (lat == null || lon == null) continue;
-        const kind = classify(el.tags);
-        places.push({
-          name: el.tags?.["name:ar"] ?? el.tags?.["name"] ?? KIND_LABEL_AR[kind],
-          kind,
-          lat,
-          lng: lon,
-        });
+      const all = await Promise.any(
+        OVERPASS_ENDPOINTS.map((endpoint) => askOverpass(endpoint, query, race.signal)),
+      );
+      try {
+        await cache?.put(
+          cacheKey,
+          new Response(JSON.stringify(all), {
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": `public, max-age=${CACHE_SECONDS}`,
+            },
+          }),
+        );
+      } catch {
+        // Not being able to store the answer never fails the lookup.
       }
-      return { places: pickNearest(data, places), failed: false };
+      return { places: pickNearest(data, all), failed: false };
     } catch {
-      // Overpass تحت ضغط أو غير متاحة — نُبلغ الواجهة بالفشل (لا «لا خدمات») بدل كسر صفحة العرض.
+      // كل الخوادم تحت ضغط أو غير متاحة — نُبلغ الواجهة بالفشل (لا «لا خدمات») بدل كسر صفحة العرض.
       return FAILED;
+    } finally {
+      clearTimeout(deadline);
+      race.abort();
     }
   });
