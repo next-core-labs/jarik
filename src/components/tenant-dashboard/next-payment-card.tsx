@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, MessageCircle, Send, Wallet } from "lucide-react";
+import { CheckCircle2, Copy, MessageCircle, Send, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { userErrorMessage } from "@/lib/auth-errors";
 
 import { supabase } from "@/integrations/supabase/client";
 import { submitTransferNotice } from "@/lib/portal-actions.functions";
 import { arNum, daysLabel, daysUntil, sar, shortDate } from "@/lib/format";
+import { formatIban } from "@/lib/saudi-iban";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,23 @@ export function NextPaymentCard({
         .order("due_date");
       if (error) throw error;
       return (data ?? []) as Payment[];
+    },
+  });
+
+  // The account to transfer to: the office's, for the lease whose installment is due next. Asked
+  // only when the pay form opens.
+  const dueLeaseId = data?.find((p) => p.status !== "paid")?.lease_id ?? null;
+  const bank = useQuery({
+    queryKey: ["lease-bank-details", dueLeaseId],
+    enabled: showPayForm && Boolean(dueLeaseId),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("lease_bank_details", {
+        _lease_id: dueLeaseId as string,
+      });
+      if (error) throw error;
+      const row = data?.[0];
+      return row?.iban ? row : null;
     },
   });
 
@@ -162,16 +180,41 @@ export function NextPaymentCard({
             </div>
             {showPayForm ? (
               <div className="space-y-3 rounded-md border border-border bg-background p-3">
-                {/* The office's bank account isn't stored in Jarak yet, so the tenant gets it from
-                    the office; the amount is the one thing we can state with certainty. */}
-                <div className="space-y-1 text-sm">
+                <div className="space-y-2 text-sm">
                   <p>
                     المبلغ المطلوب تحويله: <span className="font-bold">{sar(remaining)}</span>
                   </p>
-                  <p className="text-muted-foreground">
-                    حوّل المبلغ إلى حساب المكتب البنكي. إن لم تكن لديك بيانات الحساب فاطلبها من
-                    المكتب في المحادثات، ثم اكتب رقم مرجع التحويل هنا.
-                  </p>
+                  {bank.isLoading ? (
+                    <Skeleton className="h-24" />
+                  ) : bank.data ? (
+                    <dl className="divide-y divide-border rounded-md border border-border bg-card">
+                      {bank.data.bank_name ? (
+                        <BankRow label="البنك" value={bank.data.bank_name} />
+                      ) : null}
+                      <BankRow label="اسم صاحب الحساب" value={bank.data.account_holder} />
+                      <BankRow
+                        label="رقم الآيبان"
+                        value={formatIban(bank.data.iban)}
+                        copy={bank.data.iban}
+                        ltr
+                      />
+                      {bank.data.account_no ? (
+                        <BankRow
+                          label="رقم الحساب"
+                          value={bank.data.account_no}
+                          copy={bank.data.account_no}
+                          ltr
+                        />
+                      ) : null}
+                    </dl>
+                  ) : (
+                    // The office has not entered its account yet (or it could not be read).
+                    <p className="text-muted-foreground">
+                      حوّل المبلغ إلى حساب المكتب البنكي. إن لم تكن لديك بيانات الحساب فاطلبها من
+                      المكتب في المحادثات.
+                    </p>
+                  )}
+                  <p className="text-muted-foreground">بعد التحويل اكتب رقم مرجع التحويل هنا.</p>
                   <Button size="sm" variant="link" className="h-auto px-0" asChild>
                     <Link to="/messages">
                       <MessageCircle className="size-4" />
@@ -209,5 +252,48 @@ export function NextPaymentCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** One line of the office's bank account, with a copy button for the numbers a tenant pastes. */
+function BankRow({
+  label,
+  value,
+  copy,
+  ltr,
+}: {
+  label: string;
+  value: string;
+  copy?: string;
+  ltr?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2">
+      <div className="min-w-0">
+        <dt className="text-xs text-muted-foreground">{label}</dt>
+        <dd
+          dir={ltr ? "ltr" : undefined}
+          className={ltr ? "text-end font-semibold break-all tabular-nums" : "font-semibold"}
+        >
+          {value}
+        </dd>
+      </div>
+      {copy ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          onClick={() =>
+            navigator.clipboard?.writeText(copy).then(
+              () => toast.success(`تم نسخ ${label}`),
+              () => toast.error("تعذّر النسخ — انسخه يدويًا"),
+            )
+          }
+        >
+          <Copy className="size-4" />
+          نسخ
+        </Button>
+      ) : null}
+    </div>
   );
 }

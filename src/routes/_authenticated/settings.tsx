@@ -16,7 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { parseSaudiMobile } from "@/lib/public-form";
-import { toLatinDigits, validateFalLicense } from "@/lib/saudi-id";
+import { digitsOnly, toLatinDigits, validateFalLicense } from "@/lib/saudi-id";
+import { formatIban, normalizeIban, saudiIbanError } from "@/lib/saudi-iban";
 import { compressImage, mediaUrl, uploadListingImage, validateImageFile } from "@/lib/unit-photos";
 import { useOrgBranding } from "@/lib/use-org-branding";
 import { fillAccountPhotoIfEmpty } from "@/lib/photo-sync";
@@ -327,12 +328,175 @@ function Settings() {
         </Card>
       )}
 
+      {org.data?.id && canEdit ? <BankAccountCard orgId={org.data.id} /> : null}
       {org.data?.id ? <OfficePageCard orgId={org.data.id} canEdit={canEdit} /> : null}
     </>
   );
 }
 
 /** The office's public page: cover banner and a short bio, shown to everyone in the offers market. */
+/**
+ * The account tenants transfer rent to. Shown to the office's staff, edited by its manager only (the
+ * database enforces that too), and read by a tenant only for their own lease — never public.
+ */
+function BankAccountCard({ orgId }: { orgId: string }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ bank_name: "", holder: "", iban: "", account_no: "" });
+
+  const manager = useQuery({
+    queryKey: ["is-office-manager"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("is_office_manager");
+      if (error) throw error;
+      return Boolean(data);
+    },
+  });
+  const canEdit = manager.data === true;
+
+  const fields = useQuery({
+    queryKey: ["office-bank-account", orgId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("org_settings")
+        .select("bank_name, bank_account_holder, bank_iban, bank_account_no")
+        .eq("id", orgId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    const f = fields.data;
+    if (!f) return;
+    setForm({
+      bank_name: f.bank_name ?? "",
+      holder: f.bank_account_holder ?? "",
+      iban: f.bank_iban ? formatIban(f.bank_iban) : "",
+      account_no: f.bank_account_no ?? "",
+    });
+  }, [fields.data]);
+
+  const set = (key: keyof typeof form, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  const iban = normalizeIban(form.iban);
+  const accountNo = digitsOnly(form.account_no);
+  const ibanError = iban ? saudiIbanError(iban) : null;
+  const accountError =
+    form.account_no.trim() && !/^\d{6,30}$/.test(toLatinDigits(form.account_no).replace(/\s/g, ""))
+      ? "رقم الحساب أرقام فقط (6 إلى 30 رقمًا)"
+      : null;
+  // The IBAN is what the tenant transfers to; the other three only describe it.
+  const missingIban =
+    !iban && (form.bank_name.trim() || form.holder.trim() || accountNo)
+      ? "أدخل رقم الآيبان ليظهر الحساب للمستأجرين"
+      : null;
+  const formError = ibanError ?? accountError ?? missingIban;
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (formError) throw new Error(formError);
+      const { error } = await supabase
+        .from("org_settings")
+        .update({
+          bank_name: form.bank_name.trim() || null,
+          bank_account_holder: form.holder.trim() || null,
+          bank_iban: iban || null,
+          bank_account_no: accountNo || null,
+        })
+        .eq("id", orgId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(iban ? "تم حفظ الحساب البنكي" : "تم حذف الحساب البنكي");
+      queryClient.invalidateQueries({ queryKey: ["office-bank-account", orgId] });
+    },
+    onError: (e: Error) => toast.error(userErrorMessage(e, "تعذّر حفظ الحساب البنكي")),
+  });
+
+  return (
+    <Card className="mt-6 max-w-2xl">
+      <CardHeader>
+        <CardTitle className="text-base">الحساب البنكي لاستلام الإيجار</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          يظهر لمستأجري المكتب فقط عند استحقاق الدفعة ليحوّلوا عليه — لا يظهر في دليل المكاتب ولا في
+          صفحة المكتب العامة.
+        </p>
+      </CardHeader>
+      {fields.isLoading || manager.isLoading ? (
+        <CardContent>
+          <Skeleton className="h-32" />
+        </CardContent>
+      ) : fields.isError ? (
+        <CardContent>
+          <p className="text-sm text-muted-foreground">تعذّر تحميل الحساب البنكي.</p>
+        </CardContent>
+      ) : (
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <F label="اسم البنك">
+            <Input
+              value={form.bank_name}
+              disabled={!canEdit}
+              maxLength={80}
+              placeholder="مثال: مصرف الراجحي"
+              onChange={(e) => set("bank_name", e.target.value)}
+            />
+          </F>
+          <F label="اسم صاحب الحساب">
+            <Input
+              value={form.holder}
+              disabled={!canEdit}
+              maxLength={120}
+              placeholder="كما يظهر في البنك — يُستخدم اسم المكتب إن تُرك فارغًا"
+              onChange={(e) => set("holder", e.target.value)}
+            />
+          </F>
+          <div className="sm:col-span-2">
+            <F label="رقم الآيبان (IBAN)">
+              <Input
+                dir="ltr"
+                className="tabular-nums"
+                value={form.iban}
+                disabled={!canEdit}
+                placeholder="SA00 0000 0000 0000 0000 0000"
+                onChange={(e) => set("iban", e.target.value)}
+                onBlur={() => set("iban", formatIban(form.iban))}
+                aria-invalid={Boolean(ibanError ?? missingIban)}
+              />
+              {canEdit && (ibanError ?? missingIban) ? (
+                <p className="text-xs text-destructive">{ibanError ?? missingIban}</p>
+              ) : null}
+            </F>
+          </div>
+          <F label="رقم الحساب">
+            <Input
+              dir="ltr"
+              inputMode="numeric"
+              className="tabular-nums"
+              value={form.account_no}
+              disabled={!canEdit}
+              onChange={(e) => set("account_no", e.target.value)}
+              aria-invalid={Boolean(accountError)}
+            />
+            {canEdit && accountError ? (
+              <p className="text-xs text-destructive">{accountError}</p>
+            ) : null}
+          </F>
+          <div className="sm:col-span-2">
+            {canEdit ? (
+              <Button onClick={() => save.mutate()} disabled={save.isPending || Boolean(formError)}>
+                حفظ الحساب البنكي
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">تعديل الحساب البنكي لمدير المكتب فقط.</p>
+            )}
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 function OfficePageCard({ orgId, canEdit }: { orgId: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);

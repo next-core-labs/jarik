@@ -2493,6 +2493,10 @@ export type Database = {
       org_settings: {
         Row: {
           address: string | null;
+          bank_account_holder: string | null;
+          bank_account_no: string | null;
+          bank_iban: string | null;
+          bank_name: string | null;
           banner_path: string | null;
           bio: string | null;
           city: string | null;
@@ -2523,6 +2527,10 @@ export type Database = {
         };
         Insert: {
           address?: string | null;
+          bank_account_holder?: string | null;
+          bank_account_no?: string | null;
+          bank_iban?: string | null;
+          bank_name?: string | null;
           banner_path?: string | null;
           bio?: string | null;
           city?: string | null;
@@ -2553,6 +2561,10 @@ export type Database = {
         };
         Update: {
           address?: string | null;
+          bank_account_holder?: string | null;
+          bank_account_no?: string | null;
+          bank_iban?: string | null;
+          bank_name?: string | null;
           banner_path?: string | null;
           bio?: string | null;
           city?: string | null;
@@ -5672,6 +5684,16 @@ export type Database = {
       is_hq_offices_me: { Args: never; Returns: boolean };
       is_office_manager: { Args: never; Returns: boolean };
       is_staff: { Args: { _user_id: string }; Returns: boolean };
+      lease_bank_details: {
+        Args: { _lease_id: string };
+        Returns: {
+          account_holder: string;
+          account_no: string;
+          bank_name: string;
+          iban: string;
+          office_name: string;
+        }[];
+      };
       list_hq_admins: {
         Args: never;
         Returns: {
