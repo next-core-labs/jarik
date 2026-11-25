@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
@@ -15,8 +15,11 @@ import { parseSaudiMobile } from "@/lib/public-form";
 import { quoteBooking, submitBooking } from "@/lib/bookings.functions";
 import {
   addDays,
+  dayLabel,
+  firstFreeCheckin,
   nightsBetween,
   overlapsBooked,
+  stayLabel,
   toDateInput,
   type BookedRange,
 } from "@/lib/bookings";
@@ -25,6 +28,10 @@ import {
  * حجز وحدة بالليلة. السعر والإتاحة يأتيان من القاعدة (quote_booking) مع كل تغيير للتواريخ — فما
  * يراه الضيف هو ما سيُسجَّل عليه بالضبط. فحص التزاحم في الواجهة يعطّل الزر مبكرًا فقط؛ الرفض
  * الحقيقي من قيد EXCLUDE في القاعدة، وهو من يحمي من حجزين في اللحظة نفسها.
+ *
+ * الليالي المشغولة تُزيح الاختيار ولا تغلق الوحدة: النموذج يفتح على أول ليلة حرّة لا على «غدًا»
+ * دائمًا، ويعرض ما هو محجوز، ويدلّ على أقرب بديل حين يقع اختيار الضيف على ليلة مشغولة — فحجب
+ * ثلاث ليالٍ لا يبدو للزائر كأن الشاليه لا يُحجز أبدًا.
  */
 export function BookingWidget({
   unitId,
@@ -84,6 +91,18 @@ export function BookingWidget({
     }
   }, [from, to, minNights]);
 
+  // أول ليلة حرّة بدل «غدًا» — مرة واحدة حين تصل الليالي المشغولة، فلا يُلغى اختيار الضيف بعدها.
+  const snapped = useRef(false);
+  useEffect(() => {
+    if (snapped.current || !booked.data) return;
+    snapped.current = true;
+    if (!overlapsBooked(from, to, booked.data)) return;
+    const free = firstFreeCheckin(from, Math.max(1, minNights), booked.data);
+    if (!free) return;
+    setFrom(free);
+    setTo(addDays(free, Math.max(1, minNights)));
+  }, [booked.data, from, to, minNights]);
+
   const getQuote = useServerFn(quoteBooking);
   const quote = useQuery({
     queryKey: ["booking-quote", unitId, from, to],
@@ -111,9 +130,19 @@ export function BookingWidget({
 
   const mobile = parseSaudiMobile(phone);
   const phoneError = phone.trim() !== "" && !mobile ? t("ld_req_phone_invalid") : null;
-  const localOverlap = overlapsBooked(from, to, booked.data ?? []);
+  const bookedRanges = booked.data ?? [];
+  const localOverlap = overlapsBooked(from, to, bookedRanges);
   const q = quote.data;
   const nights = nightsBetween(from, to);
+  // المدة التي اختارها الضيف تُنقل كما هي إلى التاريخ البديل، ولا تقلّ عن أقل مدة للوحدة.
+  const wantNights = Math.max(nights, Math.max(1, minNights));
+  // بديل يُقترح فقط حين يقع الاختيار على ليلة مشغولة.
+  const suggestion = localOverlap ? firstFreeCheckin(from, wantNights, bookedRanges) : null;
+  // أقرب ثلاثة مدايات مشغولة: الضيف يرى ما هو محجوز بدل أن يجرّب التواريخ واحدًا واحدًا.
+  const upcomingBooked = [...bookedRanges]
+    .filter((b) => b.to_date > today)
+    .sort((a, b) => a.from_date.localeCompare(b.from_date))
+    .slice(0, 3);
   const canBook =
     Boolean(q?.available) &&
     !localOverlap &&
@@ -184,9 +213,31 @@ export function BookingWidget({
         </label>
       </div>
 
+      {upcomingBooked.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {t("bk_booked_dates")}:{" "}
+          {upcomingBooked.map((b) => stayLabel(b.from_date, b.to_date, locale)).join(" · ")}
+        </p>
+      ) : null}
+
       {/* السبب يأتي من القاعدة بنصّه: «محجوزة»، «أقل مدة n ليلة»، «تاريخ ماضٍ»… */}
       {localOverlap ? (
-        <p className="rounded-sm bg-muted/60 px-3 py-2 text-xs font-medium">{t("bk_taken")}</p>
+        <div className="flex flex-col items-start gap-2 rounded-sm bg-muted/60 px-3 py-2">
+          <p className="text-xs font-medium">{t("bk_taken")}</p>
+          {suggestion ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setFrom(suggestion);
+                setTo(addDays(suggestion, wantNights));
+              }}
+            >
+              {t("bk_next_free")}: {dayLabel(suggestion, locale)}
+            </Button>
+          ) : null}
+        </div>
       ) : q && !q.available && q.reason ? (
         <p className="rounded-sm bg-muted/60 px-3 py-2 text-xs font-medium">{q.reason}</p>
       ) : null}

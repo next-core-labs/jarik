@@ -4,6 +4,7 @@ import {
   addDays,
   bookedNights,
   bookingStatusLabel,
+  firstFreeCheckin,
   isBookingStatus,
   nightsBetween,
   occupiesDates,
@@ -138,5 +139,45 @@ describe("splitMyBookings", () => {
     const { toRate, upcoming, past } = splitMyBookings(rows);
     expect(toRate.length + upcoming.length + past.length).toBe(rows.length);
     expect(past.map((b) => b.status)).toEqual(["rejected", "cancelled"]);
+  });
+});
+
+describe("firstFreeCheckin", () => {
+  // ★ حجب ثلاث ليالٍ يُزيح الضيف يومًا واحدًا، ولا يعني أن الوحدة لا تُحجز.
+  it("lands on the checkout day of the block, which is itself free", () => {
+    const booked = [{ from_date: "2026-12-10", to_date: "2026-12-13" }];
+    expect(firstFreeCheckin("2026-12-10", 1, booked)).toBe("2026-12-13");
+    expect(firstFreeCheckin("2026-12-11", 2, booked)).toBe("2026-12-13");
+  });
+
+  it("keeps the date the guest picked when nothing clashes", () => {
+    const booked = [{ from_date: "2026-12-10", to_date: "2026-12-13" }];
+    expect(firstFreeCheckin("2026-12-01", 3, booked)).toBe("2026-12-01");
+    expect(firstFreeCheckin("2026-12-20", 5, booked)).toBe("2026-12-20");
+  });
+
+  it("skips a gap too short for the stay and jumps past the next block", () => {
+    const booked = [
+      { from_date: "2026-12-10", to_date: "2026-12-13" },
+      { from_date: "2026-12-14", to_date: "2026-12-18" },
+    ];
+    // ليلة واحدة تسعها الفجوة 13→14؛ وثلاث ليالٍ لا، فتنتقل إلى ما بعد الحجب الثاني.
+    expect(firstFreeCheckin("2026-12-10", 1, booked)).toBe("2026-12-13");
+    expect(firstFreeCheckin("2026-12-10", 3, booked)).toBe("2026-12-18");
+  });
+
+  it("returns null only when the whole horizon is taken", () => {
+    const booked = [{ from_date: "2026-12-10", to_date: "2027-12-20" }];
+    expect(firstFreeCheckin("2026-12-10", 2, booked, 30)).toBeNull();
+  });
+
+  it("never suggests a date that overlaps, whatever the order of the ranges", () => {
+    const booked = [
+      { from_date: "2026-12-14", to_date: "2026-12-18" },
+      { from_date: "2026-12-10", to_date: "2026-12-15" },
+    ];
+    const free = firstFreeCheckin("2026-12-09", 2, booked);
+    expect(free).toBe("2026-12-18");
+    expect(overlapsBooked(free!, addDays(free!, 2), booked)).toBe(false);
   });
 });

@@ -79,14 +79,17 @@ export function bookedNights(booked: BookedRange[]): Set<string> {
   return nights;
 }
 
+/** «20 نوفمبر» — يوم واحد مقروء للضيف. */
+export function dayLabel(iso: string, locale: Locale = "ar"): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(locale === "en" ? "en-GB" : "ar-SA", {
+    day: "numeric",
+    month: "long",
+  });
+}
+
 /** «الخميس 20 نوفمبر» — تاريخ مقروء للضيف. */
 export function stayLabel(from: string, to: string, locale: Locale = "ar"): string {
-  const fmt = (iso: string) =>
-    new Date(`${iso}T00:00:00`).toLocaleDateString(locale === "en" ? "en-GB" : "ar-SA", {
-      day: "numeric",
-      month: "long",
-    });
-  return `${fmt(from)} → ${fmt(to)}`;
+  return `${dayLabel(from, locale)} → ${dayLabel(to, locale)}`;
 }
 
 /**
@@ -113,4 +116,31 @@ export function ratingLabel(avg: number, locale: Locale = "ar"): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   });
+}
+
+/**
+ * أقرب تاريخ دخول يتّسع لـ`nights` ليلة بلا تزاحم، ابتداءً من `start`. حجب ثلاث ليالٍ يُزيح الاختيار
+ * إلى اليوم الذي يليه، لا يغلق الوحدة: يوم الخروج نفسه أول ليلة حرّة بدلالة `[)`.
+ * يعيد null إذا كان كل يوم في الأفق مشغولًا (أفق سنة — أبعد من ذلك لا يحجز أحد).
+ */
+export function firstFreeCheckin(
+  start: string,
+  nights: number,
+  booked: BookedRange[],
+  horizonDays = 365,
+): string | null {
+  const want = Math.max(1, Math.round(nights) || 1);
+  const limit = addDays(start, horizonDays);
+  let day = start;
+  // القفز إلى نهاية المدى المزاحم بدل التقدّم يومًا يومًا: يكفيه عدد الحجوزات دورة.
+  for (let guard = 0; guard <= booked.length + 1 && day < limit; guard += 1) {
+    const end = addDays(day, want);
+    const clash = booked
+      .filter((b) => day < b.to_date && b.from_date < end)
+      .sort((a, b) => a.to_date.localeCompare(b.to_date))
+      .at(-1);
+    if (!clash) return day;
+    day = clash.to_date;
+  }
+  return day < limit && !overlapsBooked(day, addDays(day, want), booked) ? day : null;
 }
