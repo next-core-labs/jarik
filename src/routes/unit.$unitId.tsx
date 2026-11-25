@@ -51,6 +51,8 @@ type UnitPageData =
       districtStat: PriceStat | null;
       /** إعدادات الحجز اليومي حين تكون الوحدة معروضة له — null لوحدة إيجار سنوي أو بيع. */
       booking: BookingOffer | null;
+      /** وحدة تُحجز بالليلة فقط: لا إيجار سنوي ولا سعر بيع، فسعرها ومقارنتها وشارتها بالليلة. */
+      dailyOnly: boolean;
       /** تقييمات الضيوف لوحدة حجز يومي — فارغة لغيرها. */
       reviews: UnitReview[];
     }
@@ -77,15 +79,20 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 async function loadUnitPage(unitId: string): Promise<UnitPageData> {
   if (!UUID_RE.test(unitId)) return { status: "missing" };
   try {
-    const { data: row, error } = await supabase
-      .from("vacant_units_public")
-      .select("*")
-      .eq("id", unitId)
-      .maybeSingle();
-    if (error) return { status: "error" };
+    // سوقان، وصفحة واحدة: وحدة الحجز اليومي فقط لا سعر سنوي لها ولا سعر بيع، فهي خارج
+    // vacant_units_public بحكم شرط السعر — ولها صفحة كغيرها، تُبنى من عرضها هي.
+    const [vacantRes, bookableRes] = await Promise.all([
+      supabase.from("vacant_units_public").select("*").eq("id", unitId).maybeSingle(),
+      supabase.from("bookable_units_public").select("*").eq("id", unitId).maybeSingle(),
+    ]);
+    if (vacantRes.error) return { status: "error" };
+    const row = vacantRes.data ?? bookableRes.data;
     const listing = row ? toListing(row) : null;
     if (!listing) return { status: "missing" };
+    // «يُحجز بالليلة فقط»: ما يُعرض به السعر والشارة والمقارنة بالحي كلها تتبع هذا.
+    const dailyOnly = vacantRes.data == null;
 
+    const similarView = dailyOnly ? "bookable_units_public" : "vacant_units_public";
     const [photosRes, byTypeRes, byDistrictRes, ownerRes, officeRes, districtStat] =
       await Promise.all([
         supabase
@@ -93,15 +100,16 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
           .select("path, position")
           .eq("unit_id", unitId)
           .order("position"),
+        // الشبيه من السوق نفسه: شاليه بالليلة لا يُقترح بجانبه شقة بعقد سنوي، والعكس.
         supabase
-          .from("vacant_units_public")
+          .from(similarView)
           .select("*")
           .eq("unit_type", listing.unitType)
           .neq("id", unitId)
           .limit(20),
         listing.district
           ? supabase
-              .from("vacant_units_public")
+              .from(similarView)
               .select("*")
               .eq("district", listing.district)
               .neq("id", unitId)
@@ -121,12 +129,15 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
               .eq("id", listing.office.id)
               .maybeSingle()
           : Promise.resolve({ data: null }),
-        loadListingDistrictStat({
-          city: listing.city,
-          district: listing.district,
-          unitType: listing.unitType,
-          purpose: listing.purpose,
-        }).catch(() => null),
+        // متوسطات الحي سنوية وبيعية؛ مقارنة سعر ليلة بها لا معنى لها، فتُترك للوحدة اليومية.
+        dailyOnly
+          ? Promise.resolve(null)
+          : loadListingDistrictStat({
+              city: listing.city,
+              district: listing.district,
+              unitType: listing.unitType,
+              purpose: listing.purpose,
+            }).catch(() => null),
       ]);
 
     const photos = (photosRes.data ?? []).map((p) => p.path).filter((p): p is string => Boolean(p));
@@ -167,13 +178,7 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
         };
 
     // الحجز اليومي: من العرض العام نفسه، فلا تُعرض واجهة حجز لوحدة لا تقبله (أو بلا رخصة إيواء).
-    const { data: bookingRow } = await supabase
-      .from("bookable_units_public")
-      .select(
-        "nightly_rate, weekend_rate, min_nights, max_guests, checkin_time, checkout_time, free_cancel_days, house_rules, tourism_license_no",
-      )
-      .eq("id", unitId)
-      .maybeSingle();
+    const bookingRow = bookableRes.data;
     const booking: BookingOffer | null =
       bookingRow && Number(bookingRow.nightly_rate ?? 0) > 0
         ? {
@@ -212,7 +217,17 @@ async function loadUnitPage(unitId: string): Promise<UnitPageData> {
         : [],
     );
 
-    return { status: "ok", listing, photos, similar, advertiser, districtStat, booking, reviews };
+    return {
+      status: "ok",
+      listing,
+      photos,
+      similar,
+      advertiser,
+      districtStat,
+      booking,
+      reviews,
+      dailyOnly,
+    };
   } catch {
     return { status: "error" };
   }
@@ -245,12 +260,21 @@ export const Route = createFileRoute("/unit/$unitId")({
         ],
       };
     }
-    const { listing: l, photos } = loaderData;
+    const { listing: l, photos, booking, dailyOnly } = loaderData;
     const title = `${listingTitle(l)} — ${en ? "Jarak" : "جارك"}`;
+    // وصف البحث من بيانات الصفحة المنشورة نفسها: سعر الليلة لوحدة بالليلة، لا سعر سنوي صفر.
+    const price = dailyOnly ? (booking?.nightlyRate ?? 0) : listingPrice(l);
+    const priceSuffix = dailyOnly
+      ? en
+        ? " / night"
+        : " لليلة"
+      : PRICE_SUFFIX[l.purpose]
+        ? en
+          ? " / year"
+          : " سنويًا"
+        : "";
     const facts = [
-      `${publicSar(listingPrice(l), en ? "en" : "ar")}${
-        PRICE_SUFFIX[l.purpose] ? (en ? " / year" : " سنويًا") : ""
-      }`,
+      `${publicSar(price, en ? "en" : "ar")}${priceSuffix}`,
       l.rooms != null ? `${publicNum(l.rooms)} ${en ? "rooms" : "غرف"}` : null,
       l.area ? `${publicNum(l.area)} ${en ? "m²" : "م²"}` : null,
       listingLocation(l) || null,
@@ -314,17 +338,17 @@ export const Route = createFileRoute("/unit/$unitId")({
                 : {}),
               offers: {
                 "@type": "Offer",
-                price: listingPrice(l),
+                price,
                 priceCurrency: "SAR",
                 availability: "https://schema.org/InStock",
                 url,
-                ...(l.purpose === "rent"
+                ...(dailyOnly || l.purpose === "rent"
                   ? {
                       priceSpecification: {
                         "@type": "UnitPriceSpecification",
-                        price: listingPrice(l),
+                        price,
                         priceCurrency: "SAR",
-                        unitText: "YEAR",
+                        unitText: dailyOnly ? "NIGHT" : "YEAR",
                       },
                     }
                   : {}),
@@ -416,7 +440,16 @@ function UnitPublic() {
 
   if (data.status !== "ok") return <UnitUnavailable error />;
 
-  const { listing: l, photos, similar, advertiser, districtStat, booking, reviews } = data;
+  const {
+    listing: l,
+    photos,
+    similar,
+    advertiser,
+    districtStat,
+    booking,
+    reviews,
+    dailyOnly,
+  } = data;
   const title = listingTitle(l);
   const location = listingLocation(l);
 
@@ -446,10 +479,13 @@ function UnitPublic() {
   const tel = phoneHref(advertiser.phone);
   const wa = whatsappHref(advertiser.whatsapp ?? advertiser.phone, inquiry);
 
-  const priceMain = formatNumber(listingPrice(l), locale);
-  const drop = priceDropPct(l);
+  // وحدة بالليلة: سعرها سعر الليلة، لا «0 ر.س سنويًا» — والسعر هنا هو عين ما يحتسبه نموذج الحجز.
+  const priceMain = formatNumber(dailyOnly ? (booking?.nightlyRate ?? 0) : listingPrice(l), locale);
+  const drop = dailyOnly ? null : priceDropPct(l);
   const saved = fav.has(l.id);
-  const priceUnit = t(l.purpose === "rent" ? "price_rent_unit" : "price_sale_unit");
+  const priceUnit = dailyOnly
+    ? t("bk_per_night")
+    : t(l.purpose === "rent" ? "price_rent_unit" : "price_sale_unit");
   const num = (n: number) => formatNumber(n, locale);
 
   const districtLine = [location, l.unitNumber ? `${t("info_unit_no")} ${l.unitNumber}` : null]
@@ -480,12 +516,12 @@ function UnitPublic() {
     <span
       className={cn(
         "flex h-[30px] items-center px-2.5 text-sm font-semibold",
-        l.purpose === "rent"
+        dailyOnly || l.purpose === "rent"
           ? "bg-foreground text-background"
           : "bg-background text-foreground shadow-[inset_0_0_0_1.5px_var(--color-foreground)]",
       )}
     >
-      {t(l.purpose === "rent" ? "tab_rent" : "tab_sale")}
+      {dailyOnly ? t("nav_booking") : t(l.purpose === "rent" ? "tab_rent" : "tab_sale")}
     </span>
   );
 

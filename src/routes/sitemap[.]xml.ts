@@ -15,7 +15,9 @@ const PAGE_SIZE = 1000;
 const MAX_ROWS = 45_000;
 
 /** Every id in a public view, a page at a time. Throws when a page can't be read. */
-async function publicIds(view: "vacant_units_public" | "office_pages_public"): Promise<string[]> {
+async function publicIds(
+  view: "vacant_units_public" | "bookable_units_public" | "office_pages_public",
+): Promise<string[]> {
   const ids: string[] = [];
   for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
     const { data, error } = await supabase
@@ -41,11 +43,14 @@ export const Route = createFileRoute("/sitemap.xml")({
         // can't be read, serve the static pages and let crawlers come back sooner.
         let complete = true;
         try {
-          const [unitIds, officeIds] = await Promise.all([
+          // سوقا العروض كلاهما له صفحة /unit/… حيّة: وحدة بالليلة فقط ليست في vacant_units_public
+          // (لا سعر سنوي لها)، وإغفالها هنا يترك صفحاتها خارج الفهرسة. التكرار يُطرح في البناء.
+          const [unitIds, bookableIds, officeIds] = await Promise.all([
             publicIds("vacant_units_public"),
+            publicIds("bookable_units_public"),
             publicIds("office_pages_public"),
           ]);
-          entries.push(...sitemapRecordEntries(unitIds, officeIds));
+          entries.push(...sitemapRecordEntries([...unitIds, ...bookableIds], officeIds));
         } catch {
           complete = false;
         }
