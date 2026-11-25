@@ -244,6 +244,9 @@ const ownerNav: PortalNavItem[] = [
     badge: "approvals",
   },
   { key: "agreements", label: "المكاتب والاتفاقيات", icon: Handshake, href: "/owner/agreements" },
+  // الحجز اليومي مسار مستقل عند المالك كما هو عند المكتب: حجوزات وحداته بالليلة وتقويمها وحجب
+  // أيامه الخاصة — لا قسم داخل لوحة الإيجار السنوي.
+  { key: "bookings", label: "الحجز اليومي", icon: CalendarCheck, href: "/owner/bookings" },
   { key: "finance", label: "المالية", icon: Wallet, href: "/owner-dashboard#finance" },
   { key: "reports", label: "التقارير", icon: FileBarChart, href: "/owner-dashboard#reports" },
   { key: "messages", label: "المحادثات", icon: MessagesSquare, href: "/messages" },

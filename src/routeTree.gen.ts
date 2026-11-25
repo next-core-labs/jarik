@@ -63,6 +63,7 @@ import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedInvoicesInvoiceIdRouteImport } from './routes/_authenticated/invoices.$invoiceId'
 import { Route as AuthenticatedInvoicesNewRouteImport } from './routes/_authenticated/invoices.new'
 import { Route as AuthenticatedOwnerAgreementsRouteImport } from './routes/_authenticated/owner.agreements'
+import { Route as AuthenticatedOwnerBookingsRouteImport } from './routes/_authenticated/owner.bookings'
 import { Route as AuthenticatedOwnerPropertiesRouteImport } from './routes/_authenticated/owner.properties'
 import { Route as AuthenticatedOwnerSettingsRouteImport } from './routes/_authenticated/owner.settings'
 import { Route as AuthenticatedTenantSettingsRouteImport } from './routes/_authenticated/tenant.settings'
@@ -353,6 +354,12 @@ const AuthenticatedOwnerAgreementsRoute =
     path: '/owner/agreements',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOwnerBookingsRoute =
+  AuthenticatedOwnerBookingsRouteImport.update({
+    id: '/owner/bookings',
+    path: '/owner/bookings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOwnerPropertiesRoute =
   AuthenticatedOwnerPropertiesRouteImport.update({
     id: '/owner/properties',
@@ -452,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
+  '/owner/bookings': typeof AuthenticatedOwnerBookingsRoute
   '/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
@@ -515,6 +523,7 @@ export interface FileRoutesByTo {
   '/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
+  '/owner/bookings': typeof AuthenticatedOwnerBookingsRoute
   '/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
   '/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/tenant/settings': typeof AuthenticatedTenantSettingsRoute
@@ -580,6 +589,7 @@ export interface FileRoutesById {
   '/_authenticated/invoices/$invoiceId': typeof AuthenticatedInvoicesInvoiceIdRoute
   '/_authenticated/invoices/new': typeof AuthenticatedInvoicesNewRoute
   '/_authenticated/owner/agreements': typeof AuthenticatedOwnerAgreementsRoute
+  '/_authenticated/owner/bookings': typeof AuthenticatedOwnerBookingsRoute
   '/_authenticated/owner/properties': typeof AuthenticatedOwnerPropertiesRoute
   '/_authenticated/owner/settings': typeof AuthenticatedOwnerSettingsRoute
   '/_authenticated/tenant/settings': typeof AuthenticatedTenantSettingsRoute
@@ -645,6 +655,7 @@ export interface FileRouteTypes {
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/owner/agreements'
+    | '/owner/bookings'
     | '/owner/properties'
     | '/owner/settings'
     | '/tenant/settings'
@@ -708,6 +719,7 @@ export interface FileRouteTypes {
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/owner/agreements'
+    | '/owner/bookings'
     | '/owner/properties'
     | '/owner/settings'
     | '/tenant/settings'
@@ -772,6 +784,7 @@ export interface FileRouteTypes {
     | '/_authenticated/invoices/$invoiceId'
     | '/_authenticated/invoices/new'
     | '/_authenticated/owner/agreements'
+    | '/_authenticated/owner/bookings'
     | '/_authenticated/owner/properties'
     | '/_authenticated/owner/settings'
     | '/_authenticated/tenant/settings'
@@ -1190,6 +1203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOwnerAgreementsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/owner/bookings': {
+      id: '/_authenticated/owner/bookings'
+      path: '/owner/bookings'
+      fullPath: '/owner/bookings'
+      preLoaderRoute: typeof AuthenticatedOwnerBookingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/owner/properties': {
       id: '/_authenticated/owner/properties'
       path: '/owner/properties'
@@ -1284,6 +1304,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedInvoicesInvoiceIdRoute: typeof AuthenticatedInvoicesInvoiceIdRoute
   AuthenticatedInvoicesNewRoute: typeof AuthenticatedInvoicesNewRoute
   AuthenticatedOwnerAgreementsRoute: typeof AuthenticatedOwnerAgreementsRoute
+  AuthenticatedOwnerBookingsRoute: typeof AuthenticatedOwnerBookingsRoute
   AuthenticatedOwnerPropertiesRoute: typeof AuthenticatedOwnerPropertiesRoute
   AuthenticatedOwnerSettingsRoute: typeof AuthenticatedOwnerSettingsRoute
   AuthenticatedTenantSettingsRoute: typeof AuthenticatedTenantSettingsRoute
@@ -1325,6 +1346,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedInvoicesInvoiceIdRoute: AuthenticatedInvoicesInvoiceIdRoute,
   AuthenticatedInvoicesNewRoute: AuthenticatedInvoicesNewRoute,
   AuthenticatedOwnerAgreementsRoute: AuthenticatedOwnerAgreementsRoute,
+  AuthenticatedOwnerBookingsRoute: AuthenticatedOwnerBookingsRoute,
   AuthenticatedOwnerPropertiesRoute: AuthenticatedOwnerPropertiesRoute,
   AuthenticatedOwnerSettingsRoute: AuthenticatedOwnerSettingsRoute,
   AuthenticatedTenantSettingsRoute: AuthenticatedTenantSettingsRoute,

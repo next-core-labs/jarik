@@ -14,6 +14,7 @@ import { appPath } from "@/lib/app-path";
 const OWNER_PATHS = new Set([
   "/owner-dashboard",
   "/owner/properties",
+  "/owner/bookings",
   "/owner/settings",
   "/owner/agreements",
 ]);
