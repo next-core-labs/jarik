@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { CalendarCheck, CalendarClock, Megaphone, Plus, Wallet } from "lucide-react";
 
 import { PageHeader } from "@/components/app-shell";
+import { CalendarTab } from "@/components/daily-bookings/calendar-tab";
 import { GuestsTab } from "@/components/daily-bookings/guests-tab";
 import { DailyListingDialog } from "@/components/daily-bookings/listing-dialog";
 import { ListingsTab } from "@/components/daily-bookings/listings-tab";
@@ -25,7 +26,7 @@ import { arNum, sar } from "@/lib/format";
  * والوحدات»)، ورخصته رخصة إيواء سياحي، وعملاؤه ضيوف لا مستأجرون بعقود.
  */
 
-const TABS = ["requests", "listings", "guests"] as const;
+const TABS = ["requests", "calendar", "listings", "guests"] as const;
 type Tab = (typeof TABS)[number];
 const isTab = (v: unknown): v is Tab => TABS.includes(v as Tab);
 
@@ -125,6 +126,9 @@ function Bookings() {
                 الحجوزات
                 {stats.pending > 0 ? <Count n={stats.pending} /> : null}
               </TabsTrigger>
+              <TabsTrigger value="calendar" className="flex-1 sm:flex-none">
+                التقويم
+              </TabsTrigger>
               <TabsTrigger value="listings" className="flex-1 sm:flex-none">
                 الإعلانات
                 <Count n={(listings.data ?? []).length} muted />
@@ -140,6 +144,9 @@ function Bookings() {
                 listings={listings.data ?? []}
                 onAddListing={addListing}
               />
+            </TabsContent>
+            <TabsContent value="calendar">
+              <CalendarTab bookings={bookings.data ?? []} listings={listings.data ?? []} />
             </TabsContent>
             <TabsContent value="listings">
               <ListingsTab
